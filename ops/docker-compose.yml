@@ -1,0 +1,37 @@
+services:
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+  api:
+    build: ../apps/api
+    volumes:
+      - /data/projects:/mnt/roots/projects:ro
+      - /mnt/raid/media:/mnt/roots/media:ro
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    ports: ["8080:8080"]  # for local debugging; not required in prod
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=app
+    volumes: [dbdata:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7
+    command: ["redis-server","--save","", "--appendonly","no"]
+
+volumes:
+  dbdata:
+  caddy_data:
+  caddy_config:
