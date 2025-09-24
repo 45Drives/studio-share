@@ -3,7 +3,7 @@
 		<template #header>
 			<!-- Top buttons -->
 			<div class="flex justify-center gap-4">
-				<button class="btn btn-primary px-6 py-3">New Collaborator</button>
+				<button @click="newCollabo()" class="btn btn-primary px-6 py-3">New Collaborator</button>
 				<button class="btn btn-primary px-6 py-3">Manage Collaborators</button>
 				<button class="btn btn-primary px-6 py-3">New Share</button>
 				<button class="btn btn-primary px-6 py-3">Manage Shares</button>
@@ -82,5 +82,9 @@ const activeLinks = ref([
 
 const leaveServer = () => {
 	router.push({ name: 'server-selection'});
+}
+
+const newCollabo = () => {
+	router.push({name: 'new-collabo'})
 }
 </script>
