@@ -1,5 +1,0 @@
-// tsconfig.typedoc.json
-{
-    "extends": "./tsconfig.app.json",
-    "include": ["dist/index.d.ts"],
-}

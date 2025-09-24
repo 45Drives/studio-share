@@ -1,1 +1,0 @@
-export type DivisionType = 'default' | 'enterprise' | 'homelab' | 'professional'|'studio';
