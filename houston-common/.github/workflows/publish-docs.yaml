@@ -1,0 +1,42 @@
+name: publish-api-doc
+
+# Trigger this when a pull request is merged (which implies pushing to master).
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  api-doc:
+    permissions:
+      id-token: "write"
+      pages: "write"
+
+    environment:
+      name: "github-pages"
+      url: "${{ steps.deployment.outputs.page_url }}"
+
+    runs-on: deployinatorv1
+    steps:
+    - uses: actions/setup-node@v3
+      with:
+        node-version: 21
+        registry-url: https://npm.pkg.github.com/
+        always-auth: true
+    - name: Git Checkout
+      uses: actions/checkout@v3
+    - name: Create clean gh-pages branch
+      run:  git checkout -b gh-pages
+    - name: Generate autodocs
+      run:  |
+        ./bootstrap.sh
+        yarn install
+        yarn docs
+    - id: "upload-documentation"
+      name: "Upload Pages artifact"
+      uses: "actions/upload-pages-artifact@v3"
+      with:
+        path: "docs/"
+    - id: "deployment"
+      name: "Deploy documentation to GitHub Pages"
+      uses: "actions/deploy-pages@v4"

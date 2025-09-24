@@ -1,0 +1,57 @@
+{
+	"name": "@45drives/houston-common-lib",
+	"description": "Houston library",
+	"author": "45Drives",
+	"license": "GPL-3.0",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"main": "./dist/index.js",
+	"exports": {
+		".": {
+			"types": "./dist/lib/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		}
+	},
+	"build": {
+		"files": [
+			"**/*",
+			"!**/*.test.ts",
+			"!**/*.test.js",
+			"!**/*.spec.ts",
+			"!**/*.spec.js"
+		]
+	},
+	"types": "dist/lib/index.d.ts",
+	"scripts": {
+		"build:lib": "tsc --noEmit && vite build",
+		"build": "tsc --noEmit && vite build",
+		"test:lib": "vitest run",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"docs": "typedoc --out ../docs"
+	},
+	"devDependencies": {
+		"@types/electron": "^1.6.12",
+		"@types/node": "^22.13.4",
+		"@types/node-localstorage": "^1.3.3",
+		"node-localstorage": "^3.0.5",
+		"prettier": "^3.5.3",
+		"typedoc": "^0.27.6",
+		"typedoc-plugin-mdn-links": "^4.0.10",
+		"typedoc-umlclass": "^0.10.1",
+		"typescript": "~5.4.5",
+		"vite-plugin-dts": "^3.9.1",
+		"vitest": "^1.6.0"
+	},
+	"dependencies": {
+		"monet": "0.9.3",
+		"neverthrow": "6.2.2",
+		"vite": "6"
+	},
+	"peerDependencies": {
+		"monet": "0.9.3",
+		"neverthrow": "6.2.2"
+	}
+}

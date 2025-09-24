@@ -1,0 +1,14 @@
+node_modules/
+yarn-error.log
+dist/
+out/
+build/
+docs/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+vite.config.ts.timestamp-*.mjs
