@@ -3,10 +3,10 @@
 		<template #header>
 			<!-- Top buttons -->
 			<div class="flex justify-center gap-4">
-				<button @click="newCollabo()" class="btn btn-primary px-6 py-3">New Collaborator</button>
-				<button class="btn btn-primary px-6 py-3">Manage Collaborators</button>
-				<button class="btn btn-primary px-6 py-3">New Share</button>
-				<button class="btn btn-primary px-6 py-3">Manage Shares</button>
+				<button @click="newCollabo" class="btn btn-primary px-6 py-3">New Collaborator</button>
+				<button @click="manageCollabos" class="btn btn-primary px-6 py-3">Manage Collaborators</button>
+				<button @click="newShare" class="btn btn-primary px-6 py-3">New Share</button>
+				<button @click="manageShares" class="btn btn-primary px-6 py-3">Manage Shares</button>
 			</div>
 		</template>
 		<div class="flex flex-1 flex-col h-full items-stretch gap-6">
@@ -40,8 +40,8 @@
 									</span>
 								</td>
 								<td class="px-2 py-2 flex gap-2 justify-center">
-									<button class="btn-primary text-white px-4 py-1 rounded">View</button>
-									<button class="btn-danger text-white px-4 py-1 rounded">KILL</button>
+									<button @click="viewLink" class="btn-primary text-white px-4 py-1 rounded">View</button>
+									<button @click="killLink" class="btn-danger text-white px-4 py-1 rounded">KILL</button>
 								</td>
 							</tr>
 						</tbody>
@@ -54,10 +54,11 @@
 		<template #footer>
 			<!-- Bottom buttons -->
 			<div class="flex justify-center gap-6">
-				<button @click="leaveServer" class="btn-danger text-default px-6 py-3 rounded-lg w-40 h-16">Log
-					Out</button>
-				<button class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button>
-				<button class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button>
+				<button @click="leaveServer" class="btn-danger text-default px-6 py-3 rounded-lg w-40 h-16">
+					Log Out
+				</button>
+				<button @click="viewLogs" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button>
+				<button @click="viewSettings" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button>
 			</div>
 		</template>
 	</CardContainer>
@@ -87,6 +88,50 @@ const leaveServer = () => {
 }
 
 const newCollabo = () => {
-	router.push({name: 'new-collabo'})
+	router.push({ name: 'new-collabo'})
+}
+
+const newShare = () => {
+	router.push({ name: 'new-share'});
+}
+
+const viewCollabo = () => {
+	// router.push({ name: '' });
+	console.log("View Collabo Called");
+}
+
+const viewShare = () => {
+	// router.push({ name: '' });
+	console.log("View Share Called");
+}
+
+const manageCollabos = () => {
+	// router.push({ name: '' });
+	console.log("Manage Collabos Called");
+}
+
+const manageShares = () => {
+	// router.push({ name: '' });
+	console.log("Manage Shares Called");
+}
+
+const viewLogs = () => {
+	// router.push({ name: '' });
+	console.log("View Logs Called");
+}
+
+const viewSettings = () => {
+	// router.push({ name: '' });
+	console.log("View Settings Called");
+}
+
+const viewLink = () => {
+	// router.push({ name: '' });
+	console.log("View Link Called");
+}
+
+const killLink = () => {
+	// router.push({ name: '' });
+	console.log("Kill Link Called");
 }
 </script>

@@ -45,9 +45,28 @@
                     <!-- Notes -->
                     <div class="grid grid-cols-[120px_1fr] items-center">
                         <label class="font-semibold text-default">Notes</label>
-                        <textarea v-model="form.note" type="text" rows="3"
+                        <textarea v-model="form.note" rows="1"
                             class="bg-default rounded-lg text-default px-4 border border-default w-full"
                             placeholder="Enter notes (optional)" />
+                    </div>
+
+                    <!-- Role Selector -->
+                    <div class="grid grid-cols-[120px_1fr] items-center">
+                        <label class="font-semibold text-default">Role</label>
+                        <select v-model="form.role" @change="applyRole"
+                            class="bg-default h-[3rem] text-default rounded-lg px-4 border border-default w-full">
+                            <option v-for="role in roles" :key="role.id" :value="role.name">
+                                {{ role.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Permissions -->
+                    <div class="grid grid-cols-4 gap-4 bg-secondary/60 py-4 rounded-lg">
+                        <label v-for="perm in permissions" :key="perm" class="flex items-center gap-2">
+                            <input type="checkbox" v-model="form.permissions" :value="perm" class="input-checkbox" />
+                            <span>{{ perm }}</span>
+                        </label>
                     </div>
 
                     <!-- Active/Suspended -->
@@ -61,17 +80,10 @@
                         </Switch>
                         <span :class="{ 'text-muted': !form.active, 'text-success': form.active }">Active</span>
                     </div>
-
-                    <!-- Save -->
-                    <div class="pt-4">
-                        <button @click="saveCollaborator" class="btn btn-primary w-full">
-                            Save Collaborator
-                        </button>
-                    </div>
                 </section>
             </CardContainer>
 
-            <!-- Right: Shares + permissions -->
+            <!-- Right: Shares + Magic Links -->
             <CardContainer class="col-span-1 bg-primary rounded-lg p-6 border border-default text-left space-y-6">
                 <section class="space-y-4">
                     <h2 class="text-lg font-semibold text-default">Add To Existing Share</h2>
@@ -79,43 +91,57 @@
                     <!-- Search -->
                     <div class="flex items-center gap-2">
                         <input v-model="search" placeholder="Search for share" class="input flex-1" />
-                        <button class="btn btn-secondary whitespace-nowrap">Add to Share</button>
+                        <!-- <button class="btn btn-secondary whitespace-nowrap">Add to Share</button> -->
+                        <button
+                            class="btn btn-secondary whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed w-40"
+                            :disabled="selectedShareIds.length === 0" @click="addCollaboratorToShares">
+                            {{ selectedShareIds.length <= 1 ? 'Add to Share' : 'Add to Shares' }} </button>
                     </div>
-
                     <!-- Shares list -->
                     <div class="bg-default rounded-lg overflow-y-auto p-2 max-h-48">
                         <ul class="space-y-2">
-                            <li v-for="share in filteredShares" :key="share.id"
-                                class="flex items-center justify-between p-2 bg-accent rounded">
-                                <span>{{ share.name }}</span>
-                                <button class="btn btn-secondary btn-sm" @click="addToShare(share)">Select</button>
+                            <li v-for="share in filteredShares" :key="share.id">
+                                <label class="flex items-center gap-3 p-2 bg-accent rounded ring-1 transition-colors"
+                                    :class="isShareSelected(share.id) ? 'ring-black dark:ring-white' : 'ring-transparent'">
+                                    <input type="checkbox" v-model="selectedShareIds" :value="share.id"
+                                        class="input-checkbox h-5 w-5" />
+                                    <span class="flex-1">{{ share.name }}</span>
+                                </label>
                             </li>
                         </ul>
                     </div>
 
-                    <!-- Extra action -->
+                    <h2 class="text-lg font-semibold text-default"> -- OR -- <br/>Add To A New Share</h2>
+
                     <button class="btn btn-secondary w-full">New Share</button>
 
-                    <!-- Permissions -->
-                    <div class="grid grid-cols-2 gap-4 bg-secondary/60 p-4 rounded-lg">
-                        <label v-for="perm in permissions" :key="perm" class="flex items-center gap-2">
-                            <input type="checkbox" v-model="form.permissions" :value="perm" class="input-checkbox" />
-                            <span>{{ perm }}</span>
-                        </label>
-                    </div>
                 </section>
             </CardContainer>
+
+            <div class="col-span-2 pt-4">
+                <div class="button-group-row space-x-6">
+                    <button @click="goBack" class="btn btn-danger w-full">
+                        Cancel
+                    </button>
+                    <button @click="saveCollaborator" class="btn btn-secondary w-full">
+                        Save Collaborator
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Switch } from '@headlessui/vue';
+import { ref, computed, watch } from 'vue'
+import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid"
 import CardContainer from '../../components/CardContainer.vue'
-import { useHeader } from '../../composables/useHeader';
+import { useHeader } from '../../composables/useHeader'
+import { router } from '../../../app/routes'
+
 useHeader('New Collaborator')
+
 const form = ref({
     name: "",
     company: "",
@@ -123,22 +149,55 @@ const form = ref({
     password: "",
     note: "",
     active: true,
-    permissions: [] as string[]
+    role: "Viewer",
+    permissions: ["view"] as string[]
 })
+
+const roles = [
+    { id: 1, name: "Viewer", perms: ["view", "comment"] },
+    { id: 2, name: "Uploader", perms: ["view", "comment", "upload"] },
+    { id: 3, name: "Editor", perms: ["view", "comment", "upload", "download"] },
+    { id: 4, name: "Custom", perms: [] }
+]
+
+const permissions = [
+    "view", "comment", "upload", "download"
+]
+
+// Apply role → permissions
+function applyRole() {
+    const role = roles.find(r => r.name === form.value.role)
+    if (role && role.name !== "Custom") {
+        form.value.permissions = [...role.perms]
+    }
+}
+
+// Watch for manual permission changes → set role to "Custom"
+watch(() => form.value.permissions, (newPerms) => {
+    const matchedRole = roles.find(r =>
+        r.perms.length > 0 &&
+        r.perms.length === newPerms.length &&
+        r.perms.every(p => newPerms.includes(p))
+    )
+
+    form.value.role = matchedRole ? matchedRole.name : "Custom"
+}, { deep: true })
 
 const showPassword = ref(false)
 const togglePassword = () => showPassword.value = !showPassword.value
-
 function generatePassword() {
     form.value.password = Math.random().toString(36).slice(-10)
 }
+
 function saveCollaborator() {
     console.log("Saving collaborator", form.value)
 }
-function addToShare(share: { id: number; name: string }) {
-    console.log("Adding collaborator to share:", share)
+
+function goBack() {
+    router.push({ name: "dashboard" })
 }
 
+// Shares + Magic Links
 const search = ref("")
 const shares = ref([
     { id: 1, name: "Fox News" },
@@ -149,15 +208,18 @@ const filteredShares = computed(() =>
     shares.value.filter(s => s.name.toLowerCase().includes(search.value.toLowerCase()))
 )
 
-const permissions = [
-    "View",
-    "Edit",
-    "Comment",
-    "Download",
-    "Upload",
-    "Watermark",
-    "No Timeout"
-]
+const selectedShareIds = ref<number[]>([])
+const isShareSelected = (id: number) => selectedShareIds.value.includes(id)
+
+function addCollaboratorToShares() {
+    // Send memberships for all selected shares
+    console.log('Add collaborator to shares', {
+        collaborator: form.value,
+        shareIds: selectedShareIds.value,
+    })
+    // e.g. await api.memberships.bulkAdd({ user_id, share_ids: selectedShareIds.value })
+}
+
 </script>
 
 <style scoped>
