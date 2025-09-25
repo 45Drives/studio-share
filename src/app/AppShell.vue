@@ -1,10 +1,10 @@
 <template>
   <div
     class="w-screen h-screen overflow-hidden flex flex-col items-center justify-center text-default bg-default text-center">
-    <header v-if="!hideHeader" class="grid grid-cols-3 items-center w-full h-16 px-4">
+    <header v-if="!hideHeader" class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent">
       <!-- Left (logo) -->
       <div class="justify-self-start">
-        <DynamicBrandingLogo :division="divisionCode" :height="20"/>
+        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)"/>
       </div>
 
       <!-- Center (title) -->
@@ -13,9 +13,9 @@
       </div>
 
       <!-- Right (menu) -->
-      <!-- <div class="justify-self-end">
+      <div class="justify-self-end text-right">
         <GlobalMenu />
-      </div> -->
+      </div>
     </header>
 
 

@@ -9,16 +9,17 @@
 				<button class="btn btn-primary px-6 py-3">Manage Shares</button>
 			</div>
 		</template>
-		<div class="flex flex-1 flex-col h-full items-stretch justify-center gap-6">
+		<div class="flex flex-1 flex-col h-full items-stretch gap-6">
 			<!-- Active links table -->
 			<div class="bg-primary p-2 rounded-lg border border-default">
 				<h2 class="text-center font-semibold text-lg mb-2">Currently Active Links</h2>
-				<div class="overflow-x-auto bg-accent rounded-md p-1">
-					<table class="min-w-full text-sm text-left">
-						<thead class="sticky top-0 bg-accent">
+				<div class="overflow-x-auto bg-well rounded-md p-1 text-default">
+					<table class="min-w-full text-sm text-left bg-accent rounded-md">
+						<thead class="sticky top-0 bg-well">
 							<tr class="border-b border-default">
 								<th class="px-2 py-1">Name</th>
 								<th class="px-2 py-1">Organization</th>
+								<th class="px-2 py-1">Share Name</th>
 								<th class="px-2 py-1">Files</th>
 								<th class="px-2 py-1">Expires</th>
 								<th class="px-2 py-1 text-center">Actions</th>
@@ -28,18 +29,19 @@
 							<tr v-for="link in activeLinks" :key="link.id" class="border-b border-default">
 								<td class="px-2 py-2">{{ link.name }}</td>
 								<td class="px-2 py-2">{{ link.org }}</td>
+								<td class="px-2 py-2">{{ link.shareName }}</td>
 								<td class="px-2 py-2">{{ link.files }} File<span v-if="link.files > 1">s</span></td>
 								<td class="px-2 py-2">
 									<span :class="{
-										'text-red-500 font-bold': link.expiresIn.includes('1 Day'),
+										'text-danger font-bold': link.expiresIn.includes('1 Day'),
 										'font-bold': true
 									}">
 										{{ link.expiresIn }}
 									</span>
 								</td>
 								<td class="px-2 py-2 flex gap-2 justify-center">
-									<button class="bg-purple-700 text-white px-4 py-1 rounded">View</button>
-									<button class="bg-red-600 text-white px-4 py-1 rounded">KILL</button>
+									<button class="btn-primary text-white px-4 py-1 rounded">View</button>
+									<button class="btn-danger text-white px-4 py-1 rounded">KILL</button>
 								</td>
 							</tr>
 						</tbody>
@@ -52,10 +54,10 @@
 		<template #footer>
 			<!-- Bottom buttons -->
 			<div class="flex justify-center gap-6">
-				<button @click="leaveServer" class="bg-red-500 text-white px-6 py-3 rounded-lg w-40 h-16">Log
+				<button @click="leaveServer" class="btn-danger text-default px-6 py-3 rounded-lg w-40 h-16">Log
 					Out</button>
-				<button class="bg-purple-700 text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button>
-				<button class="bg-purple-700 text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button>
+				<button class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button>
+				<button class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button>
 			</div>
 		</template>
 	</CardContainer>
@@ -71,13 +73,13 @@ useHeader('Dashboard')
 
 // Dummy data until API wiring
 const activeLinks = ref([
-	{ id: 1, name: 'Timmy Johnson', org: 'FoxNews', files: 4, expiresIn: '6 Days' },
-	{ id: 2, name: 'David Zaslav', org: 'WarnerMedia', files: 1, expiresIn: '3 Days' },
-	{ id: 3, name: 'Donald Trump', org: 'FakeNews', files: 2, expiresIn: '1 Day' },
-	{ id: 4, name: 'Jimmy Smith', org: 'FoxNews', files: 1, expiresIn: '3 Days' },
-	{ id: 5, name: 'Harry Potter', org: 'Ministry of Magic', files: 7, expiresIn: '6 Days' },
-	{ id: 6, name: 'Chris Hansen', org: 'Dateline NBC', files: 1, expiresIn: '2 Weeks' },
-	{ id: 7, name: 'Snuffaluffagus', org: 'PBS', files: 1, expiresIn: '3 Days' },
+	{ id: 1, name: 'Timmy Johnson', org: 'FoxNews', shareName: "FoxNews 1", files: 4, expiresIn: '6 Days' },
+	{ id: 2, name: 'David Zaslav', org: 'WarnerMedia', shareName: "WarnerMedia 1", files: 1, expiresIn: '3 Days' },
+	{ id: 3, name: 'Donald Trump', org: 'FakeNews', shareName: 'POTUS', files: 2, expiresIn: '1 Day' },
+	{ id: 4, name: 'Jimmy Smith', org: '-', shareName: "Jimmy's Share", files: 1, expiresIn: '3 Days' },
+	{ id: 5, name: 'Harry Potter', org: 'Ministry of Magic', shareName: "Hogwarts Alumni", files: 7, expiresIn: '6 Days' },
+	{ id: 6, name: 'Chris Hansen', org: 'NBC', shareName: "Dateline", files: 1, expiresIn: '2 Weeks' },
+	{ id: 7, name: 'Snuffaluffagus', org: 'PBS', shareName: "Sesame Street 1", files: 1, expiresIn: '3 Days' },
 ])
 
 const leaveServer = () => {

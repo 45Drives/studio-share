@@ -1,18 +1,30 @@
 <template>
-    <div class="h-full flex items-center justify-center">
+    <div class="h-full flex items-start justify-center pt-28">
         <div class="grid grid-cols-2 gap-10 text-2xl w-9/12 mx-auto">
-            <CardContainer class="col-span-1 bg-accent border-default rounded-md text-bold">
+            <div class="col-span-2 mx-auto text-3xl">
+                <span>Share files with your collaborators easily through secure links.<br /> Log into your server to
+                    begin.</span>
+                <br />
+                <br />
+                <span class="text-default italic text-base">
+                    <b>Note:</b> The servers in the dropdown will only populate if the <b
+                        class="text-primary">houston-broadcaster</b>
+                    service is
+                    enabled (It should be by default).<br /> If it is
+                    not, manual connection is required.
+                </span>
+            </div>
+            <CardContainer class="col-span-1 bg-accent border-default rounded-md text-bold shadow-xl">
                 <div class="flex flex-col text-left">
                     <span>
                         Select a server to connect to:
                     </span>
                     <select v-model="selectedServerIp" :disabled="manualIp !== ''"
-                        class="bg-default h-[3rem] text-default rounded-lg px-4 flex-1 border border-default">
+                        class="bg-default h-[3rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
                         <option v-for="server in discoveryState.servers" :key="server.ip" :value="server.ip">
                             {{ server.name }} ({{ server.ip }})
                         </option>
                     </select>
-
                 </div>
                 <span class="text-center items-center justify-self-center">
                     -- OR --
@@ -22,28 +34,28 @@
                         Connect to server manually via IP Address:
                     </span>
                     <input v-model="manualIp" type="text" placeholder="192.168.1.123"
-                        
-                        class="input-textlike border px-4 py-1 rounded text-xl w-full" />
+                        class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
                 </div>
             </CardContainer>
 
-            <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left">
+            <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left shadow-xl">
 
                 <div class="flex flex-col text-bold">
                     <span>
                         Username:
                     </span>
                     <input v-model="username" type="text" placeholder="root"
-                        class="input-textlike px-4 py-1 rounded text-xl w-full border" />
+                        class="text-default input-textlike px-4 py-1 rounded text-xl w-full border" />
                     <span class="text-center items-center justify-self-center">
                         <br />
                     </span>
                     <span>
                         Password:
                     </span>
-                    <div class="w-64 relative">
+                    <div class="w-full relative">
                         <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
-                            class="input-textlike px-4 py-1 rounded text-xl w-full border" placeholder="••••••••" />
+                            class="text-default input-textlike px-4 py-1 rounded text-xl w-full border"
+                            placeholder="••••••••" />
                         <button type="button" @click="togglePassword"
                             class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
                             <EyeIcon v-if="!showPassword" class="w-5 h-5" />
@@ -68,7 +80,7 @@ import { discoveryStateInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
-useHeader('CollaboConnect');
+useHeader('Houston Collabos');
 
 const router = useRouter();
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
@@ -119,19 +131,19 @@ function goToDashboard() {
         return
     }
 
-    if (!username.value.trim()) {
-        pushNotification(
-            new Notification('Error', `Please enter a username.`, 'error', 8000)
-        )
-        return
-    }
+    // if (!username.value.trim()) {
+    //     pushNotification(
+    //         new Notification('Error', `Please enter a username.`, 'error', 8000)
+    //     )
+    //     return
+    // }
 
-    if (!password.value.trim()) {
-        pushNotification(
-            new Notification('Error', `Please enter a password.`, 'error', 8000)
-        )
-        return
-    }
+    // if (!password.value.trim()) {
+    //     pushNotification(
+    //         new Notification('Error', `Please enter a password.`, 'error', 8000)
+    //     )
+    //     return
+    // }
 
     router.push({ name: 'dashboard' })
 }

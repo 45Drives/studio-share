@@ -1,7 +1,7 @@
 <template>
     <teleport to="body">
         <div v-if="visible" id="commander-popup"
-            class="absolute flex items-start text-left bg-slate-800/95 text-white p-6 min-h-[100px] rounded-md shadow-lg user-select-none"
+            class="absolute flex items-start text-left bg-slate-800/95 text-default p-6 min-h-[100px] rounded-md shadow-lg user-select-none"
             :style="{ width: width + 'px', top: position.top,left: position.left }">
 
             <div class="absolute w-0 h-0 border-l-[12px] border-r-[12px] border-transparent" :class="{
@@ -21,7 +21,7 @@
                 </p>
             </div>
             <button
-                class="absolute top-2 right-2 text-white text-xl bg-transparent border-none cursor-pointer font-mono hover:text-red-500"
+                class="absolute top-2 right-2 text-default text-xl bg-transparent border-none cursor-pointer font-mono hover:text-red-500"
                 @click="emit('close')">
                 <XMarkIcon class="w-8 h-8 pl-2" />
             </button>
