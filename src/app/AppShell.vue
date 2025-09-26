@@ -31,8 +31,8 @@
 import { ref, provide, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { DynamicBrandingLogo, GlobalModalConfirm, NotificationView, reportError, reportSuccess } from '@45drives/houston-common-ui'
 import GlobalMenu from '../renderer/components/GlobalMenu.vue'
-import { divisionCodeInjectionKey, currentServerInjectionKey, discoveryStateInjectionKey, thisOsInjectionKey } from '../renderer/keys/injection-keys'
-import type { Server, DivisionType, DiscoveryState } from '../renderer/types'
+import { divisionCodeInjectionKey, currentServerInjectionKey, discoveryStateInjectionKey, thisOsInjectionKey, connectionMetaInjectionKey } from '../renderer/keys/injection-keys'
+import type { Server, DivisionType, DiscoveryState, ConnectionMeta } from '../renderer/types'
 import { useServerDiscovery } from '../renderer/composables/useServerDiscovery'
 import { useIpcActions } from '../renderer/composables/useIpcActions'
 import { useThemeFromAlias } from '../renderer/composables/useThemeFromAlias'
@@ -57,6 +57,8 @@ provide(thisOsInjectionKey, thisOS)
 const { discoveryState } = useServerDiscovery()
 provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 
+const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
+provide(connectionMetaInjectionKey, connectionMeta)
 
 // 🌈 THEME: hook composable and reflect division into provided ref
 const { currentTheme, currentDivision, applyThemeFromAlias } = useThemeFromAlias()

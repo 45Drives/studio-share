@@ -14,6 +14,6 @@ export const router = createRouter({
     { path: '/link/view', name: 'view-link', component: () => import('../renderer/views/Shares/ViewLink.vue') },
     { path: '/logs', name: 'logs', component: () => import('../renderer/views/GlobalLogs.vue') },
     { path: '/settings', name: 'settings', component: () => import('../renderer/views/GlobalSettings.vue') },
-
+    { path: '/select-file', name: 'select-file', component: () => import('../renderer/views/MVP/SelectAndShareFile.vue')}
   ],
 })

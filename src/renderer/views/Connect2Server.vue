@@ -1,5 +1,5 @@
 <template>
-    <div class="h-full flex items-start justify-center pt-28">
+    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-28">
         <div class="grid grid-cols-2 gap-10 text-2xl w-9/12 mx-auto">
             <div class="col-span-2 mx-auto text-3xl">
                 <span>Share files with your collaborators easily through secure links.<br /> Log into your server to
@@ -65,20 +65,20 @@
                 </div>
             </CardContainer>
             <div class="col-span-2 items-center">
-                <button class="btn btn-secondary w-60" @click="goToDashboard">Connect to Server</button>
+                <button class="btn btn-secondary w-60" @click="connectToServer">Connect to Server</button>
             </div>
         </div>
-    </div>
+    </form>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
-import { discoveryStateInjectionKey } from '../keys/injection-keys'
+import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
-import { DiscoveryState, Server } from '../types'
+import { DiscoveryState, Server, ConnectionMeta } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 useHeader('Houston Collabos');
 
@@ -93,7 +93,8 @@ const togglePassword = () => {
     showPassword.value = !showPassword.value;
 };
 const selectedServerIp = ref<string>('')
-
+const providedCurrentServer = inject(currentServerInjectionKey)!;
+const connectionMeta = inject(connectionMetaInjectionKey)!;
 // computed to always get the full object if needed
 const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
@@ -123,7 +124,19 @@ watch(selectedServerIp, () => {
     }
 })
 
-function goToDashboard() {
+async function discoverHttpsHost(ip: string, port = 9095) {
+    try {
+        const r = await fetch(`http://${ip}:${port}/.well-known/houston`)
+        const data = await r.json()
+        if (data?.baseUrl?.startsWith('https://')) {
+            return new URL(data.baseUrl).host
+        }
+    } catch { }
+    return undefined
+}
+
+
+async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
         pushNotification(
             new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000)
@@ -131,21 +144,50 @@ function goToDashboard() {
         return
     }
 
-    // if (!username.value.trim()) {
-    //     pushNotification(
-    //         new Notification('Error', `Please enter a username.`, 'error', 8000)
-    //     )
-    //     return
-    // }
+    if (!username.value.trim()) {
+        pushNotification(
+            new Notification('Error', `Please enter a username.`, 'error', 8000)
+        )
+        return
+    }
 
-    // if (!password.value.trim()) {
-    //     pushNotification(
-    //         new Notification('Error', `Please enter a password.`, 'error', 8000)
-    //     )
-    //     return
-    // }
+    if (!password.value.trim()) {
+        pushNotification(
+            new Notification('Error', `Please enter a password.`, 'error', 8000)
+        )
+        return
+    }
 
-    router.push({ name: 'dashboard' })
+    // router.push({ name: 'dashboard' })
+
+    const ip = selectedServer.value?.ip || manualIp.value
+    const port = 9095
+
+    // 1) set the selected server (pure Server shape)
+    const serverObj: Server = selectedServer.value
+        ? selectedServer.value
+        : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true }
+
+    providedCurrentServer.value = serverObj
+
+    // 2) discover external host if any → store in meta (not Server)
+    const httpsHost = await discoverHttpsHost(ip, port)
+    connectionMeta.value = { ...connectionMeta.value, port, httpsHost }
+
+    // 3) login
+    try {
+        const res = await fetch(`http://${ip}:${port}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username.value, password: password.value })
+        })
+        if (!res.ok) throw new Error(await res.text())
+        const { token } = await res.json()
+        connectionMeta.value = { ...connectionMeta.value, token }
+
+        router.push({ name: 'select-file' })
+    } catch (e: any) {
+        pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000))
+    }
 }
-
 </script>

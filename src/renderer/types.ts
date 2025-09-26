@@ -34,3 +34,9 @@ export type SavedServer = {
   lastUsedAt?: number;
   // future: token?: string;
 };
+
+export interface ConnectionMeta {
+  port: number
+  httpsHost?: string
+  token?: string
+}

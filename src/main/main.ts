@@ -834,17 +834,3 @@ app.on('window-all-closed', () => {
   }
 });
 
-// function getBackUpManager() {
-//   const os = getOS();
-//   let backUpManager: BackUpManager | null = null;
-//   if (os === "win") {
-//     backUpManager = new BackUpManagerWin();
-//   } else if (os === "debian" || os == "rocky") {
-//     backUpManager = new BackUpManagerLin();
-//   } else if (os === "mac") {
-//     backUpManager = new BackUpManagerMac();
-//   }
-//   return backUpManager;
-
-// }
-
