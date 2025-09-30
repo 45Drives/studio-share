@@ -1,0 +1,93 @@
+{
+  "appId": "com.protocase.45studioshare",
+  "directories": {
+    "output": "dist"
+  },
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+  "publish": {
+    "provider": "github",
+    "owner": "45Drives",
+    "repo": "studio-share"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "shortcutName": "45Drives Studio Share"
+  },
+  "linux": {
+    "target": ["deb", "rpm", "pacman"],
+    "category": "Utility",
+    "synopsis": "Share and review media via magic links",
+    "vendor": "45Drives",
+    "maintainer": "Jordan Keough <jkeough@45drives.com>",
+    "icon": "icon.png",
+    "desktop": {
+      "Name": "45Drives Studio Share",
+      "Comment": "Create/manage collaborators and share review links",
+      "Categories": "Utility;Network;"
+    }
+  },
+  "files": [
+    {
+      "from": "node_modules/@45drives",
+      "to": "node_modules/@45drives",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "build/main",
+      "to": "main",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "build/renderer",
+      "to": "renderer",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "src/main/static",
+      "to": "static",
+      "filter": ["**/*"]
+    },
+    "!src",
+    "!build",
+    "!builds",
+    "!dist",
+    "!scripts",
+    "!houston-common",
+    "!**/*.test.js",
+    "!**/*.test.ts",
+    "!**/*.md",
+    "!**/*.config.js",
+    "!**/*.config.ts",
+    "!**/*.config.cjs",
+    "!**/package-lock.json",
+    "!**/.git*",
+    "!**/__tests__/**",
+    "!**/*.map",
+    "!**/MakeFile",
+    "!**/.yarn/**",
+    "!**/node_modules/*/test/**",
+    "!**/node_modules/*/.git/**",
+    "!**/node_modules/rollup/**",
+    "!**/node_modules/webpack/**",
+    "!**/node_modules/esbuild/**",
+    "!**/node_modules/vite/**",
+    "!**/node_modules/@vue/**",
+    "!**/node_modules/typescript/**",
+    "!**/node_modules/vue/**",
+    "!**/node_modules/@types/**"
+  ],
+  "extraResources": [
+    {
+      "from": "src/main/static",
+      "to": "static",
+      "filter": ["**/*"]
+    }
+  ],
+  "asar": true,
+  "asarUnpack": [
+    "**/node_modules/keytar/**",
+    "**/node_modules/ssh2/**"
+  ]
+}
