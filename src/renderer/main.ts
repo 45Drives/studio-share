@@ -1,8 +1,10 @@
-// 1) capture originals
+import './ipc-web-shim';
+
+// capture originals
 const _origWarn = console.warn.bind(console)
 const _origError = console.error.bind(console)
 
-// 2) override warn & error
+// override warn & error
 console.warn = (...args: any[]) => {
     const msg = args.map(String).join(' ')
     if (

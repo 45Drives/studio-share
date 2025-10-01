@@ -1,55 +1,29 @@
-# Automatic Houston Plugin Makefile
-# Copyright (C) 2022 Josh Boudreau <jboudreau@45drives.com>
-# 
-# Automatic Houston Plugin Makefile is free software: you can redistribute it and/or modify it under the terms
-# of the GNU General Public License as published by the Free Software Foundation, either version 3
-# of the License, or (at your option) any later version.
-# 
-# Automatic Houston Plugin Makefile is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License along with Automatic Houston Plugin Makefile.
-# If not, see <https://www.gnu.org/licenses/>. 
+# --- Makefile for build+deploy of the web UI behind Caddy ---
 
+SERVER_USER := root
+SERVER_HOST := 192.168.123.5
+REMOTE_DIR  := /srv/studio-share/ui
 
-# USAGE
-# installation:
-# $ make
-# # make install
-# testing:
-# $ make
-# $ make install-local
-# or
-# $ make install-remote
-################################
-# Do not edit anything below
+CADDY_RELOAD := sudo caddy reload --config /etc/caddy/Caddyfile
+RSYNC_FLAGS := -avz --delete --chmod=Fu=rw,Fgo=r,Du=rwx,Dgo=rx
+BUILD_DIR := build/renderer
 
-define greentext
-	'\033[1;32m$(1)\033[0m'
-endef
-define cyantext
-	'\033[1;96m$(1)\033[0m'
-endef
+.PHONY: build deploy quick caddy-reload restart-server logs open-url
 
-ifeq ($(DEBUG),1)
-BUILD_FLAGS=-- --minify false
-endif
+build:
+	yarn vite build --config ./vite.config.mjs
 
-default: houston-common
+deploy: build
+	rsync $(RSYNC_FLAGS) $(BUILD_DIR)/ $(SERVER_USER)@$(SERVER_HOST):$(REMOTE_DIR)/
+	ssh $(SERVER_USER)@$(SERVER_HOST) '$(CADDY_RELOAD) || true'
 
-all: default
+restart-server:
+	ssh $(SERVER_USER)@$(SERVER_HOST) 'sudo systemctl restart houston-broadcaster && systemctl --no-pager --full status houston-broadcaster | sed -n "1,25p"'
 
-.PHONY: default all install clean help install-local install-remote install houston-common
+logs:
+	ssh $(SERVER_USER)@$(SERVER_HOST) 'sudo journalctl -u houston-broadcaster -f -n 200'
 
-houston-common/Makefile:
-	git submodule update --init
+open-url:
+	@echo "Visit: https://studio-share.protocase.local/"
 
-houston-common: houston-common/Makefile
-	$(MAKE) -C houston-common
-	npm install
-
-houston-common-%:
-	$(MAKE) -C houston-common $*
-
-FORCE:
+quick: deploy restart-server open-url
