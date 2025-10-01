@@ -124,17 +124,14 @@ watch(selectedServerIp, () => {
     }
 })
 
-async function discoverHttpsHost(ip: string, port = 9095) {
-    try {
-        const r = await fetch(`http://${ip}:${port}/.well-known/houston`)
-        const data = await r.json()
-        if (data?.baseUrl?.startsWith('https://')) {
-            return new URL(data.baseUrl).host
-        }
-    } catch { }
-    return undefined
-}
+const isHttps = window.location.protocol === 'https:';
+const isLocalDev = !isHttps && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
+// True if the selected server is the same machine that serves the SPA
+function isSameBox(host: string) {
+    const h = window.location.hostname;
+    return host === '127.0.0.1' || host === 'localhost' || host === h;
+}
 
 async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
@@ -158,36 +155,56 @@ async function connectToServer() {
         return
     }
 
-    // router.push({ name: 'dashboard' })
+    const ip = (selectedServer.value?.ip || manualIp.value).trim();
+    const port = 9095;
 
-    const ip = selectedServer.value?.ip || manualIp.value
-    const port = 9095
-
-    // 1) set the selected server (pure Server shape)
-    const serverObj: Server = selectedServer.value
+    providedCurrentServer.value = selectedServer.value
         ? selectedServer.value
-        : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true }
+        : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true };
 
-    providedCurrentServer.value = serverObj
+    // -------- Choose apiBase + tell useApi how to build future URLs --------
+    let apiBase: string;
 
-    // 2) discover external host if any → store in meta (not Server)
-    const httpsHost = await discoverHttpsHost(ip, port)
-    connectionMeta.value = { ...connectionMeta.value, port, httpsHost }
+    if (isLocalDev) {
+        // DEV (HTTP): talk directly to the remote broadcaster
+        apiBase = `http://${ip}:${port}`;
+        // Clear httpsHost so useApi picks http://<ip>:<port> later
+        connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
+    } else {
+        // PROD (HTTPS)
+        if (isSameBox(ip)) {
+            // Same box: same-origin
+            apiBase = '';
+            connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: location.host };
+        } else {
+            // Remote box: always go via broker; encode ip:port for safety
+            const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
+            apiBase = `/${brokerSeg}`;
+            // Trick: set httpsHost to include the broker segment so useApi builds:
+            //   https://<host>/broker/<ip:port>
+            connectionMeta.value = {
+                ...connectionMeta.value,
+                port,
+                apiBase,
+                httpsHost: `${location.host}/${brokerSeg}`,
+            };
+        }
+    }
 
-    // 3) login
     try {
-        const res = await fetch(`http://${ip}:${port}/api/login`, {
+        // Use the apiBase we just decided on
+        const res = await fetch(`${apiBase}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username.value, password: password.value })
-        })
-        if (!res.ok) throw new Error(await res.text())
-        const { token } = await res.json()
-        connectionMeta.value = { ...connectionMeta.value, token }
-
-        router.push({ name: 'select-file' })
+            body: JSON.stringify({ username: username.value, password: password.value }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const { token } = await res.json();
+        connectionMeta.value = { ...connectionMeta.value, token };
+        router.push({ name: 'select-file' });
     } catch (e: any) {
-        pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000))
+        pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000));
     }
+
 }
 </script>
