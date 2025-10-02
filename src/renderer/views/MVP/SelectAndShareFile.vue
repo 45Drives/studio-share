@@ -98,7 +98,7 @@ const filePath = ref('')
 
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
-const maxDownloads = ref(10)
+const maxDownloads = ref(5)
 
 const viewUrl = ref('')
 const downloadUrl = ref('')
