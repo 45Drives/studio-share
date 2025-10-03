@@ -1,13 +1,31 @@
 <template>
-    <div class="h-full flex items-start justify-center pt-28">
+    <div class="h-full flex items-start justify-center pt-16">
         <div class="grid grid-cols-1 gap-10 text-2xl w-9/12 mx-auto">
             <CardContainer class="bg-accent rounded-md shadow-xl">
                 <template #header>
                     <div class="flex flex-col gap-4 text-left">
-                        <div class="flex flex-row gap-2 items-center">
+                        <!-- <div class="flex flex-row gap-2 items-center">
                             <span class="whitespace-nowrap">Enter path for file.</span>
                             <PathInput v-model="filePath" :apiFetch="apiFetch" />
+                        </div> -->
+                        <!-- inside #header, replace the single PathInput row with: -->
+                        <div class="flex flex-col gap-3 text-left">
+
+                            <FileExplorer :apiFetch="apiFetch" :modelValue="files"
+                                @add="(paths) => { paths.forEach(p => { if (!files.includes(p)) files.push(p) }) }" />
+
+                            <div v-if="files.length" class="flex flex-wrap gap-2">
+                                <div v-for="(f, i) in files" :key="f"
+                                    class="flex items-center gap-2 px-3 py-1 border rounded-full text-sm bg-transparent">
+                                    <code class="opacity-90">{{ f }}</code>
+                                    <button class="btn btn-danger" style="padding: 2px 8px; border-radius: 999px"
+                                        @click="removeFile(i)" title="Remove">
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base">
                             <!-- Max downloads -->
@@ -48,19 +66,19 @@
 
                     </div>
                 </template>
-                <div>
+                <div class="flex flex-col">
                     <button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
                         title="Create a magic link with the selected options">
                         Share via magic link
                     </button>
-                </div>
-                <template #footer>
                     <div v-if="viewUrl" class="p-3 border rounded space-x-2">
                         <code>{{ viewUrl }}</code>
-                        <button class="btn btn-secondary" @click="copyLink">Copy</button>
-                        <button class="btn btn-primary" @click="openInBrowser">Open</button>
+                        <div class="button-group-row">
+                            <button class="btn btn-secondary" @click="copyLink">Copy</button>
+                            <button class="btn btn-primary" @click="openInBrowser">Open</button>
+                        </div>
                     </div>
-                </template>
+                </div>
             </CardContainer>
             <div class="button-group-row col-span-1">
                 <button @click="goBack" class="btn btn-danger justify-start">
@@ -76,7 +94,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useApi } from '../../composables/useApi'
 import CardContainer from '../../components/CardContainer.vue'
-import PathInput from '../../components/PathInput.vue'
+import FileExplorer from '../../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { router } from '../../../app/routes'
 
@@ -95,6 +113,16 @@ async function loadDir(rel = '') {
 }
 
 const filePath = ref('')
+const files = ref<string[]>([])
+
+function addFile() {
+    if (!filePath.value) return
+    if (!files.value.includes(filePath.value)) files.value.push(filePath.value)
+    filePath.value = ''
+}
+function removeFile(i: number) {
+    files.value.splice(i, 1)
+}
 
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
@@ -126,7 +154,8 @@ const prettyExpiry = computed(() => {
 })
 
 const canGenerate = computed(() =>
-    Boolean(filePath.value) &&
+    // Boolean(filePath.value) &&
+    files.value.length > 0 &&
     Number.isFinite(maxDownloads.value) && maxDownloads.value >= 1 &&
     Number.isFinite(expiresValue.value) && expiresValue.value >= 1
 )
@@ -138,17 +167,23 @@ function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
 }
 
 async function generateLink() {
+    const body: any = {
+        expiresInSeconds: expiresSec.value,
+        maxDownloads: maxDownloads.value
+    }
+    // Back-compat: if only 1 file, we can still send filePath (server supports both)
+    if (files.value.length === 1) {
+        body.filePath = files.value[0]
+    } else {
+        body.filePaths = files.value.slice()
+    }
+
     const data = await apiFetch('/api/magic-link', {
         method: 'POST',
-        body: JSON.stringify({
-            filePath: filePath.value,
-            expiresInSeconds: expiresSec.value,
-            maxDownloads: maxDownloads.value
-        })
+        body: JSON.stringify(body)
     })
-    console.log('data:', data);
-    viewUrl.value = data.viewUrl;
-    downloadUrl.value = data.downloadUrl;
+    viewUrl.value = data.viewUrl
+    downloadUrl.value = data.downloadUrl
 }
 
 onMounted(() => loadDir())

@@ -14,8 +14,8 @@
 
                     <!-- Optional Dashboard -->
                     <button class="btn btn-secondary wizard-btn w-full mb-1" :class="buttonClass('dashboard')"
-                        @click="goto('dashboard')">
-                        Dashboard
+                        @click="goto('/')">
+                        Home
                     </button>
                 </div>
 
@@ -109,8 +109,8 @@ function selectTheme(theme: 'theme-default' | 'theme-homelab' | 'theme-professio
 }
 
 // --- Router navigation (new format) ---
-function goto(name: 'dashboard' ) {
-    router.push({ name })
+function goto(path: '/' ) {
+    router.push({ path })
     show.value = false
 }
 

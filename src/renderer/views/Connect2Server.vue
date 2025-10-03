@@ -1,5 +1,5 @@
 <template>
-    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-28">
+    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-16">
         <div class="grid grid-cols-2 gap-10 text-2xl w-9/12 mx-auto">
             <div class="col-span-2 mx-auto text-3xl">
                 <span>Share files with your collaborators easily through secure links.<br /> Log into your server to
