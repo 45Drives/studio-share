@@ -1,50 +1,73 @@
 <template>
-    <div class="h-full flex items-start justify-center pt-16">
+    <div class="h-full flex items-start justify-center pt-16 overflow-y-auto">
         <div class="grid grid-cols-1 gap-10 text-2xl w-9/12 mx-auto">
             <CardContainer class="bg-accent rounded-md shadow-xl">
                 <template #header>
-                    <div class="flex flex-col gap-4 text-left">
                         <!-- <div class="flex flex-row gap-2 items-center">
                             <span class="whitespace-nowrap">Enter path for file.</span>
                             <PathInput v-model="filePath" :apiFetch="apiFetch" />
                         </div> -->
                         <!-- inside #header, replace the single PathInput row with: -->
-                        <div class="flex flex-col gap-3 text-left">
+                        <div class="flex flex-col gap-2 text-left">
 
                             <FileExplorer :apiFetch="apiFetch" :modelValue="files"
                                 @add="(paths) => { paths.forEach(p => { if (!files.includes(p)) files.push(p) }) }" />
 
-                            <div v-if="files.length" class="flex flex-wrap gap-2">
-                                <div v-for="(f, i) in files" :key="f"
-                                    class="flex items-center gap-2 px-3 py-1 border rounded-full text-sm bg-transparent">
-                                    <code class="opacity-90">{{ f }}</code>
-                                    <button class="btn btn-danger" style="padding: 2px 8px; border-radius: 999px"
-                                        @click="removeFile(i)" title="Remove">
-                                        ✕
-                                    </button>
+                            <!-- Selected files panel -->
+                            <div v-if="files.length" class="border rounded bg-accent">
+                                <!-- header -->
+                                <div class="flex items-center justify-between px-3 py-1 text-sm">
+                                    <span class="font-semibold">{{ files.length }} selected</span>
+                                    <div class="flex items-center gap-1">
+                                        <button class="btn btn-secondary" @click="showSelected = !showSelected">
+                                            {{ showSelected ? 'Hide' : 'Show' }} list
+                                        </button>
+                                        <button class="btn btn-danger" @click="clearAll">Clear all</button>
+                                    </div>
+                                </div>
+
+                                <!-- scrollable list -->
+                                <div v-show="showSelected" class="max-h-40 overflow-auto">
+                                    <div v-for="(f, i) in files" :key="f"
+                                        class="grid items-center [grid-template-columns:1fr_auto] border-t border-default text-sm">
+                                        <code class="px-3 py-2 truncate block" :title="f">{{ f }}</code>
+                                        <button class="btn btn-danger m-2 px-2 py-1" @click="removeFile(i)"
+                                            title="Remove">✕</button>
+                                    </div>
                                 </div>
                             </div>
+
                         </div>
 
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
                             <!-- Max downloads -->
-                            <div class="flex items-center gap-3">
+                            <!-- <div class="flex items-center gap-3">
                                 <label class="whitespace-nowrap font-semibold">Max downloads</label>
                                 <input type="number" min="1" step="1" v-model.number="maxDownloads"
                                     class="input border rounded px-3 py-2 w-32 bg-transparent" />
-                            </div>
+                            </div> -->
 
                             <!-- Expiry -->
                             <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Expires in</label>
+                                <label class="whitespace-nowrap font-semibold">Expires in:</label>
+
+                                <div class="flex flex-wrap gap-2 text-sm">
+                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'hours')">1
+                                        hour</button>
+                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">1
+                                        day</button>
+                                    <button type="button" class="btn btn-secondary" @click="setPreset(7, 'weeks')">7
+                                        days</button>
+                                </div>
 
                                 <!-- number -->
                                 <input type="number" min="1" step="1" v-model.number="expiresValue"
-                                    class="input border rounded px-3 py-2 w-32 bg-transparent" />
+                                    class="input-textlike border rounded px-3 py-2 w-32 bg-transparent" />
 
                                 <!-- unit -->
-                                <select v-model="expiresUnit" class="input border rounded px-3 py-2 bg-transparent"
+                                <select v-model="expiresUnit"
+                                    class="input-textlike border rounded px-3 py-2 bg-transparent"
                                     style="min-width: 8rem">
                                     <option value="hours">hours</option>
                                     <option value="days">days</option>
@@ -53,25 +76,17 @@
 
                                 <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                             </div>
-                            <div class="flex flex-wrap gap-2 text-sm">
-                                <button type="button" class="btn btn-secondary" @click="setPreset(1, 'hours')">1
-                                    hour</button>
-                                <button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">1
-                                    day</button>
-                                <button type="button" class="btn btn-secondary" @click="setPreset(7, 'weeks')">7
-                                    days</button>
-                            </div>
+
 
                         </div>
 
-                    </div>
                 </template>
                 <div class="flex flex-col">
                     <button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
                         title="Create a magic link with the selected options">
                         Share via magic link
                     </button>
-                    <div v-if="viewUrl" class="p-3 border rounded space-x-2">
+                    <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center">
                         <code>{{ viewUrl }}</code>
                         <div class="button-group-row">
                             <button class="btn btn-secondary" @click="copyLink">Copy</button>
@@ -114,7 +129,8 @@ async function loadDir(rel = '') {
 
 const filePath = ref('')
 const files = ref<string[]>([])
-
+const showSelected = ref(true)
+function clearAll() { files.value = [] }
 function addFile() {
     if (!filePath.value) return
     if (!files.value.includes(filePath.value)) files.value.push(filePath.value)
@@ -126,7 +142,7 @@ function removeFile(i: number) {
 
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
-const maxDownloads = ref(5)
+// const maxDownloads = ref(5)
 
 const viewUrl = ref('')
 const downloadUrl = ref('')
@@ -156,7 +172,7 @@ const prettyExpiry = computed(() => {
 const canGenerate = computed(() =>
     // Boolean(filePath.value) &&
     files.value.length > 0 &&
-    Number.isFinite(maxDownloads.value) && maxDownloads.value >= 1 &&
+    // Number.isFinite(maxDownloads.value) && maxDownloads.value >= 1 &&
     Number.isFinite(expiresValue.value) && expiresValue.value >= 1
 )
 
@@ -169,7 +185,7 @@ function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
 async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
-        maxDownloads: maxDownloads.value
+        // maxDownloads: maxDownloads.value
     }
     // Back-compat: if only 1 file, we can still send filePath (server supports both)
     if (files.value.length === 1) {

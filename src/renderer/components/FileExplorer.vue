@@ -1,5 +1,5 @@
 <template>
-    <div class="flex flex-col gap-3 max-h-96">
+    <div class="flex flex-col gap-3 max-h-[500px]">
         <!-- Top controls + PathInput -->
         <div class="flex flex-col gap-2 text-sm">
             <div class="opacity-70">Pick files/folders to share.</div>
@@ -11,8 +11,7 @@
         </div>
 
         <!-- Table wrapper -->
-        <div class="border rounded overflow-auto max-h-[420px]">
-
+        <div class="border rounded overflow-auto max-h-[440px] min-h-[300px]">
             <!-- Header -->
             <div class="grid sticky top-0 bg-accent font-semibold border-b border-default
            [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">

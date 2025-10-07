@@ -1,71 +1,87 @@
 <template>
     <!-- Non-root row -->
-    <div v-if="!isRoot" class="grid items-center border-b border-default hover:bg-white/5
-           [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="{ 'opacity-60': isIndeterminate }">
-        <!-- checkbox -->
+    <div v-if="!isRoot" class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer
+         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="{ 'opacity-60': isIndeterminate }"
+        @click="onRowClick" @keydown.enter.prevent="onRowClick" @keydown.space.prevent="onRowClick" role="button"
+        tabindex="0" :aria-expanded="open">
+        <!-- checkbox col: keep spacing, no checkbox for folders -->
         <div class="px-2 py-1 flex justify-center">
-            <input ref="folderCb" class="input-checkbox" type="checkbox" :checked="isFolder ? isChecked : isFileChecked"
-                @change="onFolderOrFileCheckbox" />
+            <span class="inline-block w-4 h-4"></span>
         </div>
 
         <!-- name -->
         <div class="px-2 py-1 min-w-0">
             <div class="flex items-center gap-2"
                 :style="{ '--tw-ps': `${depth * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
-                <!-- arrow -->
-                <button v-if="isDir"
+                <!-- arrow (stop to avoid double toggle) -->
+                <button
                     class="w-4 h-4 rounded border border-current text-[10px] leading-none inline-flex items-center justify-center shrink-0"
-                    @click="toggleOpen" :aria-label="open ? 'Collapse' : 'Expand'">
+                    @click.stop="toggleOpen" :aria-label="open ? 'Collapse' : 'Expand'">
                     {{ open ? '▾' : '▸' }}
                 </button>
-                <span v-else class="w-4 h-4 rounded border border-transparent shrink-0"></span>
 
-                <!-- label (truncate) -->
-                <template v-if="isDir">
-                    <button class="underline truncate" :title="label + '/'" @click="$emit('navigate', relPath)">
-                        {{ label }}/
-                    </button>
-                </template>
-                <template v-else>
-                    <span class="truncate select-none" :title="label">{{ label }}</span>
-                </template>
+                <!-- label (also stops bubbling; the row already handles click) -->
+                <button class="underline truncate" :title="label + '/'" @click.stop="toggleOpen">
+                    {{ label }}/
+                </button>
             </div>
         </div>
 
-        <!-- type -->
-        <div class="px-2 py-1">{{ isDir ? 'Folder' : 'File' }}</div>
-
-        <!-- size -->
-        <div class="px-2 py-1">{{ isDir ? '—' : fmtBytes(entrySize) }}</div>
-
-        <!-- modified -->
-        <div class="px-2 py-1">{{ fmtDate(entryMtime) }}</div>
+        <div class="px-2 py-1">Folder</div>
+        <div class="px-2 py-1">—</div>
+        <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
+            :title="fmtDateFull(entryMtime)">
+            {{ fmtDate(entryMtime) }}
+        </div>
     </div>
 
     <!-- children -->
     <div v-show="isRoot || open">
         <div v-if="loading" class="opacity-70 text-xs p-2">Loading…</div>
-
+        <!-- empty directory notice -->
+        <div v-if="!loading && open && !children.length"
+            class="grid auto-rows-[28px] [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] items-center border-b border-default">
+            <!-- keep first col blank like other rows -->
+            <div class="px-2 py-2"></div>
+            <div class="px-2 py-2 text-sm italic opacity-70">Directory is empty</div>
+            <div class="px-2 py-2"></div>
+            <div class="px-2 py-2"></div>
+            <div class="px-2 py-2"></div>
+        </div>
         <template v-for="ch in children" :key="ch.path">
             <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :selected="selected"
                 :selectedVersion="selectedVersion" :getFilesFor="getFilesFor" :depth="depth + 1"
                 @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
-            <div v-else class="grid items-center border-b border-default hover:bg-white/5
-               [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
+            <div v-else class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer select-none
+         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="selected.has(ch.path)
+            ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)]'
+            : ''" @click="$emit('toggle', { path: ch.path, isDir: false })"
+                @keydown.enter.prevent="$emit('toggle', { path: ch.path, isDir: false })"
+                @keydown.space.prevent="$emit('toggle', { path: ch.path, isDir: false })" role="button" tabindex="0"
+                :aria-pressed="selected.has(ch.path)">
+                <!-- checkbox -->
                 <div class="px-2 py-1 flex justify-center">
-                    <input class="input-checkbox" type="checkbox" :checked="selected.has(ch.path)"
-                        @change="$emit('toggle', { path: ch.path, isDir: false })" />
+                    <input class="input-checkbox h-4 w-4 m-0 align-middle leading-none" type="checkbox"
+                        :checked="selected.has(ch.path)" @click.stop
+                        @change="$emit('toggle', { path: ch.path, isDir: false })"
+                        :aria-checked="selected.has(ch.path)" />
                 </div>
+
+                <!-- name -->
                 <div class="px-2 py-1 min-w-0">
                     <div class="flex items-center gap-2"
                         :style="{ '--tw-ps': `${(depth + 1) * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
                         <span class="w-4 h-4 rounded border border-transparent shrink-0"></span>
-                        <span class="truncate select-none" :title="ch.name">{{ ch.name }}</span>
+                        <span class="truncate" :title="ch.name">{{ ch.name }}</span>
                     </div>
                 </div>
+
                 <div class="px-2 py-1">File</div>
                 <div class="px-2 py-1">{{ fmtBytes(ch.size) }}</div>
-                <div class="px-2 py-1">{{ fmtDate(ch.mtime) }}</div>
+                <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
+                    :title="fmtDateFull(ch.mtime)">
+                    {{ fmtDate(ch.mtime) }}
+                </div>
             </div>
         </template>
     </div>
@@ -104,10 +120,15 @@ const children = ref<Array<{ name: string; isDir: boolean; path: string; size?: 
 const entrySize = computed(() => 0)
 const entryMtime = computed(() => 0)
 
-const folderCb = ref<HTMLInputElement | null>(null)
+// const folderCb = ref<HTMLInputElement | null>(null)
 const isDir = computed(() => isRoot || props.relPath.length > 0 ? true : false) // root treated like folder row only for children
 const isFolder = computed(() => !isRoot && isDir.value)
 const isFileChecked = computed(() => props.selected.has(props.relPath))
+
+function onRowClick() {
+    // This row only renders for folders, so just expand/collapse
+    toggleOpen();
+}
 
 async function ensureChildren() {
     if (children.value.length || loading.value) return
@@ -128,19 +149,20 @@ function toggleOpen() {
         ensureAllFiles()
     }
 }
-async function onFolderOrFileCheckbox(e: Event) {
-    // Immediately expand folders for visual feedback
-    if (isFolder.value && !open.value) {
-        open.value = true
-        await ensureChildren()
-    }
-    await ensureAllFiles()
-    // parent handles mass add/remove of files
-    emit('toggle', { path: props.relPath, isDir: isFolder.value })
-    // after parent updates selection, refresh tri-state (indeterminate)
-    await nextTick()
-    if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
-}
+
+// async function onFolderOrFileCheckbox(e: Event) {
+//     // Immediately expand folders for visual feedback
+//     if (isFolder.value && !open.value) {
+//         open.value = true
+//         await ensureChildren()
+//     }
+//     await ensureAllFiles()
+//     // parent handles mass add/remove of files
+//     emit('toggle', { path: props.relPath, isDir: isFolder.value })
+//     // after parent updates selection, refresh tri-state (indeterminate)
+//     await nextTick()
+//     if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
+// }
 
 const allFiles = ref<string[] | null>(null)
 
@@ -165,10 +187,10 @@ async function ensureAllFiles() {
     }
 }
 
-async function refreshTriState() {
-    await nextTick()
-    if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
-}
+// async function refreshTriState() {
+//     await nextTick()
+//     if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
+// }
 
 // mount: load per-folder file list even when collapsed
 onMounted(async () => {
@@ -177,17 +199,17 @@ onMounted(async () => {
     } else {
         allFiles.value = null
         await ensureAllFiles()
-        await refreshTriState()
+        // await refreshTriState()
     }
 })
 
 // selection changed somewhere → recompute (and make sure we have the file list)
-watch(() => props.selectedVersion, async () => {
-    if (!isRoot) {
-        if (allFiles.value === null) allFiles.value = await props.getFilesFor(props.relPath || '')
-        await refreshTriState()
-    }
-})
+// watch(() => props.selectedVersion, async () => {
+//     if (!isRoot) {
+//         if (allFiles.value === null) allFiles.value = await props.getFilesFor(props.relPath || '')
+//         // await refreshTriState()
+//     }
+// })
 
 // root/folder path changed (e.g., PathInput picked a new cwd) → reset caches
 watch(() => props.relPath, async () => {
@@ -196,7 +218,7 @@ watch(() => props.relPath, async () => {
     open.value = isRoot ? true : open.value
     await ensureChildren()
     await ensureAllFiles()
-    await refreshTriState()
+    // await refreshTriState()
 })
 
 function fmtBytes(n?: number) {
@@ -205,8 +227,21 @@ function fmtBytes(n?: number) {
     while (x >= 1024 && i < u.length - 1) { x /= 1024; i++ }
     return `${x.toFixed(x >= 10 || i === 0 ? 0 : 1)} ${u[i]}`
 }
+
 function fmtDate(ms?: number) {
-    if (!ms) return '—'
-    try { return new Date(ms).toLocaleString() } catch { return '—' }
+    if (!Number.isFinite(ms!)) return '—'
+    const d = new Date(ms!)
+    if (Number.isNaN(d.getTime())) return '—'
+    return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(d)
+}
+
+function fmtDateFull(ms?: number) {
+    if (!Number.isFinite(ms!)) return '—'
+    const d = new Date(ms!)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleString() 
 }
 </script>
