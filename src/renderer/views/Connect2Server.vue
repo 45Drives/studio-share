@@ -65,7 +65,7 @@
                 </div>
             </CardContainer>
             <div class="col-span-2 items-center">
-                <button class="btn btn-secondary w-60" @click="connectToServer">Connect to Server</button>
+                <button type="submit" class="btn btn-secondary w-60">Connect to Server</button>
             </div>
         </div>
     </form>
