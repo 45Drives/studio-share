@@ -15,7 +15,9 @@ studio-share.protocase.local {
   handle /v/*       { reverse_proxy 127.0.0.1:9095 }
   handle /download/*{ reverse_proxy 127.0.0.1:9095 }
   handle /stream/*  { reverse_proxy 127.0.0.1:9095 { flush_interval -1 } }
-
+  handle /meta/*       { reverse_proxy 127.0.0.1:9095 }
+  handle /api/token/*  { reverse_proxy 127.0.0.1:9095 { flush_interval -1 } }
+  
   handle /.well-known/* { reverse_proxy 127.0.0.1:9095 }
   handle /healthz       { reverse_proxy 127.0.0.1:9095 }
   handle /s/*           { reverse_proxy 127.0.0.1:9095 }

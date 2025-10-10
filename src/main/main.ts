@@ -448,7 +448,7 @@ function createWindow() {
         const txtAnswer = records.find(a => a.type === 'TXT' && a.name === answer1.name);
 
         if (ipAnswer && ipAnswer.data) {
-          const serverIp = ipAnswer.data as string;
+          // const serverIp = ipAnswer.data as string;
           const instance = answer1.name;    // e.g. "hl4-test._houstonserver._tcp.local"
 
           // Parse TXT into a map
@@ -459,7 +459,22 @@ function createWindow() {
               txtRecord[k] = v;
             });
           }
+          const aRecords = records.filter(a => a.type === 'A' && typeof a.data === 'string')
+            .map(a => a.data as string);
 
+          function preferRfc1918(addrs: string[]) {
+            const v4 = addrs.filter(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
+            return v4.find(a => a.startsWith('192.168.')) ||
+              v4.find(a => a.startsWith('10.')) ||
+              v4.find(a => a.startsWith('172.') && +a.split('.')[1] >= 16 && +a.split('.')[1] <= 31) ||
+              v4.find(a => !a.startsWith('169.254.')) ||
+              v4[0] || null;
+          }
+
+          const txtIp = txtRecord.ip;                 // ← from broadcaster.publish TXT
+          const serverIp = txtIp || preferRfc1918(aRecords);
+          if (!serverIp) return; // skip if we still failed
+          
           // Derive a friendly name (strip off the "._houstonserver._tcp.local" suffix)
           const [bare] = instance.split('._');
           const displayName = `${bare}.local`;
