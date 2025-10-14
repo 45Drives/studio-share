@@ -200,6 +200,23 @@ async function connectToServer() {
         });
         if (!res.ok) throw new Error(await res.text());
         const { token } = await res.json();
+
+        const settings = await fetch(`${apiBase}/api/settings`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.ok ? r.json() : {});
+
+        const needsBootstrap = !settings?.externalBase || !settings?.subdomain;
+
+        // Option A: skip silently and let user do it from a Settings screen
+        // Option B (non-blocking): fire-and-forget, but don't fail login/UI flow if it errors
+        if (needsBootstrap) {
+            fetch(`${apiBase}/api/setup/bootstrap`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ /* wantSubdomain?: 'optional' */ })
+            }).catch(() => {/* ignore; user can retry from Settings */ });
+        }
+
         connectionMeta.value = { ...connectionMeta.value, token };
         router.push({ name: 'select-file' });
     } catch (e: any) {

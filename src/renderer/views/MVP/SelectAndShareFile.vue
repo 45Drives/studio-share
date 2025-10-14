@@ -97,10 +97,10 @@
                         <!-- Selected files panel (unchanged except we ensure paths remain under project when restricted) -->
                         <div v-if="files.length" class="border rounded bg-accent">
                             <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                <!-- <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
                                     <input type="checkbox" v-model="autoRegenerate" />
                                     Auto-regenerate link
-                                </label>
+                                </label> -->
                                 <button class="btn btn-secondary" @click="showSelected = !showSelected">
                                     {{ showSelected ? 'Hide' : 'Show' }} list
                                 </button>
@@ -334,7 +334,6 @@ function resetProject() {
 const autoRegenerate = ref(false)
 let regenTimer: ReturnType<typeof setTimeout> | null = null
 
-const filePath = ref('')
 const files = ref<string[]>([])
 const showSelected = ref(true)
 function clearAll() {
@@ -342,35 +341,39 @@ function clearAll() {
     invalidateLink()
 }
 
-function addFile() {
-    if (!filePath.value) return
-    let pathToAdd = filePath.value
+function toAbsUnder(base: string, p: string) {
+    // base: e.g. "/tank"
+    const bName = (base || '').replace(/\/+$/, '').replace(/^\/+/, ''); // "tank"
+    const clean = (p || '').replace(/^\/+/, '');                         // "tank/foo" or "foo"
+    if (!bName) return '/' + clean;                                      // no project root picked
 
-    // If restricted to project root, ensure the added path stays under it
-    if (!showEntireTree.value && projectBase.value && !pathToAdd.startsWith(projectBase.value)) {
-        pathToAdd = joinPath(projectBase.value, pathToAdd)
+    // If the path already starts with the base name, don't duplicate it.
+    if (clean === bName || clean.startsWith(bName + '/')) {
+        return '/' + clean;                                                // "/tank/..."
     }
-
-    if (!files.value.includes(pathToAdd)) {
-        files.value.push(pathToAdd)
-        invalidateLink()
-        scheduleAutoRegen()
-    }
-    filePath.value = ''
+    return '/' + bName + '/' + clean;                                    // "/tank/foo"
 }
+
 
 // When FileExplorer emits @add, normalize relative paths to live under the chosen project (if restricted)
 function onExplorerAdd(paths: string[]) {
     paths.forEach(p => {
-        let full = p
-        if (!showEntireTree.value && projectBase.value && !p.startsWith(projectBase.value)) {
-            full = joinPath(projectBase.value, p)
+        let full = p;
+        if (!showEntireTree.value && projectBase.value) {
+            // Always normalize to an absolute path under the chosen project root.
+            full = toAbsUnder(projectBase.value, p);
+        } else {
+            // Ensure absolute (avoid accidental relative paths)
+            full = p.startsWith('/') ? p : '/' + p.replace(/^\/+/, '');
         }
-        if (!files.value.includes(full)) files.value.push(full)
-    })
-    invalidateLink()
-    scheduleAutoRegen()
+        if (!files.value.includes(full)) files.value.push(full);
+    });
+    invalidateLink();
+    scheduleAutoRegen();
 }
+
+const externalBase = ref<string>(''); // e.g., "https://demo123.collab.45d.io"
+
 
 function removeFile(i: number) {
     files.value.splice(i, 1)
@@ -461,22 +464,21 @@ function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
 async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
-        projectBase: projectBase.value || undefined, // server can use this to validate/resolve paths
-    }
+        projectBase: projectBase.value || undefined,
+        externalBase: externalBase.value || undefined, // <— add this
+    };
 
-    if (files.value.length === 1) {
-        body.filePath = files.value[0]
-    } else {
-        body.filePaths = files.value.slice()
-    }
+    if (files.value.length === 1) body.filePath = files.value[0];
+    else body.filePaths = files.value.slice();
 
     const data = await apiFetch('/api/magic-link', {
         method: 'POST',
-        body: JSON.stringify(body)
-    })
-    viewUrl.value = data.viewUrl
-    downloadUrl.value = data.downloadUrl
+        body: JSON.stringify(body),
+    });
+    viewUrl.value = data.viewUrl;
+    downloadUrl.value = data.downloadUrl;
 }
+
 
 // Basic join to avoid double slashes
 function joinPath(a: string, b: string) {
@@ -505,7 +507,22 @@ function openInBrowser() {
     window.open(viewUrl.value, '_blank')
 }
 
+// Add this helper (keeps behavior in one place)
+function resetToProjectPicker() {
+    // ensure we’re not in the “entire tree” mode, and drop the chosen root
+    showEntireTree.value = false
+    backToRoots()            // show ZFS pools list UI
+    resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
+}
+
+// Replace your goBack with this:
 function goBack() {
+    if (projectSelected.value) {
+        // In Step 2 → bounce back to the project picker (Step 1)
+        resetToProjectPicker()
+        return
+    }
+    // Already on the project root selection UI → leave the page
     router.push({ name: 'server-selection' })
 }
 

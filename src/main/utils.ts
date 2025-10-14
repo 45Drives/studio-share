@@ -212,3 +212,13 @@ export function formatDateForTask2(date) {
 
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
+
+function slugHost(h) {
+  return String(h).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'box';
+}
+function machineId() {
+  try { return fs.readFileSync('/etc/machine-id', 'utf8').trim(); } catch { return 'local0000'; }
+}
+export function defaultSubdomain() {
+  return `${slugHost(os.hostname())}-${machineId().slice(0, 6)}`;
+}
