@@ -60,6 +60,21 @@ const emit = defineEmits<{
 
 const apiFetch = props.apiFetch
 
+function normDir(p?: string) {
+    if (!p) return ''
+    return p.endsWith('/') ? p : (p + '/')
+}
+
+onMounted(() => {
+    if (props.startDir) {
+        cwd.value = normDir(props.startDir)
+    }
+})
+
+watch(() => props.startDir, (v) => {
+    cwd.value = normDir(v)
+})
+
 const cwd = ref<string>('')                       // shown to user; usually starts with "/"
 const rootRel = computed(() =>
     (cwd.value || '').replace(/^\/+/, '').replace(/\/+$/, '') // what the API wants

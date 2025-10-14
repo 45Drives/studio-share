@@ -117,7 +117,7 @@ function isPortOpen(ip: string, port: number, timeout = 2000): Promise<boolean> 
 }
 
 // Timeout duration in milliseconds (e.g., 30 seconds)
-const TIMEOUT_DURATION = 10000;
+const TIMEOUT_DURATION = 30000;
 const serviceType = '_houstonserver._tcp.local'; // Define the service you're looking for
 
 const getLocalIP = () => {
@@ -430,120 +430,121 @@ function createWindow() {
   // Set up mDNS for service discovery
   const mDNSClient = mdns(); // Correctly call as a function
   mDNSClient.query({ questions: [{ name: serviceType, type: 'PTR' }] });
+  
+  // ---- Add these utilities near the top (once) -------------------------------
+  const SERVICE_TYPE = '_houstonserver._tcp.local'; // your existing value
 
+  const norm = (s?: string) =>
+    (s || '').toLowerCase().replace(/\.$/, ''); // strip trailing dot
 
-  // Start listening for devices
-  mDNSClient.on('response', async (response) => {
-    // Combine answers + additionals into one array
-    const records = [
-      ...response.answers,
-      ...(response.additionals ?? []),
-    ];
+  const isGoodV4 = (ip: string) =>
+    /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith('169.254.');
 
-    server_search:
-    for (const answer1 of records) {
-      if (answer1.type === 'SRV' && answer1.name.includes(serviceType)) {
-        // Find related 'A' and 'TXT' records in the combined list
-        const ipAnswer = records.find(a => a.type === 'A' && a.name === (answer1.data as any).target);
-        const txtAnswer = records.find(a => a.type === 'TXT' && a.name === answer1.name);
+  type SrvRec = { target: string, port: number };
+  type TxtMap = Record<string, string>;
 
-        if (ipAnswer && ipAnswer.data) {
-          // const serverIp = ipAnswer.data as string;
-          const instance = answer1.name;    // e.g. "hl4-test._houstonserver._tcp.local"
+  const srvByInstance = new Map<string, SrvRec>();   // key: instance (SRV.name)
+  const txtByInstance = new Map<string, TxtMap>();   // key: instance (SRV.name)
+  const aByHost = new Map<string, string>();         // key: A.name (host) → IPv4
 
-          // Parse TXT into a map
-          const txtRecord: Record<string, string> = {};
-          if (txtAnswer && Array.isArray(txtAnswer.data)) {
-            txtAnswer.data.forEach((buf: Buffer) => {
-              const [k, v] = buf.toString().split('=');
-              txtRecord[k] = v;
-            });
-          }
-          const aRecords = records.filter(a => a.type === 'A' && typeof a.data === 'string')
-            .map(a => a.data as string);
+  function parseTxt(answer: any): TxtMap {
+    const out: TxtMap = {};
+    if (answer && Array.isArray(answer.data)) {
+      for (const buf of answer.data) {
+        const [k, v] = String(buf).split('=');
+        if (k) out[k] = v ?? '';
+      }
+    }
+    return out;
+  }
 
-          function preferRfc1918(addrs: string[]) {
-            const v4 = addrs.filter(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
-            return v4.find(a => a.startsWith('192.168.')) ||
-              v4.find(a => a.startsWith('10.')) ||
-              v4.find(a => a.startsWith('172.') && +a.split('.')[1] >= 16 && +a.split('.')[1] <= 31) ||
-              v4.find(a => !a.startsWith('169.254.')) ||
-              v4[0] || null;
-          }
+  function upsertServerFrom(instanceRaw: string) {
+    const instance = norm(instanceRaw);                   // e.g. "f8x1-rnd._houstonserver._tcp.local"
+    const srv = srvByInstance.get(instance);
+    if (!srv) return;
 
-          const txtIp = txtRecord.ip;                 // ← from broadcaster.publish TXT
-          const serverIp = txtIp || preferRfc1918(aRecords);
-          if (!serverIp) return; // skip if we still failed
-          
-          // Derive a friendly name (strip off the "._houstonserver._tcp.local" suffix)
-          const [bare] = instance.split('._');
-          const displayName = `${bare}.local`;
+    const txt = txtByInstance.get(instance) || {};
+    let ip = txt.ip && isGoodV4(txt.ip) ? txt.ip : null;
 
-          // Build your Server exactly as before, using displayName
-          const server: Server = {
-            ip: serverIp,
-            name: displayName,
-            status: 'unknown',  // overwritten below
-            lastSeen: Date.now(),
-            setupComplete: txtRecord.setupComplete === 'true',
-            serverName: txtRecord.serverName || displayName,
-            shareName: txtRecord.shareName,
-            setupTime: txtRecord.setupTime,
-            serverInfo: {
-              moboMake: txtRecord.moboMake,
-              moboModel: txtRecord.moboModel,
-              serverModel: txtRecord.serverModel,
-              aliasStyle: txtRecord.aliasStyle,
-              chassisSize: txtRecord.chassisSize,
-            },
-            manuallyAdded: false,
-            fallbackAdded: false,
-          };
+    if (!ip) {
+      const target = norm(srv.target);                   // e.g. "f8x1-rnd.local"
+      const a = aByHost.get(target);
+      if (a && isGoodV4(a)) ip = a;
+    }
 
-          if (!server.manuallyAdded && !server.fallbackAdded) {
-            try {
-              const fetchResponse = await fetch(`http://${server.ip}:9095/setup-status`);
-              if (fetchResponse.ok) {
-                const setupStatusResponse = await fetchResponse.json();
-                server.status = setupStatusResponse.status ?? 'unknown';
-              } else {
-                console.warn(`HTTP error! server: ${server.name} status: ${fetchResponse.status}`);
-              }
-            } catch (error) {
-              // console.error('Server Search -> Fetch error:', error);
-            }
-          }
+    if (!ip) return;                                     // not ready yet
 
-          // upsert into discoveredServers
-          // const existing = discoveredServers.find(s => s.ip === server.ip && s.name === server.name);
-          const existing = discoveredServers.find(s => s.ip === server.ip);
+    // Nice display name from the SRV instance
+    const [bare] = instance.split('._');
+    const displayName = `${bare}.local`;
 
-          if (!existing) {
-            discoveredServers.push(server);
-          } else {
-            Object.assign(existing, {
-              name: displayName,
-              lastSeen: server.lastSeen,
-              status: server.status,
-              setupComplete: server.setupComplete,
-              serverName: server.serverName,
-              shareName: server.shareName,
-              setupTime: server.setupTime,
-              serverInfo: server.serverInfo,
-              fallbackAdded: false
-            });
-          }
+    const s: Server = {
+      ip,
+      name: displayName,
+      status: 'unknown',
+      lastSeen: Date.now(),
+      setupComplete: txt.setupComplete === 'true',
+      serverName: txt.serverName || displayName,
+      shareName: txt.shareName,
+      setupTime: txt.setupTime,
+      serverInfo: {
+        moboMake: txt.moboMake,
+        moboModel: txt.moboModel,
+        serverModel: txt.serverModel,
+        aliasStyle: txt.aliasStyle,
+        chassisSize: txt.chassisSize,
+      },
+      manuallyAdded: false,
+      fallbackAdded: false,
+    };
 
-          break server_search;
+    // Optional probe to label 'complete'
+    (async () => {
+      try {
+        const r = await fetch(`http://${s.ip}:9095/setup-status`);
+        if (r.ok) {
+          const j = await r.json();
+          s.status = j.status ?? 'unknown';
         }
+      } catch { }
+      // upsert and notify after probe too
+      const existing = discoveredServers.find(x => x.ip === s.ip);
+      if (!existing) discoveredServers.push(s);
+      else Object.assign(existing, s, { lastSeen: Date.now(), fallbackAdded: false });
+
+      mainWindow?.webContents.send('discovered-servers', discoveredServers);
+      mainWindow?.webContents.send('client-ip', getLocalIP());
+    })();
+  }
+
+  // ---- Replace your current handler with this --------------------------------
+  mDNSClient.on('response', (response) => {
+    const items = [...(response.answers || []), ...(response.additionals || [])];
+
+    // 1) Cache what we got in this frame
+    for (const r of items) {
+      if (r.type === 'SRV' && r.name && r.name.toLowerCase().includes(SERVICE_TYPE)) {
+        const inst = norm(r.name);
+        const data = r.data as any;
+        srvByInstance.set(inst, {
+          target: norm(data?.target),                     // normalize host
+          port: Number(data?.port || 0),
+        });
+      } else if (r.type === 'TXT' && r.name && r.name.toLowerCase().includes(SERVICE_TYPE)) {
+        txtByInstance.set(norm(r.name), parseTxt(r));
+      } else if (r.type === 'A' && r.name && typeof r.data === 'string') {
+        const host = norm(r.name);
+        const ip = r.data;
+        if (isGoodV4(ip)) aByHost.set(host, ip);
       }
     }
 
-    if (mainWindow) {
-      mainWindow.webContents.send('discovered-servers', discoveredServers);
-      mainWindow.webContents.send('client-ip', getLocalIP());
+    // 2) Try to build/refresh any instances we know about
+    for (const instance of srvByInstance.keys()) {
+      upsertServerFrom(instance);
     }
   });
+
 
   const mdnsInterval = setInterval(() => {
     mDNSClient.query({

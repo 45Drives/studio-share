@@ -84,7 +84,7 @@ useHeader('Houston Collabos');
 
 const router = useRouter();
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
-
+// console.log('discovered:', discoveryState.servers);
 const manualIp = ref('');
 const username = ref('');
 const password = ref('');
