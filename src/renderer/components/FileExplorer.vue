@@ -77,7 +77,7 @@ watch(() => props.startDir, (v) => {
 
 const cwd = ref<string>('')                       // shown to user; usually starts with "/"
 const rootRel = computed(() =>
-    (cwd.value || '').replace(/^\/+/, '').replace(/\/+$/, '') // what the API wants
+    (cwd.value || '/').replace(/\/+$/, '') // keep leading slash; just trim trailing
 )
 
 const internalSelected = ref<Set<string>>(new Set())
