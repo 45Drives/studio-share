@@ -24,6 +24,7 @@ export function useApi() {
             const msg = await res.text().catch(() => res.statusText)
             throw new Error(msg || `HTTP ${res.status}`)
         }
+        console.log('token:', meta.value.token); // temporarily
         const text = await res.text()
         return text ? JSON.parse(text) : undefined
     }

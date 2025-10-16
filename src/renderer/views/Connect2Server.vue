@@ -200,8 +200,9 @@ async function connectToServer() {
         });
         if (!res.ok) throw new Error(await res.text());
         const { token } = await res.json();
-        connectionMeta.value = { ...connectionMeta.value, token };
-        router.push({ name: 'select-file' });
+        connectionMeta.value = { ...connectionMeta.value, token,ssh:{server:ip,username:username.value} };
+        // router.push({ name: 'select-file' });
+        router.push({ name: 'uplaod-file' });
     } catch (e: any) {
         pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000));
     }

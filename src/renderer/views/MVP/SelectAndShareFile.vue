@@ -25,7 +25,6 @@
                                         <button class="btn btn-danger" @click="clearAll">Clear all</button>
                                     </div>
                                 </div>
-
                                 <!-- scrollable list -->
                                 <div v-show="showSelected" class="max-h-40 overflow-auto">
                                     <div v-for="(f, i) in files" :key="f"
@@ -198,7 +197,8 @@ async function generateLink() {
         method: 'POST',
         body: JSON.stringify(body)
     })
-    viewUrl.value = data.viewUrl
+    console.log('Got magic link data', data)
+    viewUrl.value = data.downloadUrl
     downloadUrl.value = data.downloadUrl
 }
 

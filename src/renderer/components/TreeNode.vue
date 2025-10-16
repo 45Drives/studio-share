@@ -2,11 +2,24 @@
     <!-- Non-root row -->
     <div v-if="!isRoot" class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer
          [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="{ 'opacity-60': isIndeterminate }"
-        @click="onRowClick" @keydown.enter.prevent="onRowClick" @keydown.space.prevent="onRowClick" role="button"
+         @click="modeIsUpload ? selectFolder() : onRowClick()" @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"  @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()"  role="button"
         tabindex="0" :aria-expanded="open">
         <!-- checkbox col: keep spacing, no checkbox for folders -->
         <div class="px-2 py-1 flex justify-center">
-            <span class="inline-block w-4 h-4"></span>
+            <template v-if="modeIsUpload">
+                <button
+     type="button"
+    class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current"
+    :aria-checked="isFolderSelected"
+    role="radio"
+    @click.stop="selectFolder()"
+  >
+   <span v-if="isFolderSelected" class="inline-block w-2 h-2 rounded-full bg-current"></span>
+   </button>
+            </template>
+            <template v-else>
+                <span class="inline-block w-4 h-4"></span>
+            </template>
         </div>
 
         <!-- name -->
@@ -21,7 +34,7 @@
                 </button>
 
                 <!-- label (also stops bubbling; the row already handles click) -->
-                <button class="underline truncate" :title="label + '/'" @click.stop="toggleOpen">
+                    <button class="underline truncate" :title="label + '/'" @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
                     {{ label }}/
                 </button>
             </div>
@@ -49,22 +62,28 @@
             <div class="px-2 py-2"></div>
         </div>
         <template v-for="ch in children" :key="ch.path">
-            <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :selected="selected"
-                :selectedVersion="selectedVersion" :getFilesFor="getFilesFor" :depth="depth + 1"
+            <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase" :selectedFolder="selectedFolder"  :selected="selected"
+                :selectedVersion="selectedVersion" :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
                 @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
             <div v-else class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer select-none
-         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="selected.has(ch.path)
-            ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)]'
-            : ''" @click="$emit('toggle', { path: ch.path, isDir: false })"
-                @keydown.enter.prevent="$emit('toggle', { path: ch.path, isDir: false })"
-                @keydown.space.prevent="$emit('toggle', { path: ch.path, isDir: false })" role="button" tabindex="0"
-                :aria-pressed="selected.has(ch.path)">
+         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" 
+         :class="[
+    (!modeIsUpload && selected.has(ch.path)) ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)]' : '',
+    modeIsUpload ? 'pointer-events-none opacity-90' : ''
+  ]"
+ @click="onFileToggle(ch.path)"
+ @keydown.enter.prevent="onFileToggle(ch.path)"
+ @keydown.space.prevent="onFileToggle(ch.path)"
+         role="button" tabindex="0"
+         :aria-pressed="!modeIsUpload && selected.has(ch.path)">
                 <!-- checkbox -->
                 <div class="px-2 py-1 flex justify-center">
-                    <input class="input-checkbox h-4 w-4 m-0 align-middle leading-none" type="checkbox"
-                        :checked="selected.has(ch.path)" @click.stop
-                        @change="$emit('toggle', { path: ch.path, isDir: false })"
-                        :aria-checked="selected.has(ch.path)" />
+                    <template v-if="!modeIsUpload">
+                        <input class="input-checkbox h-4 w-4 m-0" type="checkbox"
+                            :checked="selected.has(ch.path)" @click.stop
+                            @change="$emit('toggle', { path: ch.path, isDir: false })"
+                            :aria-checked="selected.has(ch.path)" />
+                    </template>
                 </div>
 
                 <!-- name -->
@@ -103,12 +122,20 @@ const props = defineProps<{
     getFilesFor: (folder: string) => Promise<string[]>
     depth?: number
     isRoot?: boolean
+    useCase?: 'upload' | 'share'
+    selectedFolder?: string | null
 }>()
 
 const emit = defineEmits<{
     (e: 'toggle', payload: TogglePayload): void
     (e: 'navigate', rel: string): void
+    (e: 'select-folder', folderRel: string): void
+
 }>()
+
+const modeIsUpload = computed(() => (props.useCase ?? 'share') === 'upload')
+const isFolderSelected = computed(() =>
+ modeIsUpload.value && !isRoot && props.selectedFolder === props.relPath)
 
 const depth = props.depth ?? 0
 const isRoot = props.isRoot ?? false
@@ -243,5 +270,14 @@ function fmtDateFull(ms?: number) {
     const d = new Date(ms!)
     if (Number.isNaN(d.getTime())) return '—'
     return d.toLocaleString() 
+}
+
+function onFileToggle(path: string) {
+  if (modeIsUpload.value) return;            
+  emit('toggle', { path, isDir: false })
+}
+
+function selectFolder() {
+  emit('select-folder', props.relPath || '')
 }
 </script>
