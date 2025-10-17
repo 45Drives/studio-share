@@ -14,10 +14,10 @@ export const router = createRouter({
     // { path: '/link/view', name: 'view-link', component: () => import('../renderer/views/Shares/ViewLink.vue') },
     // { path: '/logs', name: 'logs', component: () => import('../renderer/views/GlobalLogs.vue') },
     // { path: '/settings', name: 'settings', component: () => import('../renderer/views/GlobalSettings.vue') },
-    //{ path: '/select-file', name: 'select-file', component: () => import('../renderer/views/MVP/SelectAndShareFile.vue')},
-   // { path: '/upload-file', name: 'uplaod-file', component: () => import('../renderer/views/MVP/UploadPannel.vue')},
+    { path: '/select-file', name: 'select-file', component: () => import('../renderer/views/MVP/SelectAndShareFile.vue')},
+   // { path: '/upload-file', name: 'uplaod-file', component: () => import('../renderer/views/MVP/UploadPanel.vue')},
    // { path: '/upload-destination', name: 'upload-destination', component: () => import('../renderer/views/MVP/UploadDestination.vue') },
    // { path: '/upload-progress', name: 'upload-progress', component: () => import('../renderer/views/MVP/UploadProgress.vue') },
-   { path: '/client-upload-location', name: 'client-upload-location', component: () => import('../renderer/views/MVP/ClientUploadLocation.vue') },
+  //  { path: '/client-upload-location', name: 'client-upload-location', component: () => import('../renderer/views/MVP/ClientUploadLocation.vue') },
   ],
 })
