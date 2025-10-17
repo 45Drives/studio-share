@@ -9,3 +9,4 @@ builds
 .env
 
 scripts/test-pkg.sh
+.yarn/install-state.gz

@@ -106,7 +106,6 @@
                                 </button>
                                 <button class="btn btn-danger" @click="clearAll">Clear all</button>
                             </div>
-
                             <div v-show="showSelected" class="max-h-40 overflow-auto">
                                 <div v-for="(f, i) in files" :key="f"
                                     class="grid items-center [grid-template-columns:1fr_auto] border-t border-default text-sm">
@@ -475,6 +474,9 @@ async function generateLink() {
         method: 'POST',
         body: JSON.stringify(body),
     });
+
+    console.log('Got magic link data', data)
+    // viewUrl.value = data.downloadUrl
     viewUrl.value = data.viewUrl;
     downloadUrl.value = data.downloadUrl;
 }

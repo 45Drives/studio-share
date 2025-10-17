@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ========= Settings (override via env if needed) =========
-REMOTE_HOST="${REMOTE_HOST:-root@192.168.123.5}"
+REMOTE_HOST="${REMOTE_HOST:-root@192.168.207.11}"
 REMOTE_DIR="${REMOTE_DIR:-/tmp/studio-share-build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PWD/builds/linux}"
 ARCHES="${ARCHES:-x64}"          # "x64" or "x64,arm64"

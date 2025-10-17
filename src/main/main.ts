@@ -55,7 +55,6 @@ import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { registerCredsIPC } from './creds.ipc';
 import { getPin, isHostPinned, rememberPin } from './certPins'
-
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
 
@@ -839,9 +838,192 @@ app.whenReady().then(() => {
   });
 
 });
+
 ipcMain.on('check-for-updates', () => {
   autoUpdater.checkForUpdatesAndNotify();
 });
+ipcMain.handle('dialog:pickFiles', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections']
+  });
+  if (canceled) return [];
+  return filePaths.map(p => ({ path: p, name: path.basename(p), size: fs.statSync(p).size }));
+});
+
+ipcMain.handle('dialog:pickFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (canceled || !filePaths.length) return [];
+  const dir = filePaths[0];
+  const files = fs.readdirSync(dir);
+  return files.map(f => {
+    const fp = path.join(dir, f);
+    const s = fs.statSync(fp);
+    return { path: fp, name: f, size: s.size };
+  });
+});
+
+
+// upload file (streamed)
+// Track inflight streams so we can cancel
+const inflightUploads = new Map<string, fs.ReadStream>()
+
+ipcMain.on('upload-file', async (event, { filePath, destDir, id }) => {
+  try {
+    const fileName = path.basename(filePath)
+    const url = `http://yourserver:9095/api/upload?dest=${encodeURIComponent(destDir)}&name=${encodeURIComponent(fileName)}`
+    const stat = fs.statSync(filePath)
+    const total = stat.size
+    let sent = 0
+
+    const stream = fs.createReadStream(filePath)
+    inflightUploads.set(id, stream)
+
+    stream.on('data', (chunk) => {
+      sent += chunk.length
+      event.sender.send(`upload-progress-${id}`, Math.floor((sent / total) * 100))
+    })
+    stream.on('error', (err) => {
+      event.sender.send(`upload-done-${id}`, { error: err?.message || 'stream error' })
+      inflightUploads.delete(id)
+    })
+
+    const res = await fetch(url, { method: 'POST', body: stream as any })
+    const json = await res.json().catch(() => ({}))
+    event.sender.send(`upload-done-${id}`, json)
+  } catch (err: any) {
+    event.sender.send(`upload-done-${id}`, { error: err?.message || String(err) })
+  } finally {
+    inflightUploads.delete(id)
+  }
+})
+
+ipcMain.on('upload:file:cancel', (event, { id }) => {
+  const s = inflightUploads.get(id)
+  if (s) {
+    try { s.destroy(new Error('canceled')) } catch {}
+    inflightUploads.delete(id)
+  }
+  event.sender.send(`upload-done-${id}`, { error: 'canceled' })
+})
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
+
+type RsyncStartOpts = {
+  id: string
+  src: string           // local path (file or folder)
+  host: string
+  user: string
+  destDir: string       // remote directory (no filename)
+  port?: number
+  keyPath?: string      // ~/.ssh/id_rsa etc (optional if using agent)
+  bwlimitKb?: number    // optional bandwidth limit (KB/s)
+  extraArgs?: string[]  // any other rsync flags
+}
+
+const inflightRsync = new Map<string, ChildProcessWithoutNullStreams>()
+
+function buildRsyncArgs(o: RsyncStartOpts) {
+  const sshParts = ['ssh']
+  if (o.port) sshParts.push('-p', String(o.port))
+  if (o.keyPath) sshParts.push('-i', o.keyPath)
+
+  const args = [
+    '-az',
+    '--info=progress2',     // total-progress line
+    '--human-readable',     // 10.5MB/s, etc
+    '--partial',
+    '--inplace',
+    '-e', sshParts.join(' '),
+  ]
+
+  if (o.bwlimitKb && o.bwlimitKb > 0) args.push(`--bwlimit=${o.bwlimitKb}`)
+  if (o.extraArgs?.length) args.push(...o.extraArgs)
+
+  const srcIsDir = (() => { try { return fs.statSync(o.src).isDirectory() } catch { return false } })()
+  const srcFinal = srcIsDir ? (o.src.endsWith('/') ? o.src : o.src + '/') : o.src
+
+  const dest = `${o.user}@${o.host}:${o.destDir.endsWith('/') ? o.destDir : o.destDir + '/'}`
+  args.push(srcFinal, dest)
+  return args
+}
+
+
+function parseProgress(line: string) {
+  // Examples (progress2):
+  // "  42,123,456  12%   12.34MB/s    0:10:01 (xfr#1, to-chk=0/5)"
+  // "123,456,789  55%    9.8MiB/s    0:03:21"
+  const percentMatch = line.match(/(\d+)%/)
+  const rateMatch    = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i)     // KiB/s, MiB/s, MB/s, etc
+  const etaMatch     = line.match(/(\d+:\d{2}:\d{2})/)              // 0:10:01
+  const bytesMatch   = line.trim().match(/^(\d[\d,]*)\s+/)          // leading bytes count
+
+  const percent = percentMatch ? Number(percentMatch[1]) : undefined
+  const rate = rateMatch ? `${rateMatch[1]} ${rateMatch[2]}B/s` : undefined
+  const eta = etaMatch ? etaMatch[1] : undefined
+  const bytesTransferred = bytesMatch ? Number(bytesMatch[1].replace(/,/g, '')) : undefined
+
+  return { percent, rate, eta, bytesTransferred, raw: line }
+}
+
+// Start
+ipcMain.on('rsync:start', (event, opts: RsyncStartOpts) => {
+  const { id } = opts
+  if (inflightRsync.has(id)) {
+    event.sender.send(`rsync:done:${id}`, { error: 'duplicate id' })
+    return
+  }
+
+  const args = buildRsyncArgs(opts)
+
+  const child = spawn('rsync', args, {
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
+    })
+  inflightRsync.set(id, child)
+  let buf = ''
+
+  // rsync prints progress on stderr with --info=progress2
+  child.stderr.on('data', (chunk) => {
+    buf += chunk.toString()
+    // normalize CR to NL so we can split uniformly
+    buf = buf.replace(/\r/g, '\n')
+    const lines = buf.split('\n')
+    buf = lines.pop() || '' // keep last partial
+    for (const line of lines) {
+      const t = line.trim()
+      if (!t) continue
+      const parsed = parseProgress(t)
+      event.sender.send(`rsync:progress:${id}`, parsed)
+    }
+  })
+
+  child.stdout.on('data', (chunk) => {
+    // Not typically used with --info=progress2, but forward in case useful
+    const line = chunk.toString().trim()
+    if (line) {
+      event.sender.send(`rsync:progress:${id}`, { raw: line })
+    }
+  })
+
+  child.on('error', (err) => {
+    inflightRsync.delete(id)
+    event.sender.send(`rsync:done:${id}`, { error: err?.message || 'spawn error' })
+  })
+
+  child.on('close', (code) => {
+    inflightRsync.delete(id)
+    if (code === 0) event.sender.send(`rsync:done:${id}`, { ok: true })
+    else event.sender.send(`rsync:done:${id}`, { error: `rsync exited ${code}` })
+  })
+})
+
+// Cancel
+ipcMain.on('rsync:cancel', (_event, { id }) => {
+  const p = inflightRsync.get(id)
+  if (p) {
+    try { p.kill('SIGINT') } catch {}
+  }
+})
 
 app.on('window-all-closed', () => {
   //  This ensures your app fully quits on Windows

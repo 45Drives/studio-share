@@ -1,26 +1,126 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+// preload.ts
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
-contextBridge.exposeInMainWorld('electron', {
+const genId = () => Math.random().toString(36).slice(2)
+
+/** ===== Shared Types ===== */
+export type UploadResult = { ok?: boolean; path?: string; error?: string }
+export type ProgressPayload = { percent: number; speed?: string; eta?: string }
+
+export type RsyncProgress = {
+  percent?: number
+  rate?: string
+  eta?: string
+  bytesTransferred?: number
+  raw?: string
+}
+
+export type RsyncOpts = {
+  /** local source path (file or directory) */
+  src: string
+  host: string
+  user: string
+  destDir: string
+  port?: number
+  /** path to a private key file; omit to use ssh-agent */
+  keyPath?: string
+  /** optional bandwidth limit in KB/s */
+  bwlimitKb?: number
+  /** extra rsync flags */
+  extraArgs?: string[]
+}
+
+export type RsyncResult = { ok?: boolean; error?: string }
+
+/** Shape exposed on window.electron */
+export type ElectronApi = {
   ipcRenderer: {
-    send: (channel: string, data: any) => ipcRenderer.send(channel, data),
-    on: (channel: string, listener: (event: IpcRendererEvent, ...args: any[]) => void) =>
-      ipcRenderer.on(channel, (_event, ...args) => listener(_event, ...args)),
-    invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
-    once: (channel: string, listener: (event: IpcRendererEvent, ...args: any[]) => void) =>
-      ipcRenderer.once(channel, (_event, ...args) => listener(_event, ...args)),
+    send: (channel: string, data?: any) => void
+    on: (channel: string, listener: (event: IpcRendererEvent, ...args: any[]) => void) => void
+    invoke: (channel: string, ...args: any[]) => Promise<any>
+    once: (channel: string, listener: (event: IpcRendererEvent, ...args: any[]) => void) => void
+    removeListener: (channel: string, listener: (...args: any[]) => void) => void
+    removeAllListeners: (channel: string) => void
+  }
 
-    removeListener: (channel: string, listener: (...args: any[]) => void) =>
-      ipcRenderer.removeListener(channel, listener),    
-    removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel),
+  // dialogs / misc
+  selectFolder: () => Promise<string | null>
+  getOS: () => Promise<string>
+  isFirstRunNeeded: (host: string, share: string, smbUser: string) => Promise<boolean>
+
+  // local picks
+  pickFiles: () => Promise<Array<{ path: string; name: string; size: number }>>
+  pickFolder: () => Promise<Array<{ path: string; name: string; size: number }>>
+
+  
+ 
+
+  // New: rsync over SSH
+  rsyncStart: (
+    opts: RsyncOpts,
+    onProgress?: (p: RsyncProgress) => void
+  ) => Promise<{ id: string; done: Promise<RsyncResult> }>
+
+  rsyncCancel: (id: string) => void
+}
+
+/** ===== Implementation ===== */
+const api: ElectronApi = {
+  ipcRenderer: {
+    send: (channel, data) => ipcRenderer.send(channel, data),
+    on: (channel, listener) => ipcRenderer.on(channel, (_e, ...args) => listener(_e, ...args)),
+    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+    once: (channel, listener) => ipcRenderer.once(channel, (_e, ...args) => listener(_e, ...args)),
+    removeListener: (channel, listener) => ipcRenderer.removeListener(channel, listener),
+    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
   },
+
+  // dialogs / misc
   selectFolder: () => ipcRenderer.invoke('dialog:openFolder'),
   getOS: () => ipcRenderer.invoke('get-os'),
-  isFirstRunNeeded: (host: string, share: string, smbUser: string) =>
-    ipcRenderer.invoke("backup:isFirstRunNeeded", host, share, smbUser),
-});
+  isFirstRunNeeded: (host, share, smbUser) => ipcRenderer.invoke('backup:isFirstRunNeeded', host, share, smbUser),
+
+  // local picks
+  pickFiles: () => ipcRenderer.invoke('dialog:pickFiles'),
+  pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+
+  /** ========== Legacy HTTP upload path (optional) ========== */
+  // Keep these only if your main.ts still implements 'upload:file' with progress channels.
+
+ 
+
+
+  /** ========== rsync over SSH ========== */
+  rsyncStart: (opts, onProgress) => {
+    const id = genId()
+    const pch = `rsync:progress:${id}`
+    const dch = `rsync:done:${id}`
+
+    const ph = (_: IpcRendererEvent, payload: RsyncProgress) => {
+      try { onProgress?.(payload) } catch {}
+    }
+    ipcRenderer.on(pch, ph)
+
+    ipcRenderer.send('rsync:start', { id, ...opts })
+
+    const done: Promise<RsyncResult> = new Promise((resolve) => {
+      ipcRenderer.once(dch, (_ev, res: RsyncResult) => {
+        ipcRenderer.removeAllListeners(pch)
+        resolve(res)
+      })
+    })
+
+    return Promise.resolve({ id, done })
+  },
+
+  rsyncCancel: (id) => ipcRenderer.send('rsync:cancel', { id }),
+}
+
+contextBridge.exposeInMainWorld('electron', api)
+contextBridge.exposeInMainWorld('electronAPI', api)
 
 contextBridge.exposeInMainWorld('logger', {
-  log: (...args: any[]) => ipcRenderer.send('log', { level: 'info', args }),
-  warn: (...args: any[]) => ipcRenderer.send('log', { level: 'warn', args }),
+  log:  (...args: any[]) => ipcRenderer.send('log', { level: 'info',  args }),
+  warn: (...args: any[]) => ipcRenderer.send('log', { level: 'warn',  args }),
   error: (...args: any[]) => ipcRenderer.send('log', { level: 'error', args }),
-});
+})

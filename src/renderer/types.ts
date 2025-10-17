@@ -55,4 +55,5 @@ export interface ConnectionMeta {
    *  - "http://192.168.x.x:9095" → electron-only fallback when no HTTPS
    */
   apiBase?: string;
+  ssh?:{server:string; username:string;}
 }
