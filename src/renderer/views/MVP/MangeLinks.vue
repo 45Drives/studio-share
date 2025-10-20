@@ -96,13 +96,48 @@
         </td>
 
         <!-- Expires -->
-        <td class="px-4 py-2 border border-[#2a2d33]">
-          <div :class="expiresClass(it)">{{ expiresLabel(it) }}</div>
-          <div class="flex gap-1 mt-1">
-            <button class="px-1.5 py-0.5 text-xs rounded border border-[#2a2d33]" @click="extend(it, 24*3600e3)">+1d</button>
-            <button class="px-1.5 py-0.5 text-xs rounded border border-[#2a2d33]" @click="extend(it, 7*24*3600e3)">+1w</button>
-          </div>
-        </td>
+<td class="px-4 py-2 border border-[#2a2d33]">
+  <div :class="expiresClass(it)">{{ expiresLabel(it) }}</div>
+
+  <!-- quick actions -->
+  <div class="flex flex-wrap items-center gap-1 mt-1">
+    <button class="px-1.5 py-0.5 text-xs rounded border border-[#2a2d33] text-red-300" @click="makeNever(it)">Never</button>
+    <button class="px-1.5 py-0.5 text-xs rounded border border-[#2a2d33]" @click="openCustom(it)">Custom</button>
+  </div>
+
+  <!-- custom editor -->
+  <div v-if="expEditor[it.id]?.open" class="mt-2 flex items-center gap-2 text-xs">
+    <label class="flex items-center gap-1">
+      <span class="opacity-70">Days</span>
+      <input
+        type="number" min="0"
+        class="w-16 px-2 py-1 rounded bg-[#1f2125] border border-[#2a2d33]"  style="background-color: #1f2125; color:white"
+        v-model.number="expEditor[it.id].days"
+      />
+    </label>
+    <label class="flex items-center gap-1">
+      <span class="opacity-70">Hours</span>
+      <input
+        type="number" min="0"
+        class="w-16 px-2 py-1 rounded bg-[#1f2125] border border-[#2a2d33]" style="background-color: #1f2125; color:white"
+        v-model.number="expEditor[it.id].hours"
+      />
+    </label>
+    <button
+      class="px-2 py-1 rounded bg-[#5E56C5]"
+      @click="applyCustom(it)"
+    >
+      Apply
+    </button>
+    <button
+      class="px-2 py-1 rounded border border-[#2a2d33]"
+      @click="closeCustom(it)"
+    >
+      Cancel
+    </button>
+  </div>
+</td>
+
 
         <!-- Status -->
         <td class="px-4 py-2 border border-[#2a2d33]">
@@ -282,6 +317,7 @@
 }
 // const showDrawer = ref(false)
 const showModal = ref(false)
+const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
 
 onMounted(refresh)
 
@@ -495,6 +531,44 @@ function closeModal() {
         return ea - eb
       })
   })
+
+  function ensureExpEntry(it: LinkItem) {
+  if (!expEditor.value[it.id]) {
+    expEditor.value[it.id] = { days: 0, hours: 1, open: false } // default: +1h
+  }
+}
+
+function openCustom(it: LinkItem) {
+  ensureExpEntry(it)
+  expEditor.value[it.id].open = true
+}
+function closeCustom(it: LinkItem) {
+  if (!expEditor.value[it.id]) return
+  expEditor.value[it.id].open = false
+}
+
+async function extendCustom(it: LinkItem, days: number, hours: number) {
+  const totalHours = (Number(days) || 0) * 24 + (Number(hours) || 0)
+  if (totalHours <= 0) return
+  const deltaMs = totalHours * 3600e3
+  const base = Math.max(it.expiresAt || 0, Date.now())
+  const newExp = base + deltaMs
+  await patchLink(it.id, { expiresAtMs: newExp })
+  it.expiresAt = newExp
+}
+
+async function applyCustom(it: LinkItem) {
+  ensureExpEntry(it)
+  const { days, hours } = expEditor.value[it.id]
+  await extendCustom(it, days, hours)
+  closeCustom(it)
+}
+
+async function makeNever(it: LinkItem) {
+  // Clear expiry so the link never expires
+  await patchLink(it.id, { expiresAtMs: null })
+  it.expiresAt = null
+}
   </script>
   
   <style scoped>
