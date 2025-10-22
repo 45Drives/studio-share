@@ -203,8 +203,9 @@ async function connectToServer() {
         }
 
         connectionMeta.value = { ...connectionMeta.value, token,ssh:{server:ip,username:username.value} };
-       router.push({ name: 'select-file' });
-      //  router.push({ name: 'uplaod-file' });
+    //    router.push({ name: 'select-file' });
+        router.push({ name: 'dashboard' });
+      //  router.push({ name: 'upload-file' });
     //    router.push({ name: 'client-upload-location' });
       // router.push({ name: 'manage-links' });
 
