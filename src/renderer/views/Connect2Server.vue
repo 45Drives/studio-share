@@ -124,14 +124,8 @@ watch(selectedServerIp, () => {
     }
 })
 
-const isHttps = window.location.protocol === 'https:';
-const isLocalDev = !isHttps && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
-
-// True if the selected server is the same machine that serves the SPA
-function isSameBox(host: string) {
-    const h = window.location.hostname;
-    return host === '127.0.0.1' || host === 'localhost' || host === h;
-}
+const isDev = import.meta.env.DEV === true;
+const DEFAULT_API_PORT = Number((import.meta as any).env?.VITE_API_PORT || 9095);
 
 async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
@@ -156,39 +150,30 @@ async function connectToServer() {
     }
 
     const ip = (selectedServer.value?.ip || manualIp.value).trim();
-    const port = 9095;
+    const port = DEFAULT_API_PORT;
 
     providedCurrentServer.value = selectedServer.value
         ? selectedServer.value
         : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true };
 
-    // -------- Choose apiBase + tell useApi how to build future URLs --------
-    let apiBase: string;
-
-    if (isLocalDev) {
-        // DEV (HTTP): talk directly to the remote broadcaster
-        apiBase = `http://${ip}:${port}`;
-        // Clear httpsHost so useApi picks http://<ip>:<port> later
+    // -------- Decide apiBase --------
+    let apiBase = '';
+    if (isDev) {
+        // Dev: frontend runs on http://localhost:8081, so call the target box directly
+            apiBase = `http://${ip}:${port}`;
         connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
     } else {
-        // PROD (HTTPS)
-        if (isSameBox(ip)) {
-            // Same box: same-origin
-            apiBase = '';
-            connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: location.host };
-        } else {
-            // Remote box: always go via broker; encode ip:port for safety
-            const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
-            apiBase = `/${brokerSeg}`;
-            // Trick: set httpsHost to include the broker segment so useApi builds:
-            //   https://<host>/broker/<ip:port>
-            connectionMeta.value = {
-                ...connectionMeta.value,
-                port,
-                apiBase,
-                httpsHost: `${location.host}/${brokerSeg}`,
-            };
-        }
+        // Prod: SPA is served by nginx on a box
+            if (ip === window.location.hostname || ip === '127.0.0.1' || ip === 'localhost') {
+                    // Same box → same-origin through nginx
+                        apiBase = '';
+                    connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: location.host };
+                } else {
+                // Different box → go through this box’s broker
+                    const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
+                apiBase = `/${brokerSeg}`;
+                connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: `${location.host}/${brokerSeg}` };
+            }
     }
 
     try {
@@ -201,7 +186,7 @@ async function connectToServer() {
         if (!res.ok) throw new Error(await res.text());
         const { token } = await res.json();
 
-        const settings = await fetch(`${apiBase}/api/settings`, {
+        const settings: any = await fetch(`${apiBase}/api/settings`, {
             headers: { 'Authorization': `Bearer ${token}` }
         }).then(r => r.ok ? r.json() : {});
 
