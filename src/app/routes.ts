@@ -19,5 +19,7 @@ export const router = createRouter({
    // { path: '/upload-destination', name: 'upload-destination', component: () => import('../renderer/views/MVP/UploadDestination.vue') },
    // { path: '/upload-progress', name: 'upload-progress', component: () => import('../renderer/views/MVP/UploadProgress.vue') },
   //  { path: '/client-upload-location', name: 'client-upload-location', component: () => import('../renderer/views/MVP/ClientUploadLocation.vue') },
+ //  { path: '/manage-links', name: 'manage-links', component: () => import('../renderer/views/MVP/MangeLinks.vue') }
+
   ],
 })

@@ -117,6 +117,14 @@
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
+                            <!-- Max downloads -->
+                            <!-- <div class="flex items-center gap-3">
+                                <label class="whitespace-nowrap font-semibold">Max downloads</label>
+                                <input type="number" min="1" step="1" v-model.number="maxDownloads"
+                                    class="input border rounded px-3 py-2 w-32 bg-transparent" />
+                            </div> -->
+
+                            <!-- Expiry -->
                             <div class="flex items-center gap-3">
                                 <label class="whitespace-nowrap font-semibold">Expires in:</label>
 
@@ -142,6 +150,27 @@
 
                                 <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                             </div>
+
+                            <!-- Password (optional) -->
+                            <div class="flex items-center gap-3">
+                                <label class="whitespace-nowrap font-semibold">Password:</label>
+                                <div class="flex items-center gap-2">
+                                    <input id="pw-enabled" type="checkbox" v-model="protectWithPassword" />
+                                    <label for="pw-enabled" class="text-sm">Protect with password</label>
+                                </div>
+                                <input
+                                    :disabled="!protectWithPassword"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    v-model.trim="password"
+                                    class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                                    placeholder="Enter password"
+                                    style="min-width: 16rem"
+                                />
+                                <button type="button" class="btn btn-secondary" @click="showPassword = !showPassword" :disabled="!protectWithPassword">
+                                    {{ showPassword ? 'Hide' : 'Show' }}
+                                </button>
+                            </div>
+
                         </div>
                     </div>
                 </template>
@@ -150,6 +179,7 @@
                         title="Create a magic link with the selected options">
                         Share via magic link
                     </button>
+                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required when protection is enabled.</p>
                     <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center">
                         <code>{{ viewUrl }}</code>
                         <div class="button-group-row">
@@ -405,6 +435,11 @@ const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 // const maxDownloads = ref(5)
 
+// NEW: password state
+const protectWithPassword = ref(false)
+const password = ref('')
+const showPassword = ref(false)
+
 const viewUrl = ref('')
 const downloadUrl = ref('')
 
@@ -431,10 +466,9 @@ const prettyExpiry = computed(() => {
 })
 
 const canGenerate = computed(() =>
-    // Boolean(filePath.value) &&
     files.value.length > 0 &&
-    // Number.isFinite(maxDownloads.value) && maxDownloads.value >= 1 &&
-    Number.isFinite(expiresValue.value) && expiresValue.value >= 1
+    Number.isFinite(expiresValue.value) && expiresValue.value >= 1 &&
+    (!protectWithPassword.value || !!password.value)
 )
 
 function invalidateLink() {
@@ -470,6 +504,11 @@ async function generateLink() {
     if (files.value.length === 1) body.filePath = files.value[0];
     else body.filePaths = files.value.slice();
 
+    // NEW: include password if enabled
+    if (protectWithPassword.value && password.value) {
+        body.password = password.value
+    }
+
     const data = await apiFetch('/api/magic-link', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -479,6 +518,9 @@ async function generateLink() {
     // viewUrl.value = data.downloadUrl
     viewUrl.value = data.viewUrl;
     downloadUrl.value = data.downloadUrl;
+
+    // Clear password after use for safety (optional)
+    // password.value = ''
 }
 
 

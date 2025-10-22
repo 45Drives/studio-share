@@ -203,9 +203,11 @@ async function connectToServer() {
         }
 
         connectionMeta.value = { ...connectionMeta.value, token,ssh:{server:ip,username:username.value} };
-        router.push({ name: 'select-file' });
-        //router.push({ name: 'uplaod-file' });
-        // router.push({ name: 'client-upload-location' });
+       router.push({ name: 'select-file' });
+      //  router.push({ name: 'uplaod-file' });
+    //    router.push({ name: 'client-upload-location' });
+      // router.push({ name: 'manage-links' });
+
     } catch (e: any) {
         pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000));
     }
