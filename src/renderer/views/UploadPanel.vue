@@ -216,8 +216,8 @@
 
 <script setup lang="ts">
 import { ref, computed, inject, Ref } from 'vue'
-import PathInput from '../../components/PathInput.vue'
-import TreeNode from '../../components/TreeNode.vue'
+import PathInput from '../components/PathInput.vue'
+import TreeNode from '../components/TreeNode.vue'
 import { useApi } from '../composables/useApi'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faArrowLeft  } from '@fortawesome/free-solid-svg-icons';
