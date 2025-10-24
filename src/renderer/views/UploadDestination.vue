@@ -50,7 +50,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import PathInput from '../../components/PathInput.vue';
 import TreeNode from '../../components/TreeNode.vue';
-import { useApi } from '../../composables/useApi'
+import { useApi } from '../composables/useApi'
 
 const props = defineProps<{
     startDir?: string,

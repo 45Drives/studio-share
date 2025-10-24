@@ -14,8 +14,8 @@
 
                     <!-- Optional Dashboard -->
                     <button class="btn btn-secondary wizard-btn w-full mb-1" :class="buttonClass('dashboard')"
-                        @click="goto('/')">
-                        Home
+                        @click="gotoHome">
+                         {{ isLoggedIn ? 'Dashboard' : 'Home' }}
                     </button>
                 </div>
 
@@ -51,11 +51,12 @@
 
 
 <script setup lang="ts">
-import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, nextTick, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Bars3Icon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { toggleDarkMode, useDarkModeState } from '@45drives/houston-common-ui'
 import { useThemeFromAlias } from '../composables/useThemeFromAlias'
+import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
 
 interface GlobalMenuProps {
     server?: boolean;
@@ -64,6 +65,11 @@ defineProps<GlobalMenuProps>()
 
 const router = useRouter()
 const route = useRoute()
+
+// --- Auth state (injected from AppShell) ---
+const connectionMeta = inject(connectionMetaInjectionKey)!
+const currentServer = inject(currentServerInjectionKey)!
+const isLoggedIn = computed(() => Boolean(connectionMeta.value?.token) && Boolean(currentServer.value))
 
 // --- Popover state & positioning ---
 const show = ref(false)
@@ -108,9 +114,11 @@ function selectTheme(theme: 'theme-default' | 'theme-homelab' | 'theme-professio
    setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
 }
 
-// --- Router navigation (new format) ---
-function goto(path: '/' ) {
-    router.push({ path })
+function gotoHome() {
+    const target = isLoggedIn.value
+        ? { name: 'dashboard' }          // already authenticated → Dashboard
+    : { name: 'server-selection' }   // not logged in → Login/Server select
+    router.push(target)
     show.value = false
 }
 

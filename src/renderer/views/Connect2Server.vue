@@ -72,19 +72,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, provide, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
-import { DiscoveryState, Server, ConnectionMeta } from '../types'
+import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
-useHeader('Houston Collabos');
+useHeader('Welcome to 45Studio Collab!');
 
 const router = useRouter();
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
-// console.log('discovered:', discoveryState.servers);
 const manualIp = ref('');
 const username = ref('');
 const password = ref('');
@@ -95,7 +94,6 @@ const togglePassword = () => {
 const selectedServerIp = ref<string>('')
 const providedCurrentServer = inject(currentServerInjectionKey)!;
 const connectionMeta = inject(connectionMetaInjectionKey)!;
-// computed to always get the full object if needed
 const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
 )
@@ -160,17 +158,17 @@ async function connectToServer() {
     let apiBase = '';
     if (isDev) {
         // Dev: frontend runs on http://localhost:8081, so call the target box directly
-            apiBase = `http://${ip}:${port}`;
+        apiBase = `http://${ip}:${port}`;
         connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
     } else {
         // Prod: SPA is served by nginx on a box
             if (ip === window.location.hostname || ip === '127.0.0.1' || ip === 'localhost') {
                     // Same box → same-origin through nginx
-                        apiBase = '';
+                    apiBase = '';
                     connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: location.host };
                 } else {
                 // Different box → go through this box’s broker
-                    const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
+                const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
                 apiBase = `/${brokerSeg}`;
                 connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: `${location.host}/${brokerSeg}` };
             }
@@ -192,8 +190,6 @@ async function connectToServer() {
 
         const needsBootstrap = !settings?.externalBase || !settings?.subdomain;
 
-        // Option A: skip silently and let user do it from a Settings screen
-        // Option B (non-blocking): fire-and-forget, but don't fail login/UI flow if it errors
         if (needsBootstrap) {
             fetch(`${apiBase}/api/setup/bootstrap`, {
                 method: 'POST',
@@ -203,11 +199,8 @@ async function connectToServer() {
         }
 
         connectionMeta.value = { ...connectionMeta.value, token,ssh:{server:ip,username:username.value} };
-    //    router.push({ name: 'select-file' });
+        try { sessionStorage.setItem('hb_token', token) } catch { }
         router.push({ name: 'dashboard' });
-      //  router.push({ name: 'upload-file' });
-    //    router.push({ name: 'client-upload-location' });
-      // router.push({ name: 'manage-links' });
 
     } catch (e: any) {
         pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000));

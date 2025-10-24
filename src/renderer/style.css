@@ -302,7 +302,6 @@ button.text-secondary:hover,
   color: var(--text-secondary-hover) !important;
 }
 
-/* If you want focus-visible to echo your outline token (optional) */
 a.text-primary:focus-visible,
 button.text-primary:focus-visible,
 a.text-secondary:focus-visible,

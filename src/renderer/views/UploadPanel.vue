@@ -218,14 +218,14 @@
 import { ref, computed, inject, Ref } from 'vue'
 import PathInput from '../../components/PathInput.vue'
 import TreeNode from '../../components/TreeNode.vue'
-import { useApi } from '../../composables/useApi'
+import { useApi } from '../composables/useApi'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faArrowLeft  } from '@fortawesome/free-solid-svg-icons';
 import {watch} from "vue";
 
 type LocalFile = { path: string; name: string; size: number }
 
-import { connectionMetaInjectionKey } from '../../keys/injection-keys';
+import { connectionMetaInjectionKey } from '../keys/injection-keys';
 
 
 const connectionMeta = inject(connectionMetaInjectionKey)!;

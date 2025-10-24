@@ -19,7 +19,7 @@
                         <!-- Mode: ROOTS -->
                         <template v-if="browseMode === 'roots'">
                             <div class="text-sm opacity-80">
-                                <span class="font-semibold">ZFS pools:</span>
+                                <span class="font-semibold">ZFS Pools:</span>
                                 <span v-if="detecting" class="ml-1">Detecting…</span>
                                 <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
                             </div>
@@ -88,7 +88,7 @@
                         <div class="text-sm opacity-80 -mb-1">
                             <span class="font-semibold">Project:</span>
                             <code class="ml-1">{{ projectBase }}</code>
-                            <button class="btn btn-secondary ml-3" @click="resetProject">Change project</button>
+                            <button class="btn btn-secondary ml-3" @click="resetProject">Change Project Directory</button>
                         </div>
 
                         <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
@@ -96,7 +96,7 @@
 
                         <!-- Selected files panel (unchanged except we ensure paths remain under project when restricted) -->
                         <div v-if="files.length" class="border rounded bg-accent">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 p-2">
                                 <!-- <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
                                     <input type="checkbox" v-model="autoRegenerate" />
                                     Auto-regenerate link
@@ -133,8 +133,8 @@
                                         hour</button>
                                     <button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">1
                                         day</button>
-                                    <button type="button" class="btn btn-secondary" @click="setPreset(7, 'weeks')">7
-                                        days</button>
+                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'weeks')">1
+                                        week</button>
                                 </div>
 
                                 <input type="number" min="1" step="1" v-model.number="expiresValue"
@@ -191,21 +191,20 @@
             </CardContainer>
             <div class="button-group-row col-span-1">
                 <button @click="goBack" class="btn btn-danger justify-start">
-                    Go Back
+                    Return to Dashboard
                 </button>
             </div>
         </div>
-
     </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useApi } from '../../composables/useApi'
-import CardContainer from '../../components/CardContainer.vue'
-import FileExplorer from '../../components/FileExplorer.vue'
+import { useApi } from '../composables/useApi'
+import CardContainer from '../components/CardContainer.vue'
+import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
-import { router } from '../../../app/routes'
+import { router } from '../../app/routes'
 
 const { apiFetch } = useApi()
 
@@ -561,13 +560,13 @@ function resetToProjectPicker() {
 
 // Replace your goBack with this:
 function goBack() {
-    if (projectSelected.value) {
-        // In Step 2 → bounce back to the project picker (Step 1)
-        resetToProjectPicker()
-        return
-    }
+    // if (projectSelected.value) {
+    //     // In Step 2 → bounce back to the project picker (Step 1)
+    //     resetToProjectPicker()
+    //     return
+    // }
     // Already on the project root selection UI → leave the page
-    router.push({ name: 'server-selection' })
+    router.push({ name: 'dashboard' })
 }
 
 </script>
