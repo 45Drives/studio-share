@@ -215,17 +215,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, Ref } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import PathInput from '../components/PathInput.vue'
 import TreeNode from '../components/TreeNode.vue'
 import { useApi } from '../composables/useApi'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faArrowLeft  } from '@fortawesome/free-solid-svg-icons';
-import {watch} from "vue";
+import { connectionMetaInjectionKey } from '../keys/injection-keys';
+import { useHeader } from '../composables/useHeader';
+
+useHeader('Upload Files')
 
 type LocalFile = { path: string; name: string; size: number }
 
-import { connectionMetaInjectionKey } from '../keys/injection-keys';
 
 
 const connectionMeta = inject(connectionMetaInjectionKey)!;

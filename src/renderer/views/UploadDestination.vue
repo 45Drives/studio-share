@@ -48,10 +48,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import PathInput from '../../components/PathInput.vue';
-import TreeNode from '../../components/TreeNode.vue';
+import PathInput from '../components/PathInput.vue';
+import TreeNode from '../components/TreeNode.vue';
 import { useApi } from '../composables/useApi'
-
+import { useHeader } from '../composables/useHeader';
+useHeader('Upload Location')
 const props = defineProps<{
     startDir?: string,
     modelValue?: string[]

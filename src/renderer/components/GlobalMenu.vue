@@ -20,7 +20,7 @@
                 </div>
 
                 <!-- Themes -->
-                <div class="mb-2 text-center items-center">
+                <!-- <div class="mb-2 text-center items-center">
                     <p class="text-xs text-default mb-1">Themes</p>
                     <button class="btn theme-btn theme-btn-default w-full mb-1"
                         @click="selectTheme('theme-default')">Default</button>
@@ -30,7 +30,7 @@
                         @click="selectTheme('theme-professional')">45Pro</button>
                     <button class="btn theme-btn theme-btn-studio w-full mb-1"
                         @click="selectTheme('theme-studio')">45Studio</button>
-                </div>
+                </div> -->
 
                 <!-- Dark mode -->
                 <div class="mb-2 items-center">

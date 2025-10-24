@@ -3,7 +3,7 @@
 		<template #header>
 			<!-- Top buttons -->
 			<div class="flex justify-center gap-4">
-				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">Share Files via Link</button>
+				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New Link</button>
 				<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files</button>
 				<button @click="goToClientUploadLocation" class="btn btn-primary px-6 py-3">Client Upload
 					Location</button>

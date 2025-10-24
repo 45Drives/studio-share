@@ -85,9 +85,9 @@
   import { ref, computed, inject, Ref } from 'vue'
   import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
   import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
-  import { useApi } from '../../composables/useApi'
-  import { connectionMetaInjectionKey } from '../../keys/injection-keys'
-  import FolderPicker from '../../components/FolderPicker.vue'
+  import { useApi } from '../composables/useApi'
+  import { connectionMetaInjectionKey } from '../keys/injection-keys'
+  import FolderPicker from '../components/FolderPicker.vue'
   
   // --- Injections / API ---
   const connectionMeta = inject(connectionMetaInjectionKey)!
