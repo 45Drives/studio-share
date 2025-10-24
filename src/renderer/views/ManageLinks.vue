@@ -469,67 +469,53 @@ async function toggleDisable(it: LinkItem) {
 //     await deleteLink(it.id)
 //     rows.value = rows.value.filter(r => r.id !== it.id)
 //   }
-
-function viewLink(it: LinkItem) {
-	if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
-}
-
-/* ------------------- inline title edit ------------------- */
-const editingId = ref<number|string|null>(null)
-const editTitle = ref('')
-
-function startEdit(it: LinkItem) {
-	editingId.value = it.id
-	editTitle.value = it.title || ''
-}
-
-function cancelEdit() {
-	editingId.value = null
-	editTitle.value = ''
-}
-
-async function saveTitle(it: LinkItem) {
-	await patchLink(it.id, { title: editTitle.value || null })
-	it.title = editTitle.value || null
-	cancelEdit()
-}
-
-/* ------------------- details drawer ------------------- */
-const showDrawer = ref(false)
-const current = ref<LinkItem|null>(null)
-const drawerTitle = ref('')
-const drawerNotes = ref('')
-const drawerPassword = ref('')
-
-async function fetchDetailsFor(it: LinkItem) {
-	detailsLoading.value = true; files.value = []
-	try {
-		const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
-
-		// Prefer server-provided files
-		let list: any[] = Array.isArray(resp?.files) ? resp.files : []
-
-		// If not provided for download/collection, fall back to the summary row data
-		if (!list.length && it.type !== 'upload' && Array.isArray(it.target?.files)) {
-			list = it.target.files
-		}
-
-		files.value = list.map((f: any, idx: number) => ({
-			key: `f${idx}`,
-			name: f.name || f.filename || '(unnamed)',
-			saved_as: f.saved_as || f.savedAs || null,
-			size: f.size ?? f.size_bytes ?? null,
-			mime: f.mime || f.mimetype || f.content_type || null,
-			uploader_label: f.uploader_display_name || f.uploader_username || f.uploader_name || null,
-			ip: f.ip || f.remote_ip || null,
-			ts: f.ts ?? f.created_at ?? null,
-		}))
-	} catch (e: any) {
-		console.error('Failed to load link details', e)
-		pushNotification(new Notification('Failed to load details', e?.message || String(e), 'error', 8000))
-	} finally {
-		detailsLoading.value = false
-	}
+  function viewLink(it: LinkItem) {
+    if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
+  }
+  async function extend(it: LinkItem, deltaMs: number) {
+    const base = Math.max(it.expiresAt || 0, Date.now())
+    const newExp = base + deltaMs
+    await patchLink(it.id, { expiresAtMs: newExp })
+    it.expiresAt = newExp
+  }
+  
+  /* ------------------- inline title edit ------------------- */
+  const editingId = ref<number|string|null>(null)
+  const editTitle = ref('')
+  function startEdit(it: LinkItem) {
+    editingId.value = it.id
+    editTitle.value = it.title || ''
+  }
+  function cancelEdit() {
+    editingId.value = null
+    editTitle.value = ''
+  }
+  async function saveTitle(it: LinkItem) {
+    await patchLink(it.id, { title: editTitle.value || null })
+    it.title = editTitle.value || null
+    cancelEdit()
+  }
+  
+  /* ------------------- details drawer ------------------- */
+  const showDrawer = ref(false)
+  const current = ref<LinkItem|null>(null)
+  const drawerTitle = ref('')
+  const drawerNotes = ref('')
+  const drawerPassword = ref('')
+  
+  async function fetchDetailsFor(it: LinkItem) {
+  detailsLoading.value = true; files.value = []
+  try {
+    const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
+    // normalize uploader label (upload links only)
+    files.value = (resp.files || []).map((f:any, idx:number) => ({
+      key: `f${idx}`,
+      ...f,
+      uploader_label: f.uploader_name
+    }))
+  } finally {
+    detailsLoading.value = false
+  }
 }
 
 
