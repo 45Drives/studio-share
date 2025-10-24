@@ -458,7 +458,7 @@ onMounted(refresh)
     files.value = (resp.files || []).map((f:any, idx:number) => ({
       key: `f${idx}`,
       ...f,
-      uploader_label: f.uploader_display_name || f.uploader_username || f.uploader_id || null
+      uploader_label: f.uploader_name
     }))
   } finally {
     detailsLoading.value = false
