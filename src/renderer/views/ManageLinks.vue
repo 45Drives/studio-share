@@ -48,7 +48,7 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="!loading && filteredRows.length === 0">
-							<td colspan="8" class="px-4 py-6 text-center text-default font-bold border border-default">
+							<td colspan="8" class="px-4 py-4 text-center text-default font-bold border border-default">
 								No links found.
 							</td>
 						</tr>
@@ -67,9 +67,8 @@
 								<div v-else class="flex items-center gap-2">
 									<input v-model="editTitle"
 										class="px-2 py-1 rounded bg-default border border-default w-56" />
-									<button class="px-2 py-1 rounded bg-default" @click="saveTitle(it)">Save</button>
-									<button class="px-2 py-1 rounded border border-default"
-										@click="cancelEdit">Cancel</button>
+									<button class="btn btn-secondary text-xs" @click=" saveTitle(it)">Save</button>
+									<button class="btn btn-danger text-xs" @click="cancelEdit">Cancel</button>
 								</div>
 							</td>
 
@@ -99,9 +98,18 @@
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" @click="makeNever(it)">Never</button>
-										<!-- <button class="btn btn-secondary text-xs" @click="refreshExpiry(it)">Refresh</button> -->
-										<button class="btn btn-primary text-xs" @click="openCustom(it)">Custom</button>
+										<button class="btn btn-secondary text-xs" :disabled="isExpired(it)"
+											:aria-disabled="isExpired(it)"
+											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+											@click="makeNever(it)">
+											Never
+										</button>
+										<button class="btn btn-primary text-xs" :disabled="isExpired(it)"
+											:aria-disabled="isExpired(it)"
+											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+											@click="openCustom(it)">
+											Custom
+										</button>
 									</div>
 								</div>
 
@@ -214,14 +222,14 @@
 					</div>
 					<div class="space-x-2">
 						<span class="text-default font-bold">Status:</span>
-						<span :class="statusChipClass(statusOf(current!))">{{ current ? statusOf(current).toUpperCase() : '' }}</span>
+						<span :class="statusChipClass(statusOf(current!))">{{ current ? statusOf(current).toUpperCase()
+							: '' }}</span>
 					</div>
 
 					<!-- quick edit -->
 					<div class="pt-2">
 						<label class="block text-default mb-1">Title</label>
-						<input v-model="drawerTitle"
-							class="input-textlike w-full px-3 py-2 rounded" />
+						<input v-model="drawerTitle" class="input-textlike w-full px-3 py-2 rounded" />
 					</div>
 					<div>
 						<label class="block text-default mb-1">Notes</label>
@@ -386,6 +394,10 @@ function badgeClass(t: LinkType) {
 			: 'text-purple-500'
 }
 
+function isExpired(it: LinkItem) {
+	return !!(it.expiresAt && it.expiresAt <= Date.now())
+}
+
 function statusOf(it: LinkItem): Status {
 	if (it.isDisabled) return 'disabled'
 	if (it.expiresAt && it.expiresAt <= Date.now()) return 'expired'
@@ -483,12 +495,28 @@ async function fetchDetailsFor(it: LinkItem) {
 	detailsLoading.value = true; files.value = []
 	try {
 		const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
-		// normalize uploader label (upload links only)
-		files.value = (resp.files || []).map((f:any, idx:number) => ({
+
+		// Prefer server-provided files
+		let list: any[] = Array.isArray(resp?.files) ? resp.files : []
+
+		// If not provided for download/collection, fall back to the summary row data
+		if (!list.length && it.type !== 'upload' && Array.isArray(it.target?.files)) {
+			list = it.target.files
+		}
+
+		files.value = list.map((f: any, idx: number) => ({
 			key: `f${idx}`,
-			...f,
-			uploader_label: f.uploader_display_name || f.uploader_username || f.uploader_id || null
+			name: f.name || f.filename || '(unnamed)',
+			saved_as: f.saved_as || f.savedAs || null,
+			size: f.size ?? f.size_bytes ?? null,
+			mime: f.mime || f.mimetype || f.content_type || null,
+			uploader_label: f.uploader_display_name || f.uploader_username || f.uploader_name || null,
+			ip: f.ip || f.remote_ip || null,
+			ts: f.ts ?? f.created_at ?? null,
 		}))
+	} catch (e: any) {
+		console.error('Failed to load link details', e)
+		pushNotification(new Notification('Failed to load details', e?.message || String(e), 'error', 8000))
 	} finally {
 		detailsLoading.value = false
 	}
@@ -578,6 +606,7 @@ function ensureExpEntry(it: LinkItem) {
 }
 
 function openCustom(it: LinkItem) {
+	if (isExpired(it)) return
 	ensureExpEntry(it)
 	expEditor.value[it.id].open = true
 
@@ -622,6 +651,7 @@ async function applyCustom(it: LinkItem) {
 }
 
 async function makeNever(it: LinkItem) {
+	if (isExpired(it)) return
 	// Clear expiry so the link never expires
 	await patchLink(it.id, { expiresAtMs: null })
 	it.expiresAt = null
