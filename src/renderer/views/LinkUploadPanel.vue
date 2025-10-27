@@ -280,7 +280,8 @@ async function generateLink() {
 function resetAll() {
 	destFolderRel.value = ''
 	cwd.value = '/'
-	expiresSec.value = 604800
+	expiresValue.value = 7
+	expiresUnit.value = 'days'
 	password.value = ''
 	allowUpload.value = true
 	readOnly.value = false
