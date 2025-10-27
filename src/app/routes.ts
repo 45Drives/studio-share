@@ -8,8 +8,7 @@ export const router = createRouter({
     // { path: '/logs', name: 'logs', component: () => import('../renderer/views/GlobalLogs.vue') },
     // { path: '/settings', name: 'settings', component: () => import('../renderer/views/GlobalSettings.vue') },
     { path: '/select-file', name: 'select-file', component: () => import('../renderer/views/SelectAndShareFile.vue')},
-    { path: '/upload-file', name: 'upload-file', component: () => import('../renderer/views/UploadPanel.vue')},
-    { path: '/upload-destination', name: 'upload-destination', component: () => import('../renderer/views/UploadDestination.vue') },
-    { path: '/client-upload-location', name: 'client-upload-location', component: () => import('../renderer/views/ClientUploadLocation.vue') },
+    { path: '/upload-file', name: 'upload-file', component: () => import('../renderer/views/LocalUploadPanel.vue')},
+    { path: '/create-upload-link', name: 'create-upload-link', component: () => import('../renderer/views/LinkUploadPanel.vue') },
   ],
 })

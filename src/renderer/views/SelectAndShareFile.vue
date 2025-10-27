@@ -1,5 +1,5 @@
 <template>
-    <div class="h-full flex items-start justify-center pt-16 overflow-y-auto">
+    <div class="h-full flex items-start justify-center pt-6 overflow-y-auto">
         <div class="grid grid-cols-1 gap-10 text-2xl w-9/12 mx-auto">
             <CardContainer class="bg-accent rounded-md shadow-xl">
                 <template #header>
@@ -550,7 +550,6 @@ function openInBrowser() {
     window.open(viewUrl.value, '_blank')
 }
 
-// Add this helper (keeps behavior in one place)
 function resetToProjectPicker() {
     // ensure we’re not in the “entire tree” mode, and drop the chosen root
     showEntireTree.value = false
@@ -558,14 +557,7 @@ function resetToProjectPicker() {
     resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
 }
 
-// Replace your goBack with this:
 function goBack() {
-    // if (projectSelected.value) {
-    //     // In Step 2 → bounce back to the project picker (Step 1)
-    //     resetToProjectPicker()
-    //     return
-    // }
-    // Already on the project root selection UI → leave the page
     router.push({ name: 'dashboard' })
 }
 

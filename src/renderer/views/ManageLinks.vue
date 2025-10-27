@@ -1,13 +1,13 @@
 <template>
 	<div>
-		<div class="rounded-t-lg bg-secondary text-white px-4 py-2 text-center font-semibold">
+		<div class="rounded-t-lg bg-secondary text-default px-4 py-2 text-center font-semibold">
 			Currently Active Links
 		</div>
 
 		<div class="p-4 bg-well rounded-md">
 			<div class="flex flex-wrap gap-2 mb-3">
 				<input v-model="q" type="search" placeholder="Search title / dir / file..."
-					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-white w-64" />
+					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-64" />
 				<select v-model="typeFilter" class="px-3 py-2 border border-default rounded-lg bg-default">
 					<option value="">All types</option>
 					<option value="upload">Upload</option>
@@ -36,8 +36,7 @@
 						<tr class="bg-default text-default border-b border-default">
 							<th class="text-left px-4 py-2 font-semibold border border-default">Title</th>
 							<th class="text-left px-4 py-2 font-semibold border border-default">Type</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Short Link
-							</th>
+							<th class="text-left px-4 py-2 font-semibold border border-default">Short Link</th>
 							<th class="text-left px-4 py-2 font-semibold border border-default">Expires</th>
 							<th class="text-left px-4 py-2 font-semibold border border-default">Status</th>
 							<th class="text-left px-4 py-2 font-semibold border border-default">Password</th>
@@ -212,6 +211,12 @@
 						<button class="ml-2 text-blue-500 hover:underline text-xs"
 							@click="copy(current?.shortUrl)">Copy</button>
 					</div>
+					<div class="break-all space-x-2">
+						<span class="text-default font-bold">Long Link:</span>
+						<a :href="current?.shortUrl" target="_blank" class="hover:underline">{{ current?.longUrl }}</a>
+						<button class="ml-2 text-blue-500 hover:underline text-xs"
+							@click="copy(current?.shortUrl)">Copy</button>
+					</div>
 					<div class="space-x-2">
 						<span class="text-default font-bold">Created:</span>
 						{{ current ? new Date(current.createdAt).toLocaleString() : '' }}
@@ -306,8 +311,9 @@ interface LinkItem {
 		type: LinkType
 		title?: string | null
 		notes?: string | null
-		token?: string | null          // include if your API wants to expose it in details
+		token?: string | null
 		shortUrl: string
+		longUrl: string
 		createdAt: number
 		expiresAt: number | null
 		isDisabled: boolean

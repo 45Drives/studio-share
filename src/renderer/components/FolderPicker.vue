@@ -1,60 +1,49 @@
 <template>
-    <section class="flex flex-col gap-4">
-      <h2 v-if="title" class="text-xl font-semibold mt-[2rem]">{{ title }}</h2>
-  
-      <div class="flex flex-col gap-2 text-sm mt-[2rem]">
-        <div v-if="subtitle" class="opacity-80">{{ subtitle }}</div>
-        <div class="flex flex-row gap-2 items-center">
-          <span class="whitespace-nowrap">Destination folder:</span>
-          <PathInput v-model="cwd" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChoose" />
-        </div>
+  <section class="flex flex-col gap-2 text-left text-base">
+    <h2 v-if="title" class=" font-semibold">{{ title }}</h2>
+
+    <div class="flex flex-col gap-2 text-sm">
+      <div v-if="subtitle" class="opacity-80">{{ subtitle }}</div>
+      <div class="flex flex-row gap-2 items-center">
+        <span class="whitespace-nowrap">Destination folder:</span>
+        <PathInput v-model="cwd" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChoose" />
       </div>
-  
-      <div class="border rounded overflow-auto" :class="containerHeights">
-        <!-- Toolbar / breadcrumb -->
-        <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2">
-          <button class="btn btn-secondary" :disabled="!canGoUp" @click="goUpOne" title="Go up one directory">
-            <FontAwesomeIcon :icon="faArrowLeft" />
-          </button>
-          <div class="text-xs opacity-75 truncate" :title="cwd">{{ cwd || '/' }}</div>
-        </div>
-  
-        <!-- Column headers -->
-        <div class="grid sticky top-0 bg-accent font-semibold border-b border-default [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
-          <div class="px-2 py-2 text-center"></div>
-          <div class="px-2 py-2">Name</div>
-          <div class="px-2 py-2">Type</div>
-          <div class="px-2 py-2">Size</div>
-          <div class="px-2 py-2">Modified</div>
-        </div>
-  
-        <!-- Tree -->
-        <TreeNode
-          :key="cwd"
-          :apiFetch="apiFetch"
-          :selected="internalSelected"
-          :selectedVersion="selectedVersion"
-          :getFilesFor="getFilesForFolder"
-          :relPath="rootRel"
-          :depth="0"
-          :isRoot="true"
-          :useCase="useCase"
-          :selectedFolder="modelValue"
-          @select-folder="onSelectFolder"
-          @toggle="togglePath"
-          @navigate="navigateTo"
-        />
+    </div>
+
+    <div class="border rounded overflow-auto" :class="containerHeights">
+      <!-- Toolbar / breadcrumb -->
+      <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2">
+        <button class="btn btn-secondary" :disabled="!canGoUp" @click="goUpOne" title="Go up one directory">
+          <FontAwesomeIcon :icon="faArrowLeft" />
+        </button>
+        <div class="text-xs opacity-75 truncate" :title="cwd">{{ cwd || '/' }}</div>
       </div>
-  
-      <div v-if="showSelection" class="flex items-center gap-4">
-        <div class="text-sm">
-          <span class="opacity-80">Selected folder: </span>
-          <span class="font-mono">{{ selectedAbs || '—' }}</span>
-        </div>
-        <div class="grow"></div>
-        <button class="btn btn-secondary" @click="clearTreeCache">Refresh</button>
+
+      <!-- Column headers -->
+      <div
+        class="grid sticky top-0 bg-accent font-semibold border-b border-default [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
+        <div class="px-2 py-2 text-center"></div>
+        <div class="px-2 py-2">Name</div>
+        <div class="px-2 py-2">Type</div>
+        <div class="px-2 py-2">Size</div>
+        <div class="px-2 py-2">Modified</div>
       </div>
-    </section>
+
+      <!-- Tree -->
+      <TreeNode :key="cwd" :apiFetch="apiFetch" :selected="internalSelected" :selectedVersion="selectedVersion"
+        :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0" :isRoot="true" :useCase="useCase"
+        :selectedFolder="modelValue" @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
+    </div>
+
+    <div v-if="showSelection" class="flex items-center gap-4">
+      <div class="text-sm">
+        <span class="opacity-80">Selected folder: </span>
+        <span class="font-mono">{{ selectedAbs || '—' }}</span>
+      </div>
+      <div class="grow"></div>
+      <button class="btn btn-secondary" @click="clearTreeCache">Refresh</button>
+    </div>
+  </section>
 </template>
   
   <script setup lang="ts">
@@ -154,10 +143,4 @@
   watch(() => props.initialCwd, (v) => { if (typeof v === 'string') cwd.value = v })
   
   </script>
-  
-  <style scoped>
-  .btn { @apply px-3 py-1 rounded bg-slate-700 hover:bg-slate-600; }
-  .btn-primary { @apply bg-blue-600 hover:bg-blue-500; }
-  .btn-secondary { @apply bg-slate-700 hover:bg-slate-600; }
-  </style>
   

@@ -5,10 +5,8 @@
 			<div class="flex justify-center gap-4">
 				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New Link</button>
 				<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files</button>
-				<button @click="goToClientUploadLocation" class="btn btn-primary px-6 py-3">Client Upload
+				<button @click="goToLinkUploadPanel" class="btn btn-primary px-6 py-3">Client Upload
 					Location</button>
-				<button @click="goToUploadFilesViaLinks" class="btn btn-primary px-6 py-3">Upload Files via
-					Links</button>
 			</div>
 		</template>
 		<div>
@@ -47,12 +45,8 @@ const goToUploadFiles = () => {
 	router.push({ name: 'upload-file'});
 }
 
-const goToClientUploadLocation = () => {
-	router.push({ name: 'client-upload-location' });
-}
-
-const goToUploadFilesViaLinks = () => {
-	router.push({ name: 'upload-destination' });
+const goToLinkUploadPanel = () => {
+	router.push({ name: 'create-upload-link' });
 }
 
 </script>
