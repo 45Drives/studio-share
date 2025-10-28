@@ -205,141 +205,20 @@ import CardContainer from '../components/CardContainer.vue'
 import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { router } from '../../app/routes'
+import { useProjectChoices } from '../composables/useProjectChoices'
 
 const { apiFetch } = useApi()
-
-// simple in-memory caches (per page life)
-let zfsRootsCache: Array<{ name: string; mountpoint: string }> | null = null;
-const dirCache = new Map<string, { ts: number; entries: Array<{ name: string; path: string }> }>();
-const DIR_TTL = 5000; // 5s cache to avoid spam while the user is clicking around
 
 // ================== Project selection state ==================
 const projectSelected = ref(false)
 const showEntireTree = ref(false)
 const projectBase = ref<string>('')
-const projectDirs = ref<Array<{ name: string; path: string }>>([])
-const detecting = ref(false)
-const detectError = ref<string | null>(null)
-const projectRoots = ref<Array<{ name: string; mountpoint: string }>>([])
-const browseMode = ref<'roots' | 'dir'>('roots')
-const currentRoot = ref<string>('')   // mountpoint currently open
-const browsePath = ref<string>('')    // current directory path we're listing
+const {
+    detecting, detectError, projectRoots, projectDirs,
+    browseMode, currentRoot, browsePath, canGoUp,
+    listDirs, backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
+} = useProjectChoices(showEntireTree)
 
-const canGoUp = computed(() => {
-    if (showEntireTree.value) return browsePath.value !== '/'
-    if (!currentRoot.value) return false
-    return browsePath.value !== currentRoot.value
-})
-
-function backToRoots() {
-    // return to the roots list
-    browseMode.value = 'roots'
-    currentRoot.value = ''
-    browsePath.value = ''
-    projectDirs.value = []
-}
-
-function goUp() {
-    if (!browsePath.value || browsePath.value === '/') return
-    const up = browsePath.value.replace(/\/+$/, '').split('/').slice(0, -1).join('/') || '/'
-    // don’t escape the root dataset boundary when restricted
-    if (!showEntireTree.value && currentRoot.value && !up.startsWith(currentRoot.value)) {
-        browsePath.value = currentRoot.value
-    } else {
-        browsePath.value = up
-    }
-    listDirs(browsePath.value)
-}
-
-function drillInto(p: string) {
-    browsePath.value = p
-    listDirs(p)
-}
-
-function openRoot(r: { name: string; mountpoint: string }) {
-    currentRoot.value = r.mountpoint
-    browsePath.value = r.mountpoint
-    browseMode.value = 'dir'
-    listDirs(r.mountpoint)
-}
-
-// List directories for any absolute path
-let listTimer: ReturnType<typeof setTimeout> | null = null;
-async function listDirs(base: string) {
-    if (listTimer) clearTimeout(listTimer);
-    detecting.value = true;
-
-    // small debounce to coalesce rapid “Up/Open/Back” clicks
-    await new Promise<void>(resolve => {
-        listTimer = setTimeout(() => resolve(), 120);
-    });
-
-    try {
-        const now = Date.now();
-        const cached = dirCache.get(base);
-        if (cached && (now - cached.ts) < DIR_TTL) {
-            projectDirs.value = cached.entries;
-            return;
-        }
-
-        const data = await apiFetch(`/api/files?dir=${encodeURIComponent(base)}&dirsOnly=1`);
-        const root = base.endsWith('/') ? base : base + '/';
-        const entries = (data.entries || [])
-            .filter((e: any) => e.isDir)
-            .map((e: any) => ({ name: e.name, path: root + e.name }))
-            .sort((a: any, b: any) => a.name.localeCompare(b.name));
-
-        projectDirs.value = entries;
-        dirCache.set(base, { ts: now, entries });
-    } catch (e) {
-        projectDirs.value = [];
-        detectError.value = 'Unable to load directories.';
-    } finally {
-        detecting.value = false;
-    }
-}
-
-
-/**
- * Try to detect a ZFS pool and use its mountpoint to populate project choices.
- * Fallbacks:
- *  - if user checked "Show entire directory tree", browse from '/'
- *  - if zpool detection fails, browse from '/'
- */
-async function loadProjectChoices() {
-    detecting.value = true;
-    detectError.value = null;
-    projectDirs.value = [];
-    projectRoots.value = [];
-    currentRoot.value = '';
-    browsePath.value = '';
-
-    try {
-        if (showEntireTree.value) {
-            browseMode.value = 'dir';
-            await listDirs('/');
-            return;
-        }
-
-        // use cache first
-        if (zfsRootsCache) {
-            projectRoots.value = zfsRootsCache;
-            browseMode.value = 'roots';
-            return;
-        }
-
-        const roots = await apiFetch('/api/zfs/roots').catch(() => []);
-        projectRoots.value = Array.isArray(roots) ? roots : [];
-        zfsRootsCache = projectRoots.value; // cache
-        browseMode.value = 'roots';
-    } catch (e) {
-        detectError.value = 'ZFS detection failed; showing system root.';
-        browseMode.value = 'dir';
-        await listDirs('/');
-    } finally {
-        detecting.value = false;
-    }
-}
 
 function chooseProject(dirPath: string) {
     projectBase.value = dirPath

@@ -1,9 +1,9 @@
 # --- Makefile for build+deploy of the web UI behind Caddy ---
 
 SERVER_USER := root
-S# ERVER_HOST := 192.168.123.5
+SERVER_HOST := 192.168.123.5
 # SERVER_HOST := 192.168.207.11
-SERVER_HOST := 192.168.209.147
+# SERVER_HOST := 192.168.209.147
 REMOTE_UI_DIR  := /srv/studio-share/ui
 REMOTE_CADDYDIR := /etc/caddy
 REMOTE_CADDYFILE:= $(REMOTE_CADDYDIR)/Caddyfile

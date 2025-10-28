@@ -3,10 +3,9 @@
 		<template #header>
 			<!-- Top buttons -->
 			<div class="flex justify-center gap-4">
-				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New Link</button>
-				<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files</button>
-				<button @click="goToLinkUploadPanel" class="btn btn-primary px-6 py-3">Client Upload
-					Location</button>
+				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New File Share Link</button>
+				<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files Locally</button>
+				<button @click="goToLinkUploadPanel" class="btn btn-primary px-6 py-3">New Upload Link</button>
 			</div>
 		</template>
 		<div>

@@ -52,7 +52,8 @@
 									<td class="wizard-td">
 										<div class="truncate" :title="f.path">{{ f.name }}</div>
 									</td>
-									<td class="wizard-td"><span class="text-sm opacity-75">{{ formatSize(f.size)}}</span></td>
+									<td class="wizard-td"><span class="text-sm opacity-75">{{
+											formatSize(f.size)}}</span></td>
 									<td class="wizard-td">
 										<div class="flex justify-end">
 											<button class="btn btn-secondary" @click="removeSelected(f)">Remove</button>
@@ -65,41 +66,14 @@
 				</section>
 
 				<!-- STEP 2: Destination (server) -->
-				 <section v-show="step === 2" class="wizard-pane">
+				<section v-show="step === 2" class="wizard-pane">
 					<h2 class="wizard-heading">Choose destination on server</h2>
 
-					<div class="flex flex-col gap-2 text-sm text-left">
-						<div class="text-default">Pick the folder on the server where these files will be uploaded.
-						</div>
-						<div class="flex flex-row gap-2 items-center">
-							<span class="whitespace-nowrap">Destination folder:</span>
-							<PathInput v-model="cwd" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChoose" />
-						</div>
-					</div>
-
-					<div class="wizard-table-shell">
-						<div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2">
-							<button class="btn btn-secondary" :disabled="!canGoUp" @click="goUpOne">
-								<FontAwesomeIcon :icon="faArrowLeft" class="w-5 h-5" />
-							</button>
-							<div class="text-sm opacity-75 truncate" :title="cwd">{{ cwd || '/' }}</div>
-						</div>
-
-						<div class="grid sticky top-0 bg-accent font-semibold border-b border-default
-                [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
-							<div class="px-2 py-2"></div>
-							<div class="px-2 py-2">Name</div>
-							<div class="px-2 py-2">Type</div>
-							<div class="px-2 py-2">Size</div>
-							<div class="px-2 py-2">Modified</div>
-						</div>
-
-						<TreeNode :key="cwd" :apiFetch="apiFetch" :selected="internalSelected"
-							:selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel"
-							:depth="0" :isRoot="true" :useCase="'upload'" :selectedFolder="destFolderRel"
-							@select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
-					</div>
+					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload" title="Destination" :auto-detect-roots="true"
+						subtitle="Pick the folder on the server where these files will be uploaded." :key="'picker-'+step"
+						:showSelection="true" @changed-cwd="v => (cwd = v)" />
 				</section>
+
 
 				<!-- STEP 3: Upload progress -->
 				<section v-show="step === 3" class="wizard-pane">
@@ -117,7 +91,7 @@
 								</tr>
 							</thead>
 
-							<tbody class="bg-accent">
+							<tbody class="bg-default">
 								<!-- Empty state -->
 								<tr v-if="!uploads.length">
 									<td colspan="4" class="px-4 py-4 text-center text-muted border border-default">
@@ -149,7 +123,8 @@
 
 										<!-- Status -->
 										<td class="px-4 py-2 border border-default">
-											<span class="text-sm">{{ u.status === 'uploading' ? 'Uploading' : u.status }}</span>
+											<span class="text-sm">{{ u.status === 'uploading' ? 'Uploading' :
+												u.status}}</span>
 										</td>
 
 										<!-- Action -->
@@ -166,11 +141,10 @@
 									<!-- Progress row -->
 									<tr v-if="u.status === 'uploading'">
 										<td colspan="4" class="px-4 py-2 border border-default">
-											<progress class="w-full h-2 rounded-lg overflow-hidden
+											<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
 											accent-[#584c91]
 											[&::-webkit-progress-value]:bg-[#584c91]
-											[&::-moz-progress-bar]:bg-[#584c91]" 
-											:value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
+											[&::-moz-progress-bar]:bg-[#584c91]" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
 											</progress>
 										</td>
 									</tr>
@@ -215,16 +189,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, watch } from 'vue'
+import { ref, computed, inject, watch, onMounted } from 'vue'
 import PathInput from '../components/PathInput.vue'
 import TreeNode from '../components/TreeNode.vue'
 import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faArrowLeft  } from '@fortawesome/free-solid-svg-icons';
+import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
+import { useProjectChoices } from '../composables/useProjectChoices'
 
 useHeader('Upload Files')
 
@@ -302,45 +278,15 @@ function formatSize(size: number) {
 	while(v>=1024&&i<u.length-1){ v/=1024; i++ }
 	return `${v.toFixed(v<10&&i>0?1:0)} ${u[i]}`
 }
-
-/** ── Step 2: destination (server) ──────────────────────── */
-const cwd = ref<string>('') // shown to user ("/…/")
-const rootRel = computed(() =>
-	(cwd.value || '').replace(/^\/+/, '').replace(/\/+$/, '')
-)
+// Step 2: destination (just these)
+const cwd = ref<string>('')                 // for the breadcrumb text the picker emits
 const destDir = computed(() => cwd.value) // alias used in UI
-
-const internalSelected = ref<Set<string>>(new Set())
-const selectedVersion = ref(0)
-const expandCache = new Map<string, string[]>()
-
-async function getFilesForFolder(folder: string): Promise<string[]> {
-	if (expandCache.has(folder)) return expandCache.get(folder)!
-	try {
-		const resp = await apiFetch('/api/expand-paths', { method: 'POST', body: JSON.stringify({ paths: [folder] }) })
-		const files: string[] = resp.files || []
-		expandCache.set(folder, files); return files
-	} catch { expandCache.set(folder, []); return [] }
+const destFolderRel = ref<string>('')       // FolderPicker v-model
+const canNext = computed(() => !!destFolderRel.value)
+// Optional: mirror selection to cwd (FolderPicker already does it via @changed-cwd)
+function onSelectFolder(rel: string) {
+	destFolderRel.value = rel
 }
-function onChoose(pick: { path: string; isDir: boolean }) {
-	if (pick.isDir) {
-		cwd.value = pick.path.endsWith('/') ? pick.path : (pick.path + '/')
-	} else {
-		const parent = pick.path.replace(/\/[^/]+$/, '') || '/'
-		cwd.value = parent.endsWith('/') ? parent : (parent + '/')
-	}
-}
-function navigateTo(rel: string) {
-	const absLike = '/' + rel.replace(/^\/+/, '')
-	cwd.value = absLike.endsWith('/') ? absLike : (absLike + '/')
-}
-type TogglePayload = { path: string; isDir: boolean }
-async function togglePath({ path, isDir }: TogglePayload) {
-	if (!isDir) return
-	// For destination picking we don't need multi-file select; just expand
-	await getFilesForFolder(path)
-}
-function clearTreeCache(){ expandCache.clear(); selectedVersion.value++ }
 
 /** ── Step 3: upload & progress ─────────────────────────── */	
 function finish() {
@@ -350,32 +296,8 @@ function finish() {
 	cwd.value = '/'
 	isUploading.value = false
 
-	clearTreeCache()
-	goStep(1)
-}
-
-const destFolderRel = ref<string>('')
-
-function onSelectFolder(rel: string) {
-	destFolderRel.value = rel
-	// optionally reflect into cwd:
-	const abs = '/' + rel.replace(/^\/+/, '')
-	cwd.value = abs.endsWith('/') ? abs : abs + '/'
-}
-
-const canNext = computed(() => !!destFolderRel.value)
-
-function parentPath(absLike: string): string {
-	const p = (absLike || '/').replace(/\/+$/, '')   // trim trailing
-	if (!p || p === '/') return '/'
-	const parent = p.replace(/\/[^/]*$/, '') || '/'
-	return parent.endsWith('/') ? parent : parent + '/'
-}
-
-const canGoUp = computed(() => (cwd.value && cwd.value !== '/' && cwd.value !== ''))
-function goUpOne() {
-	const parent = parentPath(cwd.value || '/')
-	cwd.value = parent
+	// goStep(1)
+	goBack();
 }
 
 // When you enter step 3, seed the rows once:
@@ -420,6 +342,7 @@ function prepareRows(): UploadRow[] {
 		eta: null,
 	}))
 }
+
 function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: string) {
 	// Coalesce many rsync ticks into one animation frame update
 	const prev = rafState.get(row.localKey) || {
@@ -446,7 +369,7 @@ function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: str
 	}
 
 	rafState.set(row.localKey, prev);
-	}
+}
 
 const rafState = new Map<string, { p?: number; speed?: string; eta?: string; scheduled?: number }>();
 	async function startUploads() {

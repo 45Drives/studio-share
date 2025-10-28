@@ -14,9 +14,8 @@
 				<!-- DESTINATION PICKER -->
 				<div class="-mt-2">
 					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
-						title="Choose destination on server"
-						subtitle="Pick the folder on the server where these files will be uploaded."
-						@changed-cwd="val => (cwd = val)" />
+						title="Choose destination on server" :auto-detect-roots="true"
+						subtitle="Pick the folder on the server where these files will be uploaded." />
 				</div>
 
 				<!-- OPTIONS -->
@@ -115,9 +114,7 @@
 
   
 <script setup lang="ts">
-import { ref, computed, inject, Ref } from 'vue'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
+import { ref, computed, inject, Ref, onMounted, watch } from 'vue'
 import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
 import { connectionMetaInjectionKey } from '../keys/injection-keys'
@@ -125,151 +122,53 @@ import FolderPicker from '../components/FolderPicker.vue'
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+
 useHeader('Upload Files via Link')
 
 // --- Injections / API ---
 const connectionMeta = inject(connectionMetaInjectionKey)!
 const { apiFetch } = useApi()
 
-// --- Tree / folder selection ---
-const cwd = ref<string>('')
-const rootRel = computed(() => (cwd.value || '').replace(/^\/+/, '').replace(/\/+$/, ''))
-const internalSelected = ref<Set<string>>(new Set())
-const selectedVersion = ref(0)
-const expandCache = new Map<string, string[]>()
-const destFolderRel = ref<string>('')
+// FolderPicker wiring
+const cwd = ref<string>('')                 // purely for the breadcrumb text
+const destFolderRel = ref<string>('')       // FolderPicker v-model
 
-const selectedAbs = computed(() => {
-if (!destFolderRel.value) return ''
-const abs = '/' + destFolderRel.value.replace(/^\/+/, '')
-return abs.endsWith('/') ? abs : abs + '/'
-})
-
-async function getFilesForFolder(folder: string): Promise<string[]> {
-if (expandCache.has(folder)) return expandCache.get(folder)!
-try {
-	const resp = await apiFetch('/api/expand-paths', { method: 'POST', body: JSON.stringify({ paths: [folder] }) })
-	const files: string[] = resp.files || []
-	expandCache.set(folder, files)
-	return files
-} catch {
-	expandCache.set(folder, [])
-	return []
-}
-}
-
-function onChoose(pick: { path: string; isDir: boolean }) {
-if (pick.isDir) {
-	cwd.value = pick.path.endsWith('/') ? pick.path : pick.path + '/'
-} else {
-	const parent = pick.path.replace(/\/[^/]+$/, '') || '/'
-	cwd.value = parent.endsWith('/') ? parent : parent + '/'
-}
-}
-
-function navigateTo(rel: string) {
-const absLike = '/' + rel.replace(/^\/+/, '')
-cwd.value = absLike.endsWith('/') ? absLike : absLike + '/'
-}
-
-async function togglePath({ path, isDir }: { path: string; isDir: boolean }) {
-if (!isDir) return
-await getFilesForFolder(path)
-}
-
-function clearTreeCache() { expandCache.clear(); selectedVersion.value++ }
-
-const canGoUp = computed(() => cwd.value && cwd.value !== '/' && cwd.value !== '')
-function parentPath(absLike: string): string {
-	const p = (absLike || '/').replace(/\/+$/, '')
-	if (!p || p === '/') return '/'
-	const parent = p.replace(/\/[^/]*$/, '') || '/'
-	return parent.endsWith('/') ? parent : parent + '/'
-}
-function goUpOne() { cwd.value = parentPath(cwd.value || '/') }
-
-function onSelectFolder(rel: string) {
-	destFolderRel.value = rel
-	const abs = '/' + rel.replace(/^\/+/, '')
-	cwd.value = abs.endsWith('/') ? abs : abs + '/'
-}
-
-// --- Share options ---
+// Share options (unchanged)
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
-// const maxDownloads = ref(5)
-
 const protectWithPassword = ref(false)
 const password = ref('')
 const showPassword = ref(false)
-
-// Map units → seconds
-const UNIT_TO_SECONDS = {
-	hours: 60 * 60,
-	days: 24 * 60 * 60,
-	weeks: 7 * 24 * 60 * 60,
-} as const
-
-
-// Computed seconds and milliseconds (so you can pick which one to send)
-const expiresSec = computed(() => {
-	const v = Math.max(1, Math.floor(expiresValue.value || 0))
-	return v * UNIT_TO_SECONDS[expiresUnit.value]
-})
-
-function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
-	expiresValue.value = v
-	expiresUnit.value = u
-}
-
-// Pretty text like "3 days" / "2 weeks"
+const UNIT_TO_SECONDS = { hours: 3600, days: 86400, weeks: 604800 } as const
+const expiresSec = computed(() => Math.max(1, Math.floor(expiresValue.value || 0)) * UNIT_TO_SECONDS[expiresUnit.value])
+function setPreset(v: number, u: 'hours' | 'days' | 'weeks') { expiresValue.value = v; expiresUnit.value = u }
 const prettyExpiry = computed(() => {
 	const v = Math.max(1, Math.floor(expiresValue.value || 0))
 	const u = expiresUnit.value
-	const label = v === 1 ? u.slice(0, -1) : u
-	return `${v} ${label}`
+	return `${v} ${v === 1 ? u.slice(0, -1) : u}`
 })
 
-
-const allowUpload = ref<boolean>(true)
-const readOnly = ref<boolean>(false)
-
-// --- Generate link ---
+// Link generation (unchanged)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const result = ref<null | { url: string; code?: string; password?: boolean; expiresAt?: string }>(null)
-
 const canGenerate = computed(() => !!destFolderRel.value)
 
 async function generateLink() {
 	if (!canGenerate.value) return
-	loading.value = true
-	error.value = null
-	result.value = null
+	loading.value = true; error.value = null; result.value = null
 	try {
 		const body: any = {
 			path: '/' + destFolderRel.value.replace(/^\/+/, ''),
 			kind: 'folder',
-			allowUpload: readOnly.value ? false : !!allowUpload.value,
+			allowUpload: true,
 			expiresSec: Number(expiresSec.value) || 0,
 		}
 		if (password.value) body.password = password.value
 
-		// POST to your API that creates a magic link for a folder
-		// Expected response shape: { url: string, code?: string, expiresAt?: string }
-		const resp = await apiFetch('/api/create-upload-link', {
-			method: 'POST',
-			body: JSON.stringify(body),
-		})
-
-		if (!resp || !resp.url) throw new Error(resp?.error || 'Failed to create link')
-
-			result.value = {
-			url: resp.url,
-			code: resp.code,
-			password: !!password.value,
-			expiresAt: resp.expiresAt,
-		}
+		const resp = await apiFetch('/api/create-upload-link', { method: 'POST', body: JSON.stringify(body) })
+		if (!resp?.url) throw new Error(resp?.error || 'Failed to create link')
+		result.value = { url: resp.url, code: resp.code, password: !!password.value, expiresAt: resp.expiresAt }
 	} catch (e: any) {
 		error.value = e?.message || String(e)
 	} finally {
@@ -283,24 +182,11 @@ function resetAll() {
 	expiresValue.value = 7
 	expiresUnit.value = 'days'
 	password.value = ''
-	allowUpload.value = true
-	readOnly.value = false
 	result.value = null
 	error.value = null
-clearTreeCache()
 }
 
-function copy(text: string) {
-	navigator.clipboard?.writeText(text).catch(() => {})
-	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
-}
-
-function fmtDate(iso?: string) {
-	if (!iso) return ''
-	try { return new Date(iso).toLocaleString() } catch { return iso }
-}
-
-function goBack() {
-	router.push({ name: 'dashboard' })
-}
+function copy(text: string) { navigator.clipboard?.writeText(text).catch(() => { }); pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000)) }
+function fmtDate(iso?: string) { if (!iso) return ''; try { return new Date(iso).toLocaleString() } catch { return iso } }
+function goBack() { router.push({ name: 'dashboard' }) }
 </script>
