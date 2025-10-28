@@ -97,13 +97,13 @@
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" :disabled="isExpired(it)"
+										<button class="btn btn-secondary text-xs" :disabled="isExpired(it) || isDisabled(it)"
 											:aria-disabled="isExpired(it)"
 											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
 											@click="makeNever(it)">
 											Never
 										</button>
-										<button class="btn btn-primary text-xs" :disabled="isExpired(it)"
+										<button class="btn btn-primary text-xs" :disabled="isExpired(it) || isDisabled(it)"
 											:aria-disabled="isExpired(it)"
 											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
 											@click="openCustom(it)">
@@ -164,11 +164,11 @@
 									<button class="btn btn-primary px-2 py-1 rounded-md" @click="openDetails(it)">
 										View Details
 									</button>
-									<button class="btn btn-success px-2 py-1 rounded-md"
+									<button :disabled="isDisabled(it)" class="btn btn-success px-2 py-1 rounded-md"
 										@click="viewLink(it)">Open</button>
 									<!-- <button class="btn btn-primary px-2 py-1 rounded-md"
 										@click="copy(it.shortUrl)">Copy</button> -->
-									<button class="btn btn-danger px-2 py-1 rounded-md"
+									<button class="btn btn-danger px-2 py-1 rounded-md" :disabled="isDisabled(it)"
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
@@ -402,6 +402,10 @@ function badgeClass(t: LinkType) {
 
 function isExpired(it: LinkItem) {
 	return !!(it.expiresAt && it.expiresAt <= Date.now())
+}
+
+function isDisabled(it: LinkItem) {
+	return !!(it.isDisabled)
 }
 
 function statusOf(it: LinkItem): Status {
