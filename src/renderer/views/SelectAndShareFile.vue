@@ -88,7 +88,8 @@
                         <div class="text-sm opacity-80 -mb-1">
                             <span class="font-semibold">Project:</span>
                             <code class="ml-1">{{ projectBase }}</code>
-                            <button class="btn btn-secondary ml-3" @click="resetProject">Change Project Directory</button>
+                            <button class="btn btn-secondary ml-3" @click="resetProject">Change Project
+                                Directory</button>
                         </div>
 
                         <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
@@ -109,11 +110,19 @@
                             <div v-show="showSelected" class="max-h-40 overflow-auto">
                                 <div v-for="(f, i) in files" :key="f"
                                     class="grid items-center [grid-template-columns:1fr_auto] border-t border-default text-sm">
-                                    <code class="px-3 py-2 truncate block" :title="f">{{ f }}</code>
+                                    <div class="relative px-3 py-2 rounded-md bg-default">
+                                        <!-- pulsing overlay -->
+                                        <span aria-hidden="true"
+                                            class="pointer-events-none absolute inset-0 rounded-md bg-green-500/50 animate-pulse z-0"></span>
+
+                                        <span class="truncate block text-default relative z-10">{{ f }}</span>
+                                    </div>
+
                                     <button class="btn btn-danger m-2 px-2 py-1" @click="removeFile(i)"
                                         title="Remove">✕</button>
                                 </div>
                             </div>
+
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
@@ -158,15 +167,12 @@
                                     <input id="pw-enabled" type="checkbox" v-model="protectWithPassword" />
                                     <label for="pw-enabled" class="text-sm">Protect with password</label>
                                 </div>
-                                <input
-                                    :disabled="!protectWithPassword"
-                                    :type="showPassword ? 'text' : 'password'"
+                                <input :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
                                     v-model.trim="password"
                                     class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                                    placeholder="Enter password"
-                                    style="min-width: 16rem"
-                                />
-                                <button type="button" class="btn btn-secondary" @click="showPassword = !showPassword" :disabled="!protectWithPassword">
+                                    placeholder="Enter password" style="min-width: 16rem" />
+                                <button type="button" class="btn btn-secondary" @click="showPassword = !showPassword"
+                                    :disabled="!protectWithPassword">
                                     {{ showPassword ? 'Hide' : 'Show' }}
                                 </button>
                             </div>
@@ -179,7 +185,8 @@
                         title="Create a magic link with the selected options">
                         Share via magic link
                     </button>
-                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required when protection is enabled.</p>
+                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
+                        when protection is enabled.</p>
                     <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center">
                         <code>{{ viewUrl }}</code>
                         <div class="button-group-row">
