@@ -1,85 +1,34 @@
-import { exec } from "child_process";
-import path from "path";
+// setupSsh.ts
 import fs from "fs";
-import { getAppPath, getOS } from "./utils";
-import { NodeSSH } from 'node-ssh';
-import { getAsset } from './utils';
-import net from 'net';
-import { app } from 'electron';
+import net from "net";
+import path from "path";
+import { app } from "electron";
+import { NodeSSH } from "node-ssh";
+import { getOS } from "./utils";
+import { getKeyDir, ensureKeyPair } from "./crossPlatformSsh";
 
+/** Quick TCP probe for port 22 */
 export function checkSSH(host: string, timeout = 3000): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     sock.setTimeout(timeout);
-    sock.once('connect', () => { sock.destroy(); resolve(true) });
-    sock.once('error', () => { sock.destroy(); resolve(false) });
-    sock.once('timeout', () => { sock.destroy(); resolve(false) });
+    sock.once("connect", () => { sock.destroy(); resolve(true); });
+    sock.once("error", () => { sock.destroy(); resolve(false); });
+    sock.once("timeout", () => { sock.destroy(); resolve(false); });
     sock.connect(22, host);
   });
 }
-// 🧩 Generates + uploads SSH key
-export async function setupSshKey(host: string, username: string, password: string): Promise<void> {
-  const ssh = await connectWithPassword({ host, username: username, password: password });
-  // const sshDir = path.join(getAppPath(), ".ssh");
-  const sshDir = path.join(app.getPath('userData'), '.ssh');
-  const privateKeyPath = path.join(sshDir, "id_rsa");
-  const publicKeyPath = path.join(sshDir, "id_rsa.pub");
 
-  if (!fs.existsSync(sshDir)) fs.mkdirSync(sshDir, { recursive: true });
-
-  if (!fs.existsSync(privateKeyPath)) {
-    const sshKeygen = getOS() === 'win'
-      ? `${path.join(process.resourcesPath, "static", "bin", 'ssh-keygen.exe')}`
-      : 'ssh-keygen';
-    if (!fs.existsSync(sshKeygen)) {
-      throw new Error(`ssh-keygen not found at ${sshKeygen}`);
-    }
-      
-    await new Promise<void>((resolve, reject) => {
-      exec(`"${sshKeygen}" -t rsa -b 4096 -f "${privateKeyPath}" -N ""`, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
-  const publicKey = fs.readFileSync(publicKeyPath, 'utf8');
-
-  // await ssh.connect({
-  //   host,
-  //   username,
-  //   password
-  // });
-
-  await ssh.execCommand(`
-    mkdir -p ~/.ssh &&
-    grep -qxF "${publicKey.trim()}" ~/.ssh/authorized_keys || echo "${publicKey.trim()}" >> ~/.ssh/authorized_keys &&
-    chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
-  `);
-
-  ssh.dispose();
-}
-
-async function connectWithPassword({
-  host,
-  username,
-  password,
-}: {
-  host: string;
-  username: string;
-  password: string;
-}) {
+/** password auth (one-time) to plant our pubkey */
+async function connectWithPassword(args: { host: string; username: string; password: string; }) {
+  const { host, username, password } = args;
   const ssh = new NodeSSH();
   await ssh.connect({
     host,
     username,
-    password,                   // plain “password” auth
-    tryKeyboard: true,          // allow keyboard-interactive fallback
-    // debug: info => console.debug('⎇ SSH DEBUG:', info),
-    onKeyboardInteractive(
-      _name, _instr, _lang, prompts, finish,
-    ) {
-      // answer every prompt with the same password
+    password,
+    tryKeyboard: true,
+    onKeyboardInteractive(_n, _i, _l, prompts, finish) {
       finish(prompts.map(() => password));
     },
     readyTimeout: 20_000,
@@ -87,47 +36,106 @@ async function connectWithPassword({
   return ssh;
 }
 
-
-// 🧩 Upload and run install script
-export async function runBootstrapScript(
-  host: string,
-  username: string,
-  privateKeyPath: string,
-): Promise<boolean> {
+/** key/agent auth */
+async function connectWithKey(args: { host: string; username: string; privateKey: string; agent?: string }) {
+  const { host, username, privateKey, agent } = args;
   const ssh = new NodeSSH();
-  const scriptLocalPath = await getAsset("static", "setup-super-simple.sh");
-  const scriptRemotePath = "/tmp/setup-super-simple.sh";
-
   await ssh.connect({
     host,
     username,
-    privateKey: fs.readFileSync(privateKeyPath, "utf8"),
+    privateKey,
+    agent,
+    tryKeyboard: false,
     readyTimeout: 20_000,
-    // debug: info => console.debug('⎇ SSH DEBUG:', info),
   });
-  await ssh.putFile(scriptLocalPath, scriptRemotePath);
+  return ssh;
+}
 
-  let rebootRequired = false;
+/** Append public key to remote authorized_keys (idempotent) */
+export async function setupSshKey(host: string, username: string, password: string): Promise<void> {
+  // make sure we actually have a keypair locally
+  const keyDir = getKeyDir();
+  const priv = path.join(keyDir, "id_rsa");
+  const pub = `${priv}.pub`;
+  await ensureKeyPair(priv, pub);
 
-  await ssh.exec(
-    // run line-buffered
-    `stdbuf -oL -eL bash "${scriptRemotePath}"`,
-    [],                               // no positional parameters
-    {
-      cwd: '/tmp',
-      stream: 'both',                 // get both stdout and stderr
-      execOptions: { pty: true },     // ← THIS is the only change
-      onStdout(chunk) {
-        const line = chunk.toString().trim();
-        console.debug(`[${host}] ${line}`);
-        if (line.includes('[REBOOT_NEEDED]')) rebootRequired = true;
-      },
-      onStderr(chunk) {
-        console.warn(`[${host}] ${chunk.toString().trim()}`);
-      },
-    },
+  const ssh = await connectWithPassword({ host, username, password });
+
+  const publicKey = fs.readFileSync(pub, "utf8").trim().replace(/["`]/g, "");
+
+  await ssh.execCommand(
+    [
+      "mkdir -p ~/.ssh",
+      "chmod 700 ~/.ssh",
+      `grep -F "${publicKey}" ~/.ssh/authorized_keys 2>/dev/null || echo "${publicKey}" >> ~/.ssh/authorized_keys`,
+      "chmod 600 ~/.ssh/authorized_keys",
+    ].join(" && ")
   );
 
   ssh.dispose();
-  return rebootRequired;
+}
+
+/** Install houston-broadcaster via OS package manager, if missing */
+async function ensureBroadcasterInstalled(ssh: NodeSSH, sudoPrefix: string) {
+  const check = await ssh.execCommand(
+    `bash -lc 'rpm -q houston-broadcaster >/dev/null 2>&1 || dpkg -s houston-broadcaster >/dev/null 2>&1'`
+  );
+  if (check.code === 0) return; // already installed
+
+  const install = await ssh.execCommand(
+    [
+      `bash -lc '`,
+      `if command -v dnf >/dev/null 2>&1; then ${sudoPrefix} dnf -y install houston-broadcaster;`,
+      `elif command -v yum >/dev/null 2>&1; then ${sudoPrefix} yum -y install houston-broadcaster;`,
+      `elif command -v apt-get >/dev/null 2>&1; then ${sudoPrefix} apt-get update -y && ${sudoPrefix} DEBIAN_FRONTEND=noninteractive apt-get install -y houston-broadcaster;`,
+      `else echo "No supported package manager found" >&2; exit 2; fi'`,
+    ].join(" ")
+  );
+
+  if ((install.code ?? 1) !== 0) {
+    throw new Error(`Unable to install houston-broadcaster: ${install.stderr || install.stdout}`);
+  }
+}
+
+/** Run the server-side hb-bootstrap CLI (preferred) or packaged bootstrap.sh */
+export async function runRemoteBootstrapCLI(
+  host: string,
+  username: string,
+  privateKeyPath: string,
+  passwordForSudo?: string
+): Promise<{ stdout: string; stderr: string; code: number; reboot?: boolean }> {
+  const agent = process.env.SSH_AUTH_SOCK || undefined;
+  const ssh = await connectWithKey({
+    host,
+    username,
+    privateKey: fs.readFileSync(privateKeyPath, "utf8"),
+    agent,
+  });
+
+  const sudoPrefix = passwordForSudo
+    ? `echo '${passwordForSudo.replace(/'/g, "'\\''")}' | sudo -S -p ''`
+    : `sudo`;
+
+  // Ensure package exists
+  await ensureBroadcasterInstalled(ssh, sudoPrefix);
+
+  // Prefer hb-bootstrap on PATH; else packaged path
+  const detect = await ssh.execCommand(
+    `bash -lc 'command -v hb-bootstrap || test -x /usr/libexec/houston/bootstrap.sh && echo "/usr/libexec/houston/bootstrap.sh" || echo ""'`
+  );
+  const hbPath = detect.stdout.trim();
+  if (!hbPath) {
+    ssh.dispose();
+    throw new Error("hb-bootstrap not found on remote host.");
+  }
+
+  const cmd =
+    hbPath.endsWith("bootstrap.sh") ? `${sudoPrefix} "${hbPath}"` : `${sudoPrefix} "${hbPath}" --mode ip`;
+
+  const run = await ssh.execCommand(cmd, { cwd: "/tmp" });
+  ssh.dispose();
+
+  const log = `${run.stdout || ""}\n${run.stderr || ""}`;
+  const reboot = /\b(REBOOT_REQUIRED)\b/i.test(log);
+  return { stdout: run.stdout, stderr: run.stderr, code: run.code ?? 0, reboot };
 }

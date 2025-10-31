@@ -1,33 +1,36 @@
 {
-  "appId": "com.protocase.45studioshare",
-  "directories": {
-    "output": "dist"
-  },
+  "appId": "com.protocase.studioshare",
+  "productName": "45Studio Filesharing",
+  "directories": { "output": "dist" },
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-  "publish": {
-    "provider": "github",
-    "owner": "45Drives",
-    "repo": "studio-share"
-  },
+  "publish": { "provider": "github", "owner": "45Drives", "repo": "studio-share" },
+
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "shortcutName": "45Drives Studio Share"
+    "shortcutName": "45Studio Filesharing"
   },
+
   "linux": {
-    "target": ["deb", "rpm", "pacman"],
+    "target": ["deb", "rpm"],
     "category": "Utility",
     "synopsis": "Share and review media via magic links",
     "vendor": "45Drives",
     "maintainer": "Jordan Keough <jkeough@45drives.com>",
-    "icon": "icon.png",
-    "desktop": {
-      "Name": "45Drives Studio Share",
-      "Comment": "Create/manage collaborators and share review links",
-      "Categories": "Utility;Network;"
-    }
+    "icon": "icon.png"
   },
+
+  "mac": {
+    "sign": false
+  },
+
+  "win": {
+    "target": "nsis",
+    "compression": "maximum",
+    "icon": "icon.ico"
+  },
+
   "files": [
     {
       "from": "node_modules/@45drives",
@@ -85,9 +88,5 @@
       "filter": ["**/*"]
     }
   ],
-  "asar": true,
-  "asarUnpack": [
-    "**/node_modules/keytar/**",
-    "**/node_modules/ssh2/**"
-  ]
+  "asar": false
 }

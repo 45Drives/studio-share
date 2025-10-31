@@ -187,7 +187,7 @@
                     </button>
                     <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
                         when protection is enabled.</p>
-                    <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center">
+                    <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
                         <code>{{ viewUrl }}</code>
                         <div class="button-group-row">
                             <button class="btn btn-secondary" @click="copyLink">Copy</button>
@@ -432,7 +432,6 @@ async function copyLink() {
 }
 
 function openInBrowser() {
-    // window.open will be intercepted by your main.ts setWindowOpenHandler
     window.open(viewUrl.value, '_blank')
 }
 

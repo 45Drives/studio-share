@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ========= Settings (override via env if needed) =========
-REMOTE_HOST="${REMOTE_HOST:-root@192.168.207.11}"
+REMOTE_HOST="${REMOTE_HOST:-root@192.168.123.5}"
 REMOTE_DIR="${REMOTE_DIR:-/tmp/studio-share-build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PWD/builds/linux}"
 ARCHES="${ARCHES:-x64}"          # "x64" or "x64,arm64"
@@ -15,7 +15,7 @@ EXCLUDES=(
   --exclude=".git"
   --exclude="dist"
   --exclude="builds"
-  --exclude="node_modules"   # Yarn 4 will restore from .yarn cache
+  --exclude="node_modules"
   --exclude=".env*"
 )
 
@@ -67,10 +67,9 @@ build_arch() {
     corepack enable || true
     corepack prepare yarn@4.6.0 --activate
 
-    # Install from your .yarn cache (zero-install friendly)
+    # Install from .yarn cache (zero-install friendly)
     yarn install --immutable
 
-    # Your existing build chain
     yarn build:common
     node scripts/build.js
 
@@ -85,7 +84,10 @@ build_arch() {
 fetch_artifacts() {
   echo "→ Fetching artifacts"
   mkdir -p "$OUTPUT_DIR"
-  rsync -avz -e "ssh $SSH_OPTS" "$REMOTE_HOST:$REMOTE_DIR/dist/" "$OUTPUT_DIR/"
+  # Grab everything; your artifactName yields names like:
+  # "45Studio Filesharing-<ver>-linux-<arch>.{deb,rpm,pacman,AppImage?}"
+  rsync -avz -e "ssh $SSH_OPTS" \
+    "$REMOTE_HOST:$REMOTE_DIR/dist/" "$OUTPUT_DIR/"
 }
 
 # ========= Main =========

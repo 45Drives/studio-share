@@ -1,7 +1,7 @@
+// installServerDeps.ts
 import path from "path";
-import { app } from "electron";
 import { NodeSSH } from "node-ssh";
-import { checkSSH, setupSshKey, runBootstrapScript } from "./setupSsh";
+import { checkSSH, setupSshKey, runRemoteBootstrapCLI } from "./setupSsh";
 import { getAgentSocket, getKeyDir, ensureKeyPair } from "./crossPlatformSsh";
 
 export async function installServerDepsRemotely({
@@ -14,54 +14,46 @@ export async function installServerDepsRemotely({
     password: string;
 }) {
     try {
-        // 1. Quick TCP check: is something listening on port 22?
+        // 1) SSH reachable?
         const reachable = await checkSSH(host);
+        if (!reachable) return { success: false, error: `Host ${host}:22 not reachable.` };
 
-        // 2. If it is, try to auth with your existing agent/key
+        // 2) Try agent/key first
         let hasAuth = false;
         const agentSock = getAgentSocket();
-        if (reachable && agentSock) {
+        if (agentSock) {
             const trial = new NodeSSH();
             try {
-                await trial.connect({
-                    host,
-                    username,
-                    agent: agentSock,
-                    tryKeyboard: false,
-                });
+                await trial.connect({ host, username, agent: agentSock, tryKeyboard: false });
                 hasAuth = true;
-                trial.dispose();
-            } catch {
-                trial.dispose();
-            }
+            } catch { /* ignore */ }
+            trial.dispose();
         }
 
-        // 3. Only generate & upload a key when you actually can’t auth
+        // 3) If no key auth, plant our key via password
         if (!hasAuth) {
             await setupSshKey(host, username, password);
         }
 
-        // 4. Now run your bootstrap script with whichever key we have
-        // const privateKeyPath = path.join(
-        //     app.getPath("userData"),
-        //     ".ssh",
-        //     "id_rsa"
-        // );
+        // 4) Ensure we have a usable keypair to reconnect
         const keyDir = getKeyDir();
-        const privateKeyPath = path.join(keyDir, "id_rsa");
-        const publicKeyPath = `${privateKeyPath}.pub`;
-        await ensureKeyPair(privateKeyPath, publicKeyPath);
-        
-        const rebootRequired = await runBootstrapScript(host, username, privateKeyPath);
+        const priv = path.join(keyDir, "id_rsa");
+        const pub = `${priv}.pub`;
+        await ensureKeyPair(priv, pub);
 
-        return { success: true, reboot: rebootRequired };
-    } catch (err: any) {
-        console.error(
-            "SSH failure:",
-            err.level,            // e.g. 'client-authentication'
-            err.description,      // e.g. 'All configured authentication methods failed'
-            err.message,          // e.g. 'Permission denied'
+        // 5) Run server-side hb-bootstrap (no uploading scripts)
+        const { code, stdout, stderr, reboot } = await runRemoteBootstrapCLI(
+            host,
+            username,
+            priv,
+            password // for sudo if required
         );
-        return { success: false, error: err.message || String(err) };
+
+        if (code !== 0) {
+            return { success: false, error: `hb-bootstrap exited ${code}\n${stderr || stdout}` };
+        }
+        return { success: true, reboot: !!reboot };
+    } catch (err: any) {
+        return { success: false, error: err?.message || String(err) };
     }
 }

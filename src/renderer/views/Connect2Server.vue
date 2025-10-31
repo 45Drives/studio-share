@@ -153,7 +153,8 @@ async function connectToServer() {
     providedCurrentServer.value = selectedServer.value
         ? selectedServer.value
         : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true };
-
+    // const isElectron = !!(window as any).process?.versions?.electron;
+    // const servedOverHttp = /^https?:/.test(window.location.protocol);
     // -------- Decide apiBase --------
     let apiBase = '';
     if (isDev) {
@@ -173,8 +174,67 @@ async function connectToServer() {
                 connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: `${location.host}/${brokerSeg}` };
             }
     }
+    
+    // let apiBase = '';
 
+    // if (isDev) {
+    //     // Dev: call target directly
+    //     apiBase = `http://${ip}:${port}`;
+    // } else if (isElectron && !servedOverHttp) {
+    //     // Packaged desktop app (file://) → call target directly
+    //     apiBase = `http://${ip}:${port}`;
+    // } else {
+    //     // Web build (served by nginx)
+    //     if (ip === window.location.hostname || ['127.0.0.1', 'localhost'].includes(ip)) {
+    //         apiBase = '';  // same-origin reverse proxy
+    //     } else {
+    //         apiBase = `/broker/${encodeURIComponent(`${ip}:${port}`)}`; // nginx route only
+    //     }
+    // }
+
+    // connectionMeta.value = { ...connectionMeta.value, port, apiBase };
+    // window.appLog?.info('login.apiBase.decided', { apiBase, context: servedOverHttp ? 'web' : 'electron' });
+
+    window.appLog?.info('login.resolveApiBase', { isDev, ip, port, apiBase, href: location.href });
+    window.appLog?.info('login.request', { url: `${apiBase}/api/login`, ip });
     try {
+
+
+        const probe = async () => {
+            try {
+                const r = await fetch(`${apiBase}/api/health`, { signal: AbortSignal.timeout(3000) });
+                return r.ok;
+            } catch { return false; }
+        };
+
+        const usedManual = !selectedServer.value;
+        let healthy = await probe();
+
+        // If API isn’t healthy or user used manual IP, run remote bootstrap
+        if (!healthy || usedManual) {
+            try {
+                window.appLog?.info('bootstrap.start', { ip });
+                const result = await window.electron?.ipcRenderer.invoke(
+                    "run-remote-bootstrap",
+                    { host: ip, username: username.value, password: password.value }
+                );
+                if (!result?.success) {
+                    pushNotification(new Notification('Error', result?.error || 'Bootstrap failed', 'error', 12000));
+                    return;
+                }
+                pushNotification(new Notification('Success', 'Server bootstrapped.', 'success', 6000));
+            } catch (e: any) {
+                pushNotification(new Notification('Error', e?.message || 'Bootstrap failed', 'error', 12000));
+                return;
+            }
+            // Try the probe again
+            healthy = await probe();
+            if (!healthy) {
+                pushNotification(new Notification('Error', 'Server not reachable after bootstrap', 'error', 10000));
+                return;
+            }
+        }
+
         // Use the apiBase we just decided on
         const res = await fetch(`${apiBase}/api/login`, {
             method: 'POST',
@@ -184,25 +244,13 @@ async function connectToServer() {
         if (!res.ok) throw new Error(await res.text());
         const { token } = await res.json();
 
-        const settings: any = await fetch(`${apiBase}/api/settings`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        }).then(r => r.ok ? r.json() : {});
-
-        const needsBootstrap = !settings?.externalBase || !settings?.subdomain;
-
-        if (needsBootstrap) {
-            fetch(`${apiBase}/api/setup/bootstrap`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ /* wantSubdomain?: 'optional' */ })
-            }).catch(() => {/* ignore; user can retry from Settings */ });
-        }
-
         connectionMeta.value = { ...connectionMeta.value, token,ssh:{server:ip,username:username.value} };
         try { sessionStorage.setItem('hb_token', token) } catch { }
+        window.appLog?.info('login.success', { ip });
         router.push({ name: 'dashboard' });
 
     } catch (e: any) {
+        window.appLog?.error('login.error', { ip, error: e?.message });
         pushNotification(new Notification('Error', e.message || 'Login failed', 'error', 8000));
     }
 

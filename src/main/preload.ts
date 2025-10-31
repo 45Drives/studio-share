@@ -119,8 +119,8 @@ const api: ElectronApi = {
 contextBridge.exposeInMainWorld('electron', api)
 contextBridge.exposeInMainWorld('electronAPI', api)
 
-contextBridge.exposeInMainWorld('logger', {
-  log:  (...args: any[]) => ipcRenderer.send('log', { level: 'info',  args }),
-  warn: (...args: any[]) => ipcRenderer.send('log', { level: 'warn',  args }),
-  error: (...args: any[]) => ipcRenderer.send('log', { level: 'error', args }),
+contextBridge.exposeInMainWorld('appLog', {
+  info: (event: string, data?: any) => ipcRenderer.send('log:info', { event, data }),
+  warn: (event: string, data?: any) => ipcRenderer.send('log:warn', { event, data }),
+  error: (event: string, data?: any) => ipcRenderer.send('log:error', { event, data }),
 })

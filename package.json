@@ -1,5 +1,5 @@
 {
-  "name": "studio-share",
+  "name": "45studio-filesharing-app",
   "version": "0.0.1",
   "description": "Client app allowing users to create/manage collaborator user accounts and send magic links to collaborators allowing them to view/interact/comment on multimedia files for review.",
   "main": "main/src/main/main.js",

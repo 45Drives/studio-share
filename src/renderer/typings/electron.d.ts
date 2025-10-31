@@ -68,12 +68,21 @@ export interface ElectronApi {
 declare global {
   interface Window {
     electron: ElectronApi
-    electronAPI: ElectronApi // if you also expose this alias
-    logger: {
+    electronAPI: ElectronApi
+
+    /** New structured logging bridge → handled by main on 'log:info|warn|error' */
+    appLog?: {
+      info: (event: string, data?: any) => void
+      warn: (event: string, data?: any) => void
+      error: (event: string, data?: any) => void
+    }
+
+    /** (Optional) keep legacy logger if you still use it anywhere */
+    logger?: {
       log: (...a: any[]) => void
       warn: (...a: any[]) => void
       error: (...a: any[]) => void
     }
   }
 }
-export {}
+export { }

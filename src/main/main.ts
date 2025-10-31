@@ -1,39 +1,50 @@
-// 1) capture originals
-const _origWarn = console.warn.bind(console)
-const _origError = console.error.bind(console)
-
-// 2) override warn & error
-console.warn = (...args: any[]) => {
-  const msg = args.map(String).join(' ')
-  if (
-    msg.includes('APPIMAGE env is not defined') ||
-    msg.includes('NODE_TLS_REJECT_UNAUTHORIZED')
-  ) return
-  _origWarn(...args)
-}
-
-console.error = (...args: any[]) => {
-  const msg = args.map(String).join(' ')
-  if (msg.includes('NODE_TLS_REJECT_UNAUTHORIZED')) return
-  _origError(...args)
-}
-
 import log from 'electron-log';
-log.transports.console.level = false;
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-// process.env.NODE_ENV = 'development';
-console.log = (...args) => log.info(...args);
-console.error = (...args) => log.error(...args);
-console.warn = (...args) => log.warn(...args);
-console.debug = (...args) => log.debug(...args);
+function initLogging(resolvedLogDir: string) {
+  log.transports.console.level = false;
+  log.transports.file.resolvePathFn = () => path.join(resolvedLogDir, 'main.log');
 
-process.on('uncaughtException', (error) => {
-  log.error('Uncaught Exception:', error);
-});
+  jsonLogger = createLogger({
+    level: 'info',
+    format: format.combine(
+      format.timestamp(),
+      format((info) => {
+        if (typeof info.message === 'string' &&
+          info.message.includes('Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED')) return false;
+        return info;
+      })(),
+      format.json()
+    ),
+    transports: [new DailyRotateFile({
+      dirname: resolvedLogDir,
+      filename: '45studio-collab-%DATE%.json',
+      datePattern: 'YYYY-MM-DD',
+      maxFiles: '14d',
+      zippedArchive: true,
+    })],
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  log.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
+    (...args: any[]) => {
+      const msg = args.map(String).join(' ');
+      (log as any)[lvl](...args);
+      (jsonLogger as any)[lvl]({ message: msg });
+    };
+
+  console.log = dual('info');
+  console.info = dual('info');
+  console.warn = dual('warn');
+  console.error = dual('error');
+  console.debug = dual('debug');
+
+  process.on('uncaughtException', (err) => {
+    log.error('Uncaught Exception:', err);
+    jsonLogger.error({ event: 'uncaughtException', error: err.stack || err.message });
+  });
+  process.on('unhandledRejection', (reason, promise) => {
+    log.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    jsonLogger.error({ event: 'unhandledRejection', reason: String(reason) });
+  });
+}
 
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron';
 import { autoUpdater } from 'electron-updater';
@@ -177,7 +188,6 @@ function createWindow() {
       .from({ length: 256 }, (_, i) => `${subnet}.${i}`)
       .filter(candidate => candidate !== ip);
 
-    // exactly your old logic, with proper serverInfo defaults
     const scanned = await Promise.allSettled(
       ips.map(async candidateIp => {
 
@@ -251,21 +261,26 @@ function createWindow() {
     autoUpdater.checkForUpdatesAndNotify();
   });
 
-  ipcMain.handle('install-cockpit-module', async (_event, { host, username, password }) => {
-    // 4. Store manual creds for login UI (if needed)
-    mainWindow.webContents.send('store-manual-creds', {
-      ip: host,
-      username,
-      password,
-    });
+  ipcMain.on('log:info', (_e, payload) => {
+    jsonLogger.info(payload);        // structured JSON
+    log.info(payload.event, payload.data); // human file
+  });
+  ipcMain.on('log:warn', (_e, payload) => {
+    jsonLogger.warn(payload);
+    log.warn(payload.event, payload.data);
+  });
+  ipcMain.on('log:error', (_e, payload) => {
+    jsonLogger.error(payload);
+    log.error(payload.event, payload.data);
+  });
 
+  ipcMain.handle('run-remote-bootstrap', async (_event, { host, username, password }) => {
     try {
       const res = await installServerDepsRemotely({ host, username, password });
-      console.debug(" install-cockpit-module →", res);
+      // shape: { success: boolean; reboot?: boolean; error?: string }
       return res;
-    } catch (err) {
-      console.error(" install-cockpit-module error:", err);
-      throw err;            // so the renderer gets the real stack
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
     }
   });
   
@@ -296,7 +311,7 @@ function createWindow() {
 
   IPCRouter.getInstance().addEventListener('action', async (data) => {
 
-       if (data === "requestHostname") {
+    if (data === "requestHostname") {
       IPCRouter.getInstance().send('renderer', 'action', JSON.stringify({
         type: "sendHostname",
         hostname: await unwrap(server.getHostname())
@@ -628,10 +643,11 @@ app.on('web-contents-created', (_event, contents) => {
 
 app.whenReady().then(() => {
   const resolvedLogDir = checkLogDir();
+  initLogging(resolvedLogDir);
+
   console.debug('userData is here:', app.getPath('userData'))
   console.debug('log dir:', resolvedLogDir);
-  log.transports.file.resolvePathFn = () =>
-    path.join(resolvedLogDir, 'main.log');
+
   log.info("🟢 Logging initialized.");
   log.info("Log file path:", log.transports.file.getFile().path);
 
@@ -733,41 +749,6 @@ app.whenReady().then(() => {
       if (response === 1) { rememberPin(req.hostname, presented); cb(0); }
       else cb(-2);
     });
-  });
-  
-  // const origConsole = {
-  //   log: console.debug,
-  //   warn: console.warn,
-  //   error: console.error,
-  //   debug: console.debug,
-  // };
-
-  // Monkey‐patch so calls go to both electron-log + jsonLogger
-  console.debug = (...args: any[]) => {
-    log.info(...args);
-    jsonLogger.info({ message: args.map(String).join(' ') });
-  };
-  console.warn = (...args: any[]) => {
-    log.warn(...args);
-    jsonLogger.warn({ message: args.map(String).join(' ') });
-  };
-  console.error = (...args: any[]) => {
-    log.error(...args);
-    jsonLogger.error({ message: args.map(String).join(' ') });
-  };
-  console.debug = (...args: any[]) => {
-    log.debug(...args);
-    jsonLogger.debug({ message: args.map(String).join(' ') });
-  };
-
-  process.on('uncaughtException', (err) => {
-    log.error('Uncaught Exception:', err);
-    jsonLogger.error({ event: 'uncaughtException', error: err.stack || err.message });
-  });
-
-  process.on('unhandledRejection', (reason, promise) => {
-    log.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    jsonLogger.error({ event: 'unhandledRejection', reason, promise: String(promise) });
   });
 
   autoUpdater.logger = log;

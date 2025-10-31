@@ -472,12 +472,10 @@ function goBack() {
 	@apply text-sm text-muted;
 }
 
-/* Same shell for all main lists/tables */
 .wizard-table-shell {
 	@apply border rounded overflow-auto h-[28rem];
 }
 
-/* Table defaults that match your existing table styling */
 .wizard-table {
 	@apply min-w-full text-sm border border-default border-collapse text-left;
 }

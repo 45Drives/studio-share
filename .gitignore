@@ -10,3 +10,5 @@ builds
 
 scripts/test-pkg.sh
 .yarn/install-state.gz
+
+package-*.sh

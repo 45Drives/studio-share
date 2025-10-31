@@ -5,6 +5,62 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
+"45studio-filesharing-app@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "45studio-filesharing-app@workspace:."
+  dependencies:
+    "@45drives/houston-common-css": "workspace:*"
+    "@45drives/houston-common-lib": "workspace:*"
+    "@45drives/houston-common-ui": "workspace:*"
+    "@fontsource/red-hat-text": "npm:^5.0.18"
+    "@fortawesome/fontawesome-svg-core": "npm:^7.1.0"
+    "@fortawesome/free-solid-svg-icons": "npm:^7.1.0"
+    "@fortawesome/vue-fontawesome": "npm:^3.1.2"
+    "@headlessui/vue": "npm:^1.7.23"
+    "@heroicons/vue": "npm:^2.2.0"
+    "@tailwindcss/forms": "npm:^0.5.7"
+    "@types/node": "npm:^24.7.1"
+    "@types/ssh2": "npm:^1.15.4"
+    "@vitejs/plugin-vue": "npm:^5.2.1"
+    asar: "npm:^3.2.0"
+    autoprefixer: "npm:^10.4.19"
+    chalk: "npm:^4.1.2"
+    chokidar: "npm:^3.5.3"
+    dmg-license: "npm:^1.0.9"
+    electron: "npm:^38.2.2"
+    electron-builder: "npm:26.0.12"
+    electron-log: "npm:^5.4.1"
+    electron-osx-sign: "npm:^0.6.0"
+    electron-updater: "npm:6.6.2"
+    esbuild: "npm:^0.25.1"
+    jsdom: "npm:^26.0.0"
+    keytar: "npm:^7.9.0"
+    monet: "npm:^0.9.3"
+    multicast-dns: "npm:^7.2.5"
+    neverthrow: "npm:^8.2.0"
+    node-localstorage: "npm:^3.0.5"
+    node-ssh: "npm:^13.2.1"
+    pinia: "npm:^3.0.3"
+    plist: "npm:^3.1.0"
+    postcss: "npm:^8.4.38"
+    postcss-modules: "npm:^6.0.0"
+    ssh2: "npm:^1.16.0"
+    sudo-prompt: "npm:^9.2.1"
+    tailwindcss: "npm:^3.4.3"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.9.3"
+    vite: "npm:^6.0.11"
+    vitest: "npm:^3.0.7"
+    vue: "npm:^3.3.8"
+    vue-router: "npm:^4.5.1"
+    winston: "npm:^3.17.0"
+    winston-daily-rotate-file: "npm:^5.0.0"
+  dependenciesMeta:
+    dmg-license:
+      optional: true
+  languageName: unknown
+  linkType: soft
+
 "7zip-bin@npm:~5.2.0":
   version: 5.2.0
   resolution: "7zip-bin@npm:5.2.0"
@@ -9163,62 +9219,6 @@ __metadata:
   checksum: 10c0/50918f669915d9ad0fe4b7599902b735f853f2201c97791ead00104a654259c0c61bc2bc8fa3db05109339b61f4cf09e47b94ecc874ffbd0e013965223893af8
   languageName: node
   linkType: hard
-
-"studio-share@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "studio-share@workspace:."
-  dependencies:
-    "@45drives/houston-common-css": "workspace:*"
-    "@45drives/houston-common-lib": "workspace:*"
-    "@45drives/houston-common-ui": "workspace:*"
-    "@fontsource/red-hat-text": "npm:^5.0.18"
-    "@fortawesome/fontawesome-svg-core": "npm:^7.1.0"
-    "@fortawesome/free-solid-svg-icons": "npm:^7.1.0"
-    "@fortawesome/vue-fontawesome": "npm:^3.1.2"
-    "@headlessui/vue": "npm:^1.7.23"
-    "@heroicons/vue": "npm:^2.2.0"
-    "@tailwindcss/forms": "npm:^0.5.7"
-    "@types/node": "npm:^24.7.1"
-    "@types/ssh2": "npm:^1.15.4"
-    "@vitejs/plugin-vue": "npm:^5.2.1"
-    asar: "npm:^3.2.0"
-    autoprefixer: "npm:^10.4.19"
-    chalk: "npm:^4.1.2"
-    chokidar: "npm:^3.5.3"
-    dmg-license: "npm:^1.0.9"
-    electron: "npm:^38.2.2"
-    electron-builder: "npm:26.0.12"
-    electron-log: "npm:^5.4.1"
-    electron-osx-sign: "npm:^0.6.0"
-    electron-updater: "npm:6.6.2"
-    esbuild: "npm:^0.25.1"
-    jsdom: "npm:^26.0.0"
-    keytar: "npm:^7.9.0"
-    monet: "npm:^0.9.3"
-    multicast-dns: "npm:^7.2.5"
-    neverthrow: "npm:^8.2.0"
-    node-localstorage: "npm:^3.0.5"
-    node-ssh: "npm:^13.2.1"
-    pinia: "npm:^3.0.3"
-    plist: "npm:^3.1.0"
-    postcss: "npm:^8.4.38"
-    postcss-modules: "npm:^6.0.0"
-    ssh2: "npm:^1.16.0"
-    sudo-prompt: "npm:^9.2.1"
-    tailwindcss: "npm:^3.4.3"
-    ts-node: "npm:^10.9.2"
-    typescript: "npm:^5.9.3"
-    vite: "npm:^6.0.11"
-    vitest: "npm:^3.0.7"
-    vue: "npm:^3.3.8"
-    vue-router: "npm:^4.5.1"
-    winston: "npm:^3.17.0"
-    winston-daily-rotate-file: "npm:^5.0.0"
-  dependenciesMeta:
-    dmg-license:
-      optional: true
-  languageName: unknown
-  linkType: soft
 
 "sucrase@npm:^3.35.0":
   version: 3.35.0

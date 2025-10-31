@@ -1,6 +1,6 @@
 <template>
 	<div>
-		<div class="rounded-t-lg bg-secondary text-default px-4 py-2 text-center font-semibold">
+		<div class="rounded-t-lg bg-secondary text-default p-2 text-center font-semibold">
 			Currently Active Links
 		</div>
 
@@ -34,20 +34,20 @@
 				<table class="min-w-full text-sm border border-default border-collapse">
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
-							<th class="text-left px-4 py-2 font-semibold border border-default">Title</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Type</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Short Link</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Expires</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Status</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Password</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Created</th>
-							<th class="text-left px-4 py-2 font-semibold border border-default">Actions</th>
+							<th class="text-left p-2 font-semibold border border-default">Title</th>
+							<th class="text-left p-2 font-semibold border border-default">Type</th>
+							<th class="text-left p-2 font-semibold border border-default">Short Link</th>
+							<th class="text-left p-2 font-semibold border border-default">Expires</th>
+							<th class="text-left p-2 font-semibold border border-default">Status</th>
+							<th class="text-left p-2 font-semibold border border-default">Password</th>
+							<th class="text-left p-2 font-semibold border border-default">Created</th>
+							<th class="text-left p-2 font-semibold border border-default">Actions</th>
 						</tr>
 					</thead>
 
 					<tbody class="bg-accent">
 						<tr v-if="!loading && filteredRows.length === 0">
-							<td colspan="8" class="px-4 py-4 text-center text-default font-bold border border-default">
+							<td colspan="8" class="px-2 py-4 text-center text-default font-bold border border-default">
 								No links found.
 							</td>
 						</tr>
@@ -55,7 +55,7 @@
 						<tr v-for="it in filteredRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
 							<!-- Title -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<div v-if="editingId !== it.id" class="flex items-center justify-between gap-2">
 									<span class="font-medium cursor-pointer hover:underline" @click="openDetails(it)">
 										{{ it.title || fallbackTitle(it) }}
@@ -72,13 +72,13 @@
 							</td>
 
 							<!-- Type -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
 							</td>
 
 							<!-- Short link -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<div class="flex items-center gap-2 justify-between">
 									<a :href="it.shortUrl" target="_blank" rel="noopener"
 										class="hover:underline truncate max-w-[22rem]">
@@ -90,10 +90,10 @@
 							</td>
 
 							<!-- Expires -->
-							<td class="px-4 py-2 border border-default ">
+							<td class="p-2 border border-default ">
 								<div v-if="!expEditor[it.id]?.open"
-									class="flex flex-row justify-between items-center text-center">
-									<div class="mx-auto" :class="expiresClass(it)">
+									class="flex flex-row items-center">
+									<div class="justify-start text-left" :class="expiresClass(it)">
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
@@ -140,26 +140,26 @@
 
 
 							<!-- Status -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="statusChipClass(statusOf(it))">{{ statusOf(it).toUpperCase() }}</span>
 							</td>
 
 							<!-- Password -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<span class="text-xs">{{ it.passwordRequired ? 'Yes' : 'No' }}</span>
 								<!-- <button class="ml-2 text-blue-500 hover:underline text-xs" @click="openDetails(it)">Manage</button> -->
 							</td>
 
 							<!-- Created -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<div>{{ new Date(it.createdAt).toLocaleDateString() }}</div>
 								<div class="text-xs text-muted">{{ new
 									Date(it.createdAt).toLocaleTimeString() }}</div>
 							</td>
 
 							<!-- Actions -->
-							<td class="px-4 py-2 border border-default">
+							<td class="p-2 border border-default">
 								<div class="flex flex-wrap justify-around items-center">
 									<button class="btn btn-primary px-2 py-1 rounded-md" @click="openDetails(it)">
 										View Details
@@ -191,7 +191,7 @@
 		<div class="absolute inset-x-0 top-12 mx-auto w-11/12 max-w-5xl
 			bg-well border border-default rounded-lg shadow-lg z-50">
 			<!-- Header -->
-			<div class="flex items-center justify-between px-4 py-3 border-b border-default">
+			<div class="flex items-center justify-between px-2 py-3 border-b border-default">
 				<h3 class="text-lg font-semibold">
 					Link Details — {{ current?.title || (current && fallbackTitle(current)) }}
 				</h3>
@@ -199,7 +199,7 @@
 			</div>
 
 			<!-- Meta -->
-			<div class="px-4 pt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm text-left items-center">
+			<div class="px-2 pt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm text-left items-center">
 				<section class="space-y-2">
 					<div class="space-x-2">
 						<span class="text-default font-bold">Type of Link:</span>
