@@ -97,15 +97,12 @@
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" :disabled="isExpired(it) || isDisabled(it)"
-											:aria-disabled="isExpired(it)"
-											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+										<button class="btn btn-secondary text-xs" 
+
 											@click="makeNever(it)">
 											Never
 										</button>
-										<button class="btn btn-primary text-xs" :disabled="isExpired(it) || isDisabled(it)"
-											:aria-disabled="isExpired(it)"
-											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+										<button class="btn btn-primary text-xs" 
 											@click="openCustom(it)">
 											Custom
 										</button>
@@ -272,7 +269,7 @@
 										class="text-left px-3 py-2 border border-default">Uploader</th>
 									<th v-if="current?.type === 'upload'"
 										class="text-left px-3 py-2 border border-default">IP</th>
-									<th class="text-left px-3 py-2 border border-default">When</th>
+									<th  v-if="current?.type === 'upload'" class="text-left px-3 py-2 border border-default">When</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -286,7 +283,7 @@
 										f.uploader_label || '—' }}</td>
 									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{
 										f.ip || '—' }}</td>
-									<td class="px-3 py-2 border border-default">{{ f.ts ? new
+									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{ f.ts ? new
 										Date(f.ts).toLocaleString() : '—' }}</td>
 								</tr>
 							</tbody>
@@ -363,9 +360,6 @@ async function patchLink(id: number|string, body: any) {
 	return apiFetch(`/api/links/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 }
 
-//   async function deleteLink(id: number|string) {
-//     return apiFetch(`/api/links/${id}`, { method: 'DELETE' })
-//   }
 
 /* ------------------- state ------------------- */
 const loading = ref(false)
@@ -507,6 +501,8 @@ async function toggleDisable(it: LinkItem) {
   detailsLoading.value = true; files.value = []
   try {
     const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
+	console.log('details resp', resp)
+	console.log(`/api/links/`,it.id+'/details')
     // normalize uploader label (upload links only)
     files.value = (resp.files || []).map((f:any, idx:number) => ({
       key: `f${idx}`,
@@ -647,7 +643,7 @@ async function applyCustom(it: LinkItem) {
 }
 
 async function makeNever(it: LinkItem) {
-	if (isExpired(it)) return
+
 	// Clear expiry so the link never expires
 	await patchLink(it.id, { expiresAtMs: null })
 	it.expiresAt = null
