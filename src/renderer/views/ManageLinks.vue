@@ -165,7 +165,7 @@
 										@click="viewLink(it)">Open</button>
 									<!-- <button class="btn btn-primary px-2 py-1 rounded-md"
 										@click="copy(it.shortUrl)">Copy</button> -->
-									<button class="btn btn-danger px-2 py-1 rounded-md" :disabled="isDisabled(it)"
+									<button class="btn btn-danger px-2 py-1 rounded-md" 
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}

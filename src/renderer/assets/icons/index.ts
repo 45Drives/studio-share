@@ -1,0 +1,5 @@
+export { default as FolderIcon } from './FolderIcon'
+export { default as FileIcon }   from './FileIcon'
+export { default as ImageIcon }  from './ImageIcon'
+export { default as VideoIcon }  from './VideoIcon'
+export { default as AudioIcon }  from './AudioIcon'

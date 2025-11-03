@@ -8,14 +8,29 @@
         </header>
   
         <!-- DESTINATION PICKER -->
-        <FolderPicker
+        <!-- <FolderPicker
         v-model="destFolderRel"
         :apiFetch="apiFetch"
         useCase="upload"
         title="Choose destination on server"
         subtitle="Pick the folder on the server where these files will be uploaded."
         @changed-cwd="val => (cwd = val)"
-      />
+      /> -->
+      <IconMode
+  :key="cwd"
+  :apiFetch="apiFetch"
+  :selected="internalSelected"
+  :selectedVersion="selectedVersion"
+  :getFilesFor="getFilesForFolder"
+  :relPath="rootRel"
+  :depth="0"
+  v-model:selectedFolder="destFolder"
+  useCase="upload"
+  :isRoot="true"
+  @select-folder="onSelectFolder"
+  @toggle="togglePath"
+  @navigate="navigateTo"
+/>
   
         <!-- OPTIONS -->
         <section class="flex flex-col gap-4">
@@ -88,6 +103,8 @@
   import { useApi } from '../composables/useApi'
   import { connectionMetaInjectionKey } from '../keys/injection-keys'
   import FolderPicker from '../components/FolderPicker.vue'
+  import IconMode from '../components/IconMode.vue'
+import { Upload } from '@45drives/houston-common-lib'
   
   // --- Injections / API ---
   const connectionMeta = inject(connectionMetaInjectionKey)!
