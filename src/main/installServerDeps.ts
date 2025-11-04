@@ -1,58 +1,92 @@
 // installServerDeps.ts
 import path from "path";
 import { NodeSSH } from "node-ssh";
-import { checkSSH, setupSshKey, runRemoteBootstrapCLI } from "./setupSsh";
-import { getAgentSocket, getKeyDir, ensureKeyPair } from "./crossPlatformSsh";
+import { checkSSH, setupSshKey, ensureBroadcasterInstalled, connectWithKey } from "./setupSsh";
+import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from "./crossPlatformSsh";
 
-export async function installServerDepsRemotely({
-    host,
-    username,
-    password,
-}: {
-    host: string;
-    username: string;
-    password: string;
+type ProgressFn = (p: { step: string; label: string }) => void;
+
+export async function installServerDepsRemotely(opts: {
+    host: string; username: string; password: string; onProgress?: ProgressFn;
 }) {
+    const { host, username, password, onProgress } = opts;
+    const send = (step: string, label: string) => onProgress?.({ step, label });
+
     try {
-        // 1) SSH reachable?
+        send('probe', `Probing ${host}:22…`);
         const reachable = await checkSSH(host);
         if (!reachable) return { success: false, error: `Host ${host}:22 not reachable.` };
 
-        // 2) Try agent/key first
+        // Try agent first, else plant key via password
         let hasAuth = false;
         const agentSock = getAgentSocket();
         if (agentSock) {
+            send('auth', 'Trying SSH agent…');
             const trial = new NodeSSH();
-            try {
-                await trial.connect({ host, username, agent: agentSock, tryKeyboard: false });
-                hasAuth = true;
-            } catch { /* ignore */ }
+            try { await trial.connect({ host, username, agent: agentSock, tryKeyboard: false }); hasAuth = true; } catch { }
             trial.dispose();
         }
-
-        // 3) If no key auth, plant our key via password
         if (!hasAuth) {
+            send('key', 'Creating/planting SSH key…');
             await setupSshKey(host, username, password);
         }
 
-        // 4) Ensure we have a usable keypair to reconnect
+        // Connect with key/agent
+        send('connect', 'Connecting via SSH…');
         const keyDir = getKeyDir();
-        const priv = path.join(keyDir, "id_rsa");
-        const pub = `${priv}.pub`;
-        await ensureKeyPair(priv, pub);
-
-        // 5) Run server-side hb-bootstrap (no uploading scripts)
-        const { code, stdout, stderr, reboot } = await runRemoteBootstrapCLI(
-            host,
-            username,
-            priv,
-            password // for sudo if required
-        );
-
-        if (code !== 0) {
-            return { success: false, error: `hb-bootstrap exited ${code}\n${stderr || stdout}` };
+        const priv = path.join(keyDir, 'id_rsa');
+        await ensureKeyPair(priv, `${priv}.pub`);
+        console.log('keyDir:', keyDir)
+        async function tryConnectWithCurrentKey() {
+            return hasAuth
+                ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock! })
+                : await connectWithKey({ host, username, privateKey: priv });
         }
-        return { success: true, reboot: !!reboot };
+
+        let ssh;
+        try {
+            ssh = await tryConnectWithCurrentKey();
+        } catch (e: any) {
+            const m = String(e?.message || e);
+            if (/unsupported key format/i.test(m)) {
+                // Fallback: regenerate PEM and retry
+                send('key', 'Regenerating SSH key (PEM)…');
+                await regeneratePemKeyPair(priv); 
+                ssh = await tryConnectWithCurrentKey();
+            } else {
+                throw e; // real failure
+            }
+        }
+
+        try {
+            send('install', 'Installing Broadcaster…');
+            await ensureBroadcasterInstalled(ssh, { password });
+
+            send('enable', 'Enabling & starting service…');
+            await ssh.execCommand(`bash -lc 'sudo systemctl enable --now houston-broadcaster || true'`);
+
+            // Wait for bootstrap to finish: health first, then look for the known journal line
+            send('wait', 'Waiting for service health…');
+            const health = await ssh.execCommand(
+                `bash -lc 'for i in {1..30}; do curl -fsS http://127.0.0.1:9095/healthz >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1;'`
+            );
+
+            if ((health.code ?? 1) !== 0) {
+                // Optional: check journal for the “Finished first-run bootstrap” marker
+                send('wait', 'Waiting for bootstrap to complete…');
+                const journal = await ssh.execCommand(
+                    `bash -lc 'for i in {1..60}; do journalctl -u houston-broadcaster -o cat --since "5 min ago" | grep -q "Finished Houston Broadcaster first-run bootstrap" && exit 0; sleep 1; done; exit 1;'`
+                );
+                if ((journal.code ?? 1) !== 0) {
+                    // Not fatal—renderer will probe again—but tell the UI we’re done waiting
+                    send('warn', 'Service started; bootstrap may still be finishing…');
+                }
+            }
+
+            return { success: true };
+        } finally {
+            ssh.dispose();
+        }
     } catch (err: any) {
         return { success: false, error: err?.message || String(err) };
     }

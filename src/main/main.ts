@@ -274,12 +274,20 @@ function createWindow() {
     log.error(payload.event, payload.data);
   });
 
-  ipcMain.handle('run-remote-bootstrap', async (_event, { host, username, password }) => {
+  ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id }) => {
+    const send = (label: string, step?: string) =>
+      event.sender.send('bootstrap-progress', { id, ts: Date.now(), step, label });
+
     try {
-      const res = await installServerDepsRemotely({ host, username, password });
-      // shape: { success: boolean; reboot?: boolean; error?: string }
+      send('Probing SSH…', 'probe');
+      const res = await installServerDepsRemotely({
+        host, username, password,
+        onProgress: ({ step, label }: any) => send(label, step), // bubble up labels
+      });
+      send(res.success ? 'Bootstrap complete.' : 'Bootstrap failed.', res.success ? 'done' : 'error');
       return res;
     } catch (err: any) {
+      send('Bootstrap failed.', 'error');
       return { success: false, error: err?.message || String(err) };
     }
   });

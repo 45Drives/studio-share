@@ -20,7 +20,7 @@ export function checkSSH(host: string, timeout = 3000): Promise<boolean> {
 }
 
 /** password auth (one-time) to plant our pubkey */
-async function connectWithPassword(args: { host: string; username: string; password: string; }) {
+export async function connectWithPassword(args: { host: string; username: string; password: string; }) {
   const { host, username, password } = args;
   const ssh = new NodeSSH();
   await ssh.connect({
@@ -37,16 +37,23 @@ async function connectWithPassword(args: { host: string; username: string; passw
 }
 
 /** key/agent auth */
-async function connectWithKey(args: { host: string; username: string; privateKey: string; agent?: string }) {
+export async function connectWithKey(args: { host: string; username: string; privateKey: string; agent?: string }) {
   const { host, username, privateKey, agent } = args;
+
+  // If a path was passed, load the file
+  const keyData = privateKey.includes('BEGIN ')
+    ? privateKey
+    : fs.readFileSync(privateKey, 'utf8');  // <-- read contents
+
   const ssh = new NodeSSH();
   await ssh.connect({
     host,
     username,
-    privateKey,
+    privateKey: keyData,              // pass contents
     agent,
     tryKeyboard: false,
     readyTimeout: 20_000,
+    debug: (m: string) => console.log('ssh.debug', m),
   });
   return ssh;
 }
@@ -75,67 +82,54 @@ export async function setupSshKey(host: string, username: string, password: stri
   ssh.dispose();
 }
 
-/** Install houston-broadcaster via OS package manager, if missing */
-async function ensureBroadcasterInstalled(ssh: NodeSSH, sudoPrefix: string) {
-  const check = await ssh.execCommand(
-    `bash -lc 'rpm -q houston-broadcaster >/dev/null 2>&1 || dpkg -s houston-broadcaster >/dev/null 2>&1'`
-  );
-  if (check.code === 0) return; // already installed
+export async function ensureBroadcasterInstalled(
+  ssh: NodeSSH,
+  opts: { password?: string }
+) {
+  const q = (s: string) => `'${s.replace(/'/g, `'\"'\"'`)}'`;
+  const PW = opts.password ?? "";
 
-  const install = await ssh.execCommand(
-    [
-      `bash -lc '`,
-      `if command -v dnf >/dev/null 2>&1; then ${sudoPrefix} dnf -y install houston-broadcaster;`,
-      `elif command -v yum >/dev/null 2>&1; then ${sudoPrefix} yum -y install houston-broadcaster;`,
-      `elif command -v apt-get >/dev/null 2>&1; then ${sudoPrefix} apt-get update -y && ${sudoPrefix} DEBIAN_FRONTEND=noninteractive apt-get install -y houston-broadcaster;`,
-      `else echo "No supported package manager found" >&2; exit 2; fi'`,
-    ].join(" ")
-  );
+  const script = `
+set -euo pipefail
 
-  if ((install.code ?? 1) !== 0) {
-    throw new Error(`Unable to install houston-broadcaster: ${install.stderr || install.stdout}`);
-  }
+PW=${q(PW)}
+
+have_sudo() {
+  sudo -n true 2>/dev/null
 }
 
-/** Run the server-side hb-bootstrap CLI (preferred) or packaged bootstrap.sh */
-export async function runRemoteBootstrapCLI(
-  host: string,
-  username: string,
-  privateKeyPath: string,
-  passwordForSudo?: string
-): Promise<{ stdout: string; stderr: string; code: number; reboot?: boolean }> {
-  const agent = process.env.SSH_AUTH_SOCK || undefined;
-  const ssh = await connectWithKey({
-    host,
-    username,
-    privateKey: fs.readFileSync(privateKeyPath, "utf8"),
-    agent,
-  });
+run_root() {
+  if have_sudo; then
+    sudo "$@"
+  else
+    # feed password via stdin for each sudo call
+    printf '%s\\n' "$PW" | sudo -S -p '' "$@"
+  fi
+}
 
-  const sudoPrefix = passwordForSudo
-    ? `echo '${passwordForSudo.replace(/'/g, "'\\''")}' | sudo -S -p ''`
-    : `sudo`;
+# already installed?
+if command -v rpm >/dev/null 2>&1; then
+  if rpm -q houston-broadcaster >/dev/null 2>&1; then exit 0; fi
+elif command -v dpkg >/dev/null 2>&1; then
+  if dpkg -s houston-broadcaster >/dev/null 2>&1; then exit 0; fi
+fi
 
-  // Ensure package exists
-  await ensureBroadcasterInstalled(ssh, sudoPrefix);
+# pick pm + install
+if command -v dnf >/dev/null 2>&1; then
+  run_root dnf -y install houston-broadcaster
+elif command -v yum >/dev/null 2>&1; then
+  run_root yum -y install houston-broadcaster
+elif command -v apt-get >/dev/null 2>&1; then
+  run_root apt-get update -y
+  DEBIAN_FRONTEND=noninteractive run_root apt-get install -y houston-broadcaster
+else
+  echo "No supported package manager found" >&2
+  exit 2
+fi
+`.trim();
 
-  // Prefer hb-bootstrap on PATH; else packaged path
-  const detect = await ssh.execCommand(
-    `bash -lc 'command -v hb-bootstrap || test -x /usr/libexec/houston/bootstrap.sh && echo "/usr/libexec/houston/bootstrap.sh" || echo ""'`
-  );
-  const hbPath = detect.stdout.trim();
-  if (!hbPath) {
-    ssh.dispose();
-    throw new Error("hb-bootstrap not found on remote host.");
+  const res = await ssh.execCommand(`bash -lc ${q(script)}`);
+  if ((res.code ?? 1) !== 0) {
+    throw new Error(`install failed: ${res.stderr || res.stdout}`);
   }
-
-  const cmd =
-    hbPath.endsWith("bootstrap.sh") ? `${sudoPrefix} "${hbPath}"` : `${sudoPrefix} "${hbPath}" --mode ip`;
-
-  const run = await ssh.execCommand(cmd, { cwd: "/tmp" });
-  ssh.dispose();
-
-  const log = `${run.stdout || ""}\n${run.stderr || ""}`;
-  const reboot = /\b(REBOOT_REQUIRED)\b/i.test(log);
-  return { stdout: run.stdout, stderr: run.stderr, code: run.code ?? 0, reboot };
 }

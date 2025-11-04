@@ -53,3 +53,22 @@ export function getKeyDir() {
     // one place under %APPDATA% / ~/.config / ~/Library
     return path.join(app.getPath("userData"), ".ssh");
 }
+
+
+export async function regeneratePemKeyPair(pk: string) {
+    const pub = `${pk}.pub`;
+    // remove old pair (or back them up if you prefer)
+    try { await fs.promises.unlink(pk); } catch { }
+    try { await fs.promises.unlink(pub); } catch { }
+
+    const sshKeygen = getOS() === 'win'
+        ? await getAsset('static/bin', 'ssh-keygen.exe')
+        : 'ssh-keygen';
+
+    // generate RSA key in **PEM** format (widely supported)
+    await execFileAsync(
+        sshKeygen,
+        ['-t', 'rsa', '-b', '4096', '-m', 'PEM', '-f', pk, '-N', '', '-q'],
+        { windowsHide: true }
+    );
+}

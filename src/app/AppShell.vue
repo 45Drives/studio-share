@@ -70,27 +70,28 @@ let unregisterIpcListener: (() => void) | null = null
 // IPC → router navigation (uses currentServer IP)
 useIpcActions(() => currentServer.value?.ip)
 
-// (optional) global notifications
 onMounted(() => {
-  // IPC → router navigation listener
-  unregisterIpcListener = registerIpcActionListener({
-    vueRouter: router,
-    setCurrentWizard: (w) => { /* optional: track wizard here if needed */ },
-    setShowWebView: (v) => { /* optional: track webview toggle */ },
-    // if you have old helpers, pass them in:
-    // openStorageSetup,
-    // openHoustonWindow,
-    // waitForServerRebootAndShowWizard,
-    // waitForServerRebootAndOpenHouston
-  })
-
   const isJson = (s: string) => { try { JSON.parse(s); return true } catch { return false } }
-  window.electron?.ipcRenderer.on('notification', (_e, message: string) => {
+
+  const notificationHandler = (_e: any, message: string) => {
     if (message.startsWith('Error')) return reportError(new Error(message))
     if (isJson(message)) {
       const m = JSON.parse(message)
       m.error ? reportError(new Error(m.error)) : reportSuccess(message)
-    } else reportSuccess(message)
+    } else {
+      reportSuccess(message)
+    }
+  }
+
+  window.electron?.ipcRenderer.on('notification', notificationHandler)
+
+  // IPC → router navigation listener
+  unregisterIpcListener = registerIpcActionListener({
+    vueRouter: router,
+  })
+
+  onBeforeUnmount(() => {
+    window.electron?.ipcRenderer.removeListener('notification', notificationHandler)
   })
 })
 
