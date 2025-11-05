@@ -13,7 +13,7 @@
       <!-- Table wrapper -->
       <div class="border rounded overflow-auto max-h-[440px] min-h-[300px]">
         <!-- Small toolbar: List / Grid toggle -->
-        <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2">
+        <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10" >
           <div class="text-xs opacity-75 truncate" :title="cwd">Showing: {{ cwd || '/' }}</div>
           <div class="ml-auto flex items-center">
             <button
@@ -82,7 +82,6 @@
         </button>
         <button class="btn btn-secondary" :disabled="!internalSelected.size" @click="clearSelection">Clear</button>
         <div class="grow"></div>
-        <div class="text-sm opacity-75">Showing: {{ cwd || '/' }}</div>
       </div>
     </div>
 </template>

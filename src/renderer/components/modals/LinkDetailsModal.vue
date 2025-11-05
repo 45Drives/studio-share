@@ -147,6 +147,7 @@
               v-model="accessModalOpen"
               :apiFetch="apiFetch"
               :preselected="access.map(a => ({
+                id: a.user_id,
                 username: a.user_name || '',
                 name: a.name || '',
                 user_email: a.user_email || '',
@@ -276,22 +277,23 @@ import type { LinkItem, LinkType, AccessRow, Status } from '../../typings/electr
  }
 
   
-  function buildCommentersPayload(users: Array<{ username?: string; name?: string; user_email?: string }>) {
+  function buildCommentersPayload(users: Array<{  id?: number; username?: string; name?: string; user_email?: string }>) {
     return users
       .map(u => {
         const out: any = {}
+        if (u.id != null) out.userId = u.id
+
         if (u.username) out.username = u.username
         if (u.user_email) out.user_email = u.user_email
         if (u.name) out.name = u.name
         return out
       })
-      .filter(x => x.username || x.user_email)
+      .filter(x => x.userId != null || x.username || x.user_email)
   }
   
-  async function mergeAccess(users: Array<{ username?: string; name?: string; user_email?: string }>) {
+  async function mergeAccess(users: Array<{  id?: number; username?: string; name?: string; user_email?: string }>) {
     if (!props.link) return
     const payload = { commenters: buildCommentersPayload(users) }
-    if (!payload.commenters.length) return
     await props.apiFetch(`/api/links/${props.link.id}/access/merge`, {
       method: 'POST',
       body: JSON.stringify(payload),

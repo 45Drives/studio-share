@@ -30,7 +30,7 @@
               class="flex items-center justify-between px-3 py-2 border-b border-default text-sm"
             >
               <label class="flex items-center gap-2 cursor-pointer" @click.stop>
-                <input type="checkbox" :value="u" v-model="selectedUsersLocal" />
+                <input type="checkbox" :value="userKey(u)" v-model="selectedKeys" />
                 <span
                   class="inline-block h-3 w-3 rounded-full"
                   :style="{ backgroundColor: u.display_color || '#999' }"
@@ -67,7 +67,7 @@
 
           <div class="flex gap-2 mt-2">
             <button class="btn btn-secondary" @click="selectAll()" :disabled="!users.length">Select all</button>
-            <button class="btn btn-secondary" @click="clearSelected()" :disabled="!selectedUsersLocal.length">
+            <button class="btn btn-secondary" @click="clearSelected()" :disabled="!selectedKeys.length">
               Clear
             </button>
           </div>
@@ -232,7 +232,8 @@ const emit = defineEmits<{
 // UI state
 const userSearch = ref('')
 const users = ref<ExistingUser[]>([])
-const selectedUsersLocal = ref<ExistingUser[]>([])
+const selectedKeys = ref<string[]>([])
+
 const newUser = ref<ExistingUser>({ username: '', name: '', user_email: '', display_color: randomPastel() })
 const error = ref('')
 const tempPin = ref('')
@@ -277,18 +278,26 @@ watch(
     if (v) {
       userSearch.value = ''
       error.value = ''
-      selectedUsersLocal.value = props.preselected ? props.preselected.slice() : []
+      selectedKeys.value = (props.preselected || [])
+      .map(p => userKey(p))
+       .filter(Boolean)
       fetchUsers()
     }
   }
 )
 
 // API helpers
+function userKey(u: ExistingUser) {
+  return u.id != null ? String(u.id) : (u.username || '').toLowerCase()
+}
+
 async function fetchUsers() {
   try {
     const q = userSearch.value ? `?q=${encodeURIComponent(userSearch.value)}` : ''
     const data = await props.apiFetch(`/api/users${q}`, { method: 'GET' })
     users.value = Array.isArray(data) ? data : []
+    // ensure selected keys still exist; keep them even if not in the current page
+    selectedKeys.value = Array.from(new Set(selectedKeys.value))
   } catch {
     users.value = []
   }
@@ -348,9 +357,10 @@ async function createUser() {
       user_email: created.user_email ?? payload.user_email,
       display_color: created.display_color ?? payload.display_color,
     }
-    if (!selectedUsersLocal.value.some(s => s.username === u.username)) {
-      selectedUsersLocal.value.push(u)
-    }
+    const k = userKey(u)           // <- one canonical key
+if (!selectedKeys.value.includes(k)) {
+  selectedKeys.value.push(k)   // <- push the same canonical key
+}
     await fetchUsers()
     resetNewUser()
   } catch (e: any) {
@@ -371,35 +381,33 @@ function startEdit(u: ExistingUser) {
 async function saveEdit() {
   if (!editing.value) return
   try {
-    const idOrUsername = editing.value.id ?? editing.value.username
-    const payload: any = {
-      name: editForm.value.name.trim(),
-      user_email: editForm.value.user_email.trim() || null,
-      display_color: normalizeHex(editForm.value.display_color),
-    }
-    await props.apiFetch(`/api/users/${idOrUsername}`, {
+   const id = Number(editing.value.id)
+   if (!Number.isFinite(id)) throw new Error('Missing numeric user id')
+
+   const payload: any = {}
+      if (editForm.value.name.trim() !== (editing.value.name || '')) {
+        payload.name = editForm.value.name.trim()
+      }
+      const newEmail = editForm.value.user_email.trim() || null
+      if ((newEmail || null) !== (editing.value.user_email ?? null)) {
+        payload.user_email = newEmail
+      }
+      const newColor = normalizeHex(editForm.value.display_color)
+      if (newColor && newColor !== (editing.value.display_color || null)) {
+        payload.display_color = newColor
+      }
+   await props.apiFetch(`/api/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     })
 
     await fetchUsers()
-
-    // keep selections in sync with updated record
-    const updated = users.value.find(
-      x => (x.id ?? x.username) === (idOrUsername as any)
-    )
-    if (updated) {
-      const idx = selectedUsersLocal.value.findIndex(
-        s => (s.id ?? s.username) === (idOrUsername as any)
-      )
-      if (idx >= 0) selectedUsersLocal.value[idx] = updated
-    }
-
     editing.value = null
   } catch (e: any) {
     error.value = e?.message || 'Failed to update user.'
   }
 }
+
 
 async function deleteUser(u: ExistingUser) {
   const label = u.name || u.username
@@ -407,9 +415,10 @@ async function deleteUser(u: ExistingUser) {
   try {
     const idOrUsername = u.id ?? u.username
     await props.apiFetch(`/api/users/${idOrUsername}`, { method: 'DELETE' })
-    selectedUsersLocal.value = selectedUsersLocal.value.filter(
-      s => (s.id ?? s.username) !== (idOrUsername as any)
-    )
+    const k = userKey(u)
+    selectedKeys.value = selectedKeys.value.filter(x => x !== k)
+
+
     await fetchUsers()
   } catch (e: any) {
     error.value = e?.message || 'Failed to delete user.'
@@ -419,11 +428,13 @@ async function deleteUser(u: ExistingUser) {
 
 // UX helpers
 function selectAll() {
-  selectedUsersLocal.value = users.value.slice()
+  selectedKeys.value = users.value.map(userKey).filter(Boolean)
+
 }
 function clearSelected() {
-  selectedUsersLocal.value = []
+  selectedKeys.value = []
 }
+
 function resetNewUser() {
   newUser.value = { username: '', name: '', user_email: '', display_color: randomPastel() }
   tempPin.value = ''
@@ -435,9 +446,24 @@ function close() {
   emit('update:modelValue', false)
 }
 function apply() {
-  emit('apply', selectedUsersLocal.value.slice())
+  const byKey = (arr: ExistingUser[]) => {
+    const m = new Map<string, ExistingUser>()
+    arr.forEach(u => {
+      const k = userKey(u)
+      if (k) m.set(k, u)
+    })
+    return m
+  }
+  const mapUsers = byKey(users.value)
+  const mapPre   = byKey(props.preselected || [])
+  const chosen: ExistingUser[] = []
+  for (const k of selectedKeys.value) {
+    chosen.push(mapUsers.get(k) || mapPre.get(k)!)
+  }
+    emit('apply', chosen)
   close()
 }
+
 function openCreate() {
   showCreate.value = true
   // clear any stale values each time it opens
