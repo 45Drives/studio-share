@@ -176,6 +176,21 @@
                                     {{ showPassword ? 'Hide' : 'Show' }}
                                 </button>
                             </div>
+                        </div>
+                        <div>
+                            <!-- Commenter access (optional) -->
+                            <button type="button" class="btn btn-primary" @click="openUserModal()">
+                                Add users…
+                            </button>
+                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
+                                id: c.id,                         // <-- include id
+                                username: c.username || '',
+                                name: c.name,
+                                user_email: c.user_email,
+                                display_color: c.display_color
+                            }))" @apply="onApplyUsers" />
+
+
 
                         </div>
                     </div>
@@ -213,6 +228,8 @@ import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { router } from '../../app/routes'
 import { useProjectChoices } from '../composables/useProjectChoices'
+import AddUsersModal from '../components/modals/AddUsersModal.vue'
+import type { Commenter } from '../typings/electron'
 
 const { apiFetch } = useApi()
 
@@ -383,7 +400,7 @@ async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
-        externalBase: externalBase.value || undefined, // <— add this
+        externalBase: externalBase.value || undefined,
     };
 
     if (files.value.length === 1) body.filePath = files.value[0];
@@ -394,6 +411,16 @@ async function generateLink() {
         body.password = password.value
     }
 
+    if (commenters.value.length) {
+        (body as any).commenters = commenters.value.map(c => {
+            const out: any = {}
+            if (c.id != null) out.userId = c.id
+            if (c.username) out.username = c.username
+            if (c.user_email) out.user_email = c.user_email
+            if (c.name) out.name = c.name
+            return out
+        })
+    }
     const data = await apiFetch('/api/magic-link', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -404,18 +431,6 @@ async function generateLink() {
     viewUrl.value = data.viewUrl;
     downloadUrl.value = data.downloadUrl;
 
-    // Clear password after use for safety (optional)
-    // password.value = ''
-}
-
-
-// Basic join to avoid double slashes
-function joinPath(a: string, b: string) {
-    if (!a) return b
-    if (!b) return a
-    const left = a.endsWith('/') ? a.slice(0, -1) : a
-    const right = b.startsWith('/') ? b.slice(1) : b
-    return `${left}/${right}`
 }
 
 
@@ -445,6 +460,37 @@ function resetToProjectPicker() {
 
 function goBack() {
     router.push({ name: 'dashboard' })
+}
+
+const userModalOpen = ref(false)
+const commenters = ref<Commenter[]>([])
+
+function openUserModal() {
+  userModalOpen.value = true
+}
+
+function makeKey(name?: string, user_email?: string, username?: string) {
+  const u = (username ?? '').trim().toLowerCase()
+  const e = (user_email ?? '').trim().toLowerCase()
+  const n = (name ?? '').trim().toLowerCase()
+  return (u || n) + '|' + e
+}
+// Called when the modal emits @apply
+function onApplyUsers(
+  users: Array<{ id?: number; username: string; name?: string; user_email?: string; display_color?: string }>
+) {
+  users.forEach(u => {
+    const username = (u.username || '').trim()
+    const name = (u.name || username).trim()
+    const user_email = u.user_email?.trim() || undefined
+    const display_color = u.display_color
+    const key = makeKey(name, user_email, username)
+    if (!commenters.value.some(c => c.key === key)) {
+      commenters.value.push({ key, id: u.id, username, name, user_email, display_color }) // <-- include id
+    }
+  })
+  invalidateLink()
+  scheduleAutoRegen()
 }
 
 </script>

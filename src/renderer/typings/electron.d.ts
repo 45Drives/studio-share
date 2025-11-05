@@ -26,6 +26,42 @@ export type RsyncOpts = {
   /** extra rsync flags */
   extraArgs?: string[]
 }
+export type LinkType = 'upload' | 'download' | 'collection'
+export type Status = 'active' | 'expired' | 'disabled'
+
+export type LinkItem = {
+  id: number | string
+  type: LinkType
+  title?: string | null
+  notes?: string | null
+  token?: string | null
+  shortUrl: string
+  createdAt: number
+  expiresAt: number | null
+  isDisabled: boolean
+  passwordRequired?: boolean
+  createdIp?: string | null
+  createdUa?: string | null
+  owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }
+  target?: { dirRel?: string; allowUpload?: boolean; files?: Array<{ id?: string; name?: string; size?: number; mime?: string }> }
+}
+export type AccessRow = {
+  user_id: number
+  user_name?: string
+  name?: string
+  user_email?: string
+  display_color?: string | null
+  granted_at?: string | null
+}
+export type Commenter = {
+  key: string
+  id?: number
+  username?: string
+  name?: string
+  user_email?: string,
+    display_color?: string
+
+}
 export type RsyncResult = { ok?: boolean; error?: string }
 
 export interface ElectronApi {
@@ -67,7 +103,6 @@ export interface ElectronApi {
 
 declare global {
   interface Window {
-    electron: ElectronApi
     electronAPI: ElectronApi // if you also expose this alias
     logger: {
       log: (...a: any[]) => void

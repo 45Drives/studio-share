@@ -181,145 +181,22 @@
 	</div>
 
 	<!--  /////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
-	<!-- Details modal -->
-	<div v-if="showModal" class="fixed inset-0 z-40">
-		<div class="absolute inset-0 bg-black/50" @click="closeModal"></div>
-
-		<div class="absolute inset-x-0 top-12 mx-auto w-11/12 max-w-5xl
-			bg-well border border-default rounded-lg shadow-lg z-50">
-			<!-- Header -->
-			<div class="flex items-center justify-between px-4 py-3 border-b border-default">
-				<h3 class="text-lg font-semibold">
-					Link Details — {{ current?.title || (current && fallbackTitle(current)) }}
-				</h3>
-				<button class="btn btn-danger" @click="closeModal">Close</button>
-			</div>
-
-			<!-- Meta -->
-			<div class="px-4 pt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm text-left items-center">
-				<section class="space-y-2">
-					<div class="space-x-2">
-						<span class="text-default font-bold">Type of Link:</span>
-						<span :class="badgeClass(current?.type!)">{{ current?.type.toUpperCase() }}</span>
-					</div>
-					<div class="break-all space-x-2">
-						<span class="text-default font-bold">Short Link:</span>
-						<a :href="current?.shortUrl" target="_blank" class="hover:underline">{{ current?.shortUrl }}</a>
-						<button class="ml-2 text-blue-500 hover:underline text-xs"
-							@click="copy(current?.shortUrl)">Copy</button>
-					</div>
-					<div class="break-all space-x-2">
-						<span class="text-default font-bold">Long Link:</span>
-						<a :href="current?.shortUrl" target="_blank" class="hover:underline">{{ current?.longUrl }}</a>
-						<button class="ml-2 text-blue-500 hover:underline text-xs"
-							@click="copy(current?.shortUrl)">Copy</button>
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Created:</span>
-						{{ current ? new Date(current.createdAt).toLocaleString() : '' }}
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Expires:</span>
-						{{ current?.expiresAt ? new Date(current.expiresAt).toLocaleString() : 'Never' }}
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Status:</span>
-						<span :class="statusChipClass(statusOf(current!))">{{ current ? statusOf(current).toUpperCase()
-							: '' }}</span>
-					</div>
-
-					<!-- quick edit -->
-					<div class="pt-2">
-						<label class="block text-default mb-1">Title</label>
-						<input v-model="drawerTitle" class="input-textlike w-full px-3 py-2 rounded" />
-					</div>
-					<div>
-						<label class="block text-default mb-1">Notes</label>
-						<textarea v-model="drawerNotes" rows="3"
-							class="input-textlike w-full px-3 py-2 rounded"></textarea>
-					</div>
-					<div class="flex gap-2 pt-2">
-						<button class="px-3 py-2 rounded bg-[#5E56C5]" @click="saveDetails">Save</button>
-						<button class="px-3 py-2 rounded border border-default" @click="closeModal">Cancel</button>
-					</div>
-				</section>
-
-				<!-- Files table -->
-				<section class="lg:col-span-2">
-					<div class="flex items-center justify-between mb-2">
-						<h4 class="font-semibold">
-							{{ current?.type === 'upload' ? 'Uploaded Files' : 'Shared Files' }}
-						</h4>
-						<div class="text-xs opacity-70" v-if="!detailsLoading">{{ files.length }} item(s)</div>
-					</div>
-
-					<div v-if="detailsLoading" class="text-sm opacity-70">Loading…</div>
-					<div v-else-if="files.length === 0" class="text-sm opacity-70">No files.</div>
-					<div
-						class="overflow-x-auto h-80 overflow-y-auto overscroll-y-contain rounded-lg border border-default mb-6">
-						<table class="min-w-full text-sm border-separate border-spacing-0">
-							<thead>
-								<tr class="bg-default text-gray-300">
-									<th class="text-left px-3 py-2 border border-default">Name</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">Saved As</th>
-									<th class="text-right px-3 py-2 border border-default">Size</th>
-									<th class="text-left px-3 py-2 border border-default">MIME</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">Uploader</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">IP</th>
-									<th  v-if="current?.type === 'upload'" class="text-left px-3 py-2 border border-default">When</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-for="f in files" :key="f.key" class="border-t border-default">
-									<td class="px-3 py-2 break-all border border-default">{{ f.name }}</td>
-									<td v-if="current?.type === 'upload'"
-										class="px-3 py-2 break-all border border-default">{{ f.saved_as || '—' }}</td>
-									<td class="px-3 py-2 text-right border border-default">{{ fmtBytes(f.size) }}</td>
-									<td class="px-3 py-2 border border-default">{{ f.mime || '—' }}</td>
-									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{
-										f.uploader_label || '—' }}</td>
-									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{
-										f.ip || '—' }}</td>
-									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{ f.ts ? new
-										Date(f.ts).toLocaleString() : '—' }}</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</section>
-			</div>
-		</div>
-	</div>
+	<LinkDetailsModal
+  v-model="showModal"
+  :link="current"
+  :apiFetch="apiFetch"
+  @updated="applyLinkPatch"
+/>
 </template>
 	
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
+import type { LinkItem, LinkType, Status } from '../typings/electron'
 
-type LinkType = 'upload' | 'download' | 'collection'
-type Status = 'active' | 'expired' | 'disabled'
 	
-interface LinkItem {
-		id: number | string
-		type: LinkType
-		title?: string | null
-		notes?: string | null
-		token?: string | null
-		shortUrl: string
-		longUrl: string
-		createdAt: number
-		expiresAt: number | null
-		isDisabled: boolean
-		passwordRequired?: boolean
-		createdIp?: string | null
-		createdUa?: string | null
-		owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }
-		target?: { dirRel?: string; allowUpload?: boolean; files?: Array<{ id?: string; name?: string; size?: number; mime?: string }> }
-}
 	
 const { apiFetch } = useApi()
 async function refresh() {
@@ -458,21 +335,10 @@ async function toggleDisable(it: LinkItem) {
 	it.isDisabled = disable
 }
 
-//   async function remove(it: LinkItem) {
-//     if (!confirm('Delete this link? This action cannot be undone.')) return
-//     await deleteLink(it.id)
-//     rows.value = rows.value.filter(r => r.id !== it.id)
-//   }
+
   function viewLink(it: LinkItem) {
     if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
   }
-  async function extend(it: LinkItem, deltaMs: number) {
-    const base = Math.max(it.expiresAt || 0, Date.now())
-    const newExp = base + deltaMs
-    await patchLink(it.id, { expiresAtMs: newExp })
-    it.expiresAt = newExp
-  }
-  
   /* ------------------- inline title edit ------------------- */
   const editingId = ref<number|string|null>(null)
   const editTitle = ref('')
@@ -491,78 +357,25 @@ async function toggleDisable(it: LinkItem) {
   }
   
   /* ------------------- details drawer ------------------- */
-  const showDrawer = ref(false)
   const current = ref<LinkItem|null>(null)
-  const drawerTitle = ref('')
-  const drawerNotes = ref('')
-  const drawerPassword = ref('')
-  
-  async function fetchDetailsFor(it: LinkItem) {
-  detailsLoading.value = true; files.value = []
-  try {
-    const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
-	console.log('details resp', resp)
-	console.log(`/api/links/`,it.id+'/details')
-    // normalize uploader label (upload links only)
-    files.value = (resp.files || []).map((f:any, idx:number) => ({
-      key: `f${idx}`,
-      ...f,
-      uploader_label: f.uploader_name
-    }))
-  } finally {
-    detailsLoading.value = false
-  }
-}
-
-
-function fmtBytes(n?: number) {
-	if (n === undefined || n === null) return '—'
-	const k = 1024, u = ['B','KB','MB','GB','TB']; let i=0, v=n
-	while (v>=k && i<u.length-1) { v/=k; i++ }
-	return `${v.toFixed(v>=10||i===0?0:1)} ${u[i]}`
-}
 
 async function openDetails(it: LinkItem) {
-	current.value = it
-	drawerTitle.value = it.title || ''
-	drawerNotes.value = it.notes || ''
-	drawerPassword.value = ''
-	showModal.value = true
-	await fetchDetailsFor(it)
-	}
+  current.value = it
+  showModal.value = true
+}
+
 
 
 function closeModal() {
-	showModal.value = false
-	current.value = null
+  showModal.value = false
 }
-async function saveDetails() {
-	if (!current.value) return
-	await patchLink(current.value.id, {
-		title: drawerTitle.value || null,
-		notes: drawerNotes.value || null
-	})
-	current.value.title = drawerTitle.value || null
-	current.value.notes = drawerNotes.value || null
-	// reflect in table
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) { r.title = current.value.title; r.notes = current.value.notes }
-}
-
-async function savePassword() {
-	if (!current.value) return
-	await patchLink(current.value.id, { password: drawerPassword.value }) // server hashes → password_hash
-	drawerPassword.value = ''
-	// Optional: set passwordRequired flag true
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) r.passwordRequired = true
-}
-
-async function clearPassword() {
-	if (!current.value) return
-	await patchLink(current.value.id, { password: '' })
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) r.passwordRequired = false
+function applyLinkPatch(p: Partial<LinkItem> & { id: LinkItem['id'] }) {
+  if (!p?.id) return
+  // patch current
+  if (current.value?.id === p.id) Object.assign(current.value, p)
+  // patch list row
+  const idx = rows.value.findIndex(r => r.id === p.id)
+  if (idx >= 0) Object.assign(rows.value[idx], p)
 }
 
 /* ------------------- filters ------------------- */
