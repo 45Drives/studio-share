@@ -183,7 +183,34 @@
                                     {{ showPassword ? 'Hide' : 'Show' }}
                                 </button>
                             </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-3">
+                                <button type="button" class="btn btn-primary" @click="openUserModal()">
+                                    Manage comment access
+                                    <span v-if="commentCount"
+                                        class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                        {{ commentCount }}
+                                    </span>
+                                </button>
 
+                                <label class="flex items-center gap-2 text-sm">
+                                    <input type="checkbox" v-model="noCommentAccess" />
+                                    <span>No one can comment</span>
+                                </label>
+                            </div>
+
+                            <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1">
+                                Select at least one commenter or check “No one can comment”.
+                            </p>
+
+                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
+                                id: c.id,
+                                username: c.username || '',
+                                name: c.name,
+                                user_email: c.user_email,
+                                display_color: c.display_color
+                            }))" @apply="onApplyUsers" />
                         </div>
                     </div>
                 </template>
@@ -220,6 +247,8 @@ import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { router } from '../../app/routes'
 import { useProjectChoices } from '../composables/useProjectChoices'
+import AddUsersModal from '../components/modals/AddUsersModal.vue'
+import type { Commenter } from '../typings/electron'
 
 const { apiFetch } = useApi()
 
@@ -232,6 +261,12 @@ const {
     browseMode, currentRoot, browsePath, canGoUp,
     listDirs, backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
 } = useProjectChoices(showEntireTree)
+const commenters = ref<Commenter[]>([])
+const noCommentAccess = ref(false)
+const commentCount = computed(() => commenters.value.length)
+const commentAccessSatisfied = computed(() => noCommentAccess.value || commentCount.value > 0)
+
+
 
 
 function chooseProject(dirPath: string) {
@@ -324,6 +359,13 @@ watch(showEntireTree, (v) => {
         loadProjectChoices();
     }
 });
+watch(
+    commenters,
+    (arr) => {
+        if (arr.length > 0) noCommentAccess.value = false
+    },
+    { deep: true }
+)
 
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
@@ -362,7 +404,8 @@ const prettyExpiry = computed(() => {
 const canGenerate = computed(() =>
     files.value.length > 0 &&
     Number.isFinite(expiresValue.value) && expiresValue.value >= 1 &&
-    (!protectWithPassword.value || !!password.value)
+    (!protectWithPassword.value || !!password.value) &&
+    commentAccessSatisfied.value
 )
 
 function invalidateLink() {
@@ -404,6 +447,16 @@ async function generateLink() {
         body.password = password.value
     }
 
+    if (!noCommentAccess.value && commenters.value.length) {
+        (body as any).commenters = commenters.value.map(c => {
+            const out: any = {}
+            if (c.id != null) out.userId = c.id
+            if (c.username) out.username = c.username
+            if (c.user_email) out.user_email = c.user_email
+            if (c.name) out.name = c.name
+            return out
+        })
+    }
     const data = await apiFetch('/api/magic-link', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -414,18 +467,6 @@ async function generateLink() {
     viewUrl.value = data.viewUrl;
     downloadUrl.value = data.downloadUrl;
 
-    // Clear password after use for safety (optional)
-    // password.value = ''
-}
-
-
-// Basic join to avoid double slashes
-function joinPath(a: string, b: string) {
-    if (!a) return b
-    if (!b) return a
-    const left = a.endsWith('/') ? a.slice(0, -1) : a
-    const right = b.startsWith('/') ? b.slice(1) : b
-    return `${left}/${right}`
 }
 
 
@@ -455,5 +496,48 @@ function resetToProjectPicker() {
 function goBack() {
     router.push({ name: 'dashboard' })
 }
+
+const userModalOpen = ref(false)
+
+function openUserModal() {
+    userModalOpen.value = true
+}
+
+function makeKey(name?: string, user_email?: string, username?: string) {
+    const u = (username ?? '').trim().toLowerCase()
+    const e = (user_email ?? '').trim().toLowerCase()
+    const n = (name ?? '').trim().toLowerCase()
+    return (u || n) + '|' + e
+}
+// Called when the modal emits @apply
+function onApplyUsers(
+    users: Array<{ id?: number; username: string; name?: string; user_email?: string; display_color?: string }>
+) {
+    // Normalize the selection coming back from the modal
+    const next = users.map(u => {
+        const username = (u.username || '').trim()
+        const name = (u.name || username).trim()
+        const user_email = u.user_email?.trim() || undefined
+        const display_color = u.display_color
+        const key = makeKey(name, user_email, username)
+        return { key, id: u.id, username, name, user_email, display_color }
+    })
+
+    // Dedupe by key just in case
+    const seen = new Set<string>()
+    const dedup: typeof next = []
+    for (const c of next) {
+        if (seen.has(c.key)) continue
+        seen.add(c.key)
+        dedup.push(c)
+    }
+
+    // REPLACE (not merge): reflect exactly what's selected in the modal
+    commenters.value = dedup
+
+    invalidateLink()
+    scheduleAutoRegen()
+}
+
 
 </script>

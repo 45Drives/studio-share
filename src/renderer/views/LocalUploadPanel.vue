@@ -190,17 +190,12 @@
 
 <script setup lang="ts">
 import { ref, computed, inject, watch, onMounted } from 'vue'
-import PathInput from '../components/PathInput.vue'
-import TreeNode from '../components/TreeNode.vue'
 import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { faArrowLeft  } from '@fortawesome/free-solid-svg-icons';
 import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
-import { useProjectChoices } from '../composables/useProjectChoices'
 
 useHeader('Upload Files')
 

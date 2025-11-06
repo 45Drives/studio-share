@@ -133,7 +133,6 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 useHeader('Upload Files via Link')
 
 // --- Injections / API ---
-const connectionMeta = inject(connectionMetaInjectionKey)!
 const { apiFetch } = useApi()
 
 // FolderPicker wiring

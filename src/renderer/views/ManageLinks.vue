@@ -97,15 +97,12 @@
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" :disabled="isExpired(it) || isDisabled(it)"
-											:aria-disabled="isExpired(it)"
-											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+										<button class="btn btn-secondary text-xs" 
+
 											@click="makeNever(it)">
 											Never
 										</button>
-										<button class="btn btn-primary text-xs" :disabled="isExpired(it) || isDisabled(it)"
-											:aria-disabled="isExpired(it)"
-											:class="isExpired(it) ? 'opacity-50 cursor-not-allowed' : ''"
+										<button class="btn btn-primary text-xs" 
 											@click="openCustom(it)">
 											Custom
 										</button>
@@ -168,7 +165,7 @@
 										@click="viewLink(it)">Open</button>
 									<!-- <button class="btn btn-primary px-2 py-1 rounded-md"
 										@click="copy(it.shortUrl)">Copy</button> -->
-									<button class="btn btn-danger px-2 py-1 rounded-md" :disabled="isDisabled(it)"
+									<button class="btn btn-danger px-2 py-1 rounded-md" 
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
@@ -184,145 +181,22 @@
 	</div>
 
 	<!--  /////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
-	<!-- Details modal -->
-	<div v-if="showModal" class="fixed inset-0 z-40">
-		<div class="absolute inset-0 bg-black/50" @click="closeModal"></div>
-
-		<div class="absolute inset-x-0 top-12 mx-auto w-11/12 max-w-5xl
-			bg-well border border-default rounded-lg shadow-lg z-50">
-			<!-- Header -->
-			<div class="flex items-center justify-between px-2 py-3 border-b border-default">
-				<h3 class="text-lg font-semibold">
-					Link Details — {{ current?.title || (current && fallbackTitle(current)) }}
-				</h3>
-				<button class="btn btn-danger" @click="closeModal">Close</button>
-			</div>
-
-			<!-- Meta -->
-			<div class="px-2 pt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm text-left items-center">
-				<section class="space-y-2">
-					<div class="space-x-2">
-						<span class="text-default font-bold">Type of Link:</span>
-						<span :class="badgeClass(current?.type!)">{{ current?.type.toUpperCase() }}</span>
-					</div>
-					<div class="break-all space-x-2">
-						<span class="text-default font-bold">Short Link:</span>
-						<a :href="current?.shortUrl" target="_blank" class="hover:underline">{{ current?.shortUrl }}</a>
-						<button class="ml-2 text-blue-500 hover:underline text-xs"
-							@click="copy(current?.shortUrl)">Copy</button>
-					</div>
-					<div class="break-all space-x-2">
-						<span class="text-default font-bold">Long Link:</span>
-						<a :href="current?.shortUrl" target="_blank" class="hover:underline">{{ current?.longUrl }}</a>
-						<button class="ml-2 text-blue-500 hover:underline text-xs"
-							@click="copy(current?.shortUrl)">Copy</button>
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Created:</span>
-						{{ current ? new Date(current.createdAt).toLocaleString() : '' }}
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Expires:</span>
-						{{ current?.expiresAt ? new Date(current.expiresAt).toLocaleString() : 'Never' }}
-					</div>
-					<div class="space-x-2">
-						<span class="text-default font-bold">Status:</span>
-						<span :class="statusChipClass(statusOf(current!))">{{ current ? statusOf(current).toUpperCase()
-							: '' }}</span>
-					</div>
-
-					<!-- quick edit -->
-					<div class="pt-2">
-						<label class="block text-default mb-1">Title</label>
-						<input v-model="drawerTitle" class="input-textlike w-full px-3 py-2 rounded" />
-					</div>
-					<div>
-						<label class="block text-default mb-1">Notes</label>
-						<textarea v-model="drawerNotes" rows="3"
-							class="input-textlike w-full px-3 py-2 rounded"></textarea>
-					</div>
-					<div class="flex gap-2 pt-2">
-						<button class="px-3 py-2 rounded bg-[#5E56C5]" @click="saveDetails">Save</button>
-						<button class="px-3 py-2 rounded border border-default" @click="closeModal">Cancel</button>
-					</div>
-				</section>
-
-				<!-- Files table -->
-				<section class="lg:col-span-2">
-					<div class="flex items-center justify-between mb-2">
-						<h4 class="font-semibold">
-							{{ current?.type === 'upload' ? 'Uploaded Files' : 'Shared Files' }}
-						</h4>
-						<div class="text-xs opacity-70" v-if="!detailsLoading">{{ files.length }} item(s)</div>
-					</div>
-
-					<div v-if="detailsLoading" class="text-sm opacity-70">Loading…</div>
-					<div v-else-if="files.length === 0" class="text-sm opacity-70">No files.</div>
-					<div
-						class="overflow-x-auto h-80 overflow-y-auto overscroll-y-contain rounded-lg border border-default mb-6">
-						<table class="min-w-full text-sm border-separate border-spacing-0">
-							<thead>
-								<tr class="bg-default text-gray-300">
-									<th class="text-left px-3 py-2 border border-default">Name</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">Saved As</th>
-									<th class="text-right px-3 py-2 border border-default">Size</th>
-									<th class="text-left px-3 py-2 border border-default">MIME</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">Uploader</th>
-									<th v-if="current?.type === 'upload'"
-										class="text-left px-3 py-2 border border-default">IP</th>
-									<th class="text-left px-3 py-2 border border-default">When</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-for="f in files" :key="f.key" class="border-t border-default">
-									<td class="px-3 py-2 break-all border border-default">{{ f.name }}</td>
-									<td v-if="current?.type === 'upload'"
-										class="px-3 py-2 break-all border border-default">{{ f.saved_as || '—' }}</td>
-									<td class="px-3 py-2 text-right border border-default">{{ fmtBytes(f.size) }}</td>
-									<td class="px-3 py-2 border border-default">{{ f.mime || '—' }}</td>
-									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{
-										f.uploader_label || '—' }}</td>
-									<td v-if="current?.type === 'upload'" class="px-3 py-2 border border-default">{{
-										f.ip || '—' }}</td>
-									<td class="px-3 py-2 border border-default">{{ f.ts ? new
-										Date(f.ts).toLocaleString() : '—' }}</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</section>
-			</div>
-		</div>
-	</div>
+	<LinkDetailsModal
+  v-model="showModal"
+  :link="current"
+  :apiFetch="apiFetch"
+  @updated="applyLinkPatch"
+/>
 </template>
 	
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
+import type { LinkItem, LinkType, Status } from '../typings/electron'
 
-type LinkType = 'upload' | 'download' | 'collection'
-type Status = 'active' | 'expired' | 'disabled'
 	
-interface LinkItem {
-		id: number | string
-		type: LinkType
-		title?: string | null
-		notes?: string | null
-		token?: string | null
-		shortUrl: string
-		longUrl: string
-		createdAt: number
-		expiresAt: number | null
-		isDisabled: boolean
-		passwordRequired?: boolean
-		createdIp?: string | null
-		createdUa?: string | null
-		owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }
-		target?: { dirRel?: string; allowUpload?: boolean; files?: Array<{ id?: string; name?: string; size?: number; mime?: string }> }
-}
 	
 const { apiFetch } = useApi()
 async function refresh() {
@@ -363,9 +237,6 @@ async function patchLink(id: number|string, body: any) {
 	return apiFetch(`/api/links/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 }
 
-//   async function deleteLink(id: number|string) {
-//     return apiFetch(`/api/links/${id}`, { method: 'DELETE' })
-//   }
 
 /* ------------------- state ------------------- */
 const loading = ref(false)
@@ -464,123 +335,47 @@ async function toggleDisable(it: LinkItem) {
 	it.isDisabled = disable
 }
 
-//   async function remove(it: LinkItem) {
-//     if (!confirm('Delete this link? This action cannot be undone.')) return
-//     await deleteLink(it.id)
-//     rows.value = rows.value.filter(r => r.id !== it.id)
-//   }
 
-function viewLink(it: LinkItem) {
-	if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
-}
-
-/* ------------------- inline title edit ------------------- */
-const editingId = ref<number|string|null>(null)
-const editTitle = ref('')
-
-function startEdit(it: LinkItem) {
-	editingId.value = it.id
-	editTitle.value = it.title || ''
-}
-
-function cancelEdit() {
-	editingId.value = null
-	editTitle.value = ''
-}
-
-async function saveTitle(it: LinkItem) {
-	await patchLink(it.id, { title: editTitle.value || null })
-	it.title = editTitle.value || null
-	cancelEdit()
-}
-
-/* ------------------- details drawer ------------------- */
-const showDrawer = ref(false)
-const current = ref<LinkItem|null>(null)
-const drawerTitle = ref('')
-const drawerNotes = ref('')
-const drawerPassword = ref('')
-
-async function fetchDetailsFor(it: LinkItem) {
-	detailsLoading.value = true; files.value = []
-	try {
-		const resp = await apiFetch(`/api/links/${encodeURIComponent(String(it.id))}/details`)
-
-		// Prefer server-provided files
-		let list: any[] = Array.isArray(resp?.files) ? resp.files : []
-
-		// If not provided for download/collection, fall back to the summary row data
-		if (!list.length && it.type !== 'upload' && Array.isArray(it.target?.files)) {
-			list = it.target.files
-		}
-
-		files.value = list.map((f: any, idx: number) => ({
-			key: `f${idx}`,
-			name: f.name || f.filename || '(unnamed)',
-			saved_as: f.saved_as || f.savedAs || null,
-			size: f.size ?? f.size_bytes ?? null,
-			mime: f.mime || f.mimetype || f.content_type || null,
-			uploader_label: f.uploader_display_name || f.uploader_username || f.uploader_name || null,
-			ip: f.ip || f.remote_ip || null,
-			ts: f.ts ?? f.created_at ?? null,
-		}))
-	} catch (e: any) {
-		console.error('Failed to load link details', e)
-		pushNotification(new Notification('Failed to load details', e?.message || String(e), 'error', 8000))
-	} finally {
-		detailsLoading.value = false
-	}
-}
-
-
-function fmtBytes(n?: number) {
-	if (n === undefined || n === null) return '—'
-	const k = 1024, u = ['B','KB','MB','GB','TB']; let i=0, v=n
-	while (v>=k && i<u.length-1) { v/=k; i++ }
-	return `${v.toFixed(v>=10||i===0?0:1)} ${u[i]}`
-}
+  function viewLink(it: LinkItem) {
+    if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
+  }
+  /* ------------------- inline title edit ------------------- */
+  const editingId = ref<number|string|null>(null)
+  const editTitle = ref('')
+  function startEdit(it: LinkItem) {
+    editingId.value = it.id
+    editTitle.value = it.title || ''
+  }
+  function cancelEdit() {
+    editingId.value = null
+    editTitle.value = ''
+  }
+  async function saveTitle(it: LinkItem) {
+    await patchLink(it.id, { title: editTitle.value || null })
+    it.title = editTitle.value || null
+    cancelEdit()
+  }
+  
+  /* ------------------- details drawer ------------------- */
+  const current = ref<LinkItem|null>(null)
 
 async function openDetails(it: LinkItem) {
-	current.value = it
-	drawerTitle.value = it.title || ''
-	drawerNotes.value = it.notes || ''
-	drawerPassword.value = ''
-	showModal.value = true
-	await fetchDetailsFor(it)
-	}
+  current.value = it
+  showModal.value = true
+}
+
 
 
 function closeModal() {
-	showModal.value = false
-	current.value = null
+  showModal.value = false
 }
-async function saveDetails() {
-	if (!current.value) return
-	await patchLink(current.value.id, {
-		title: drawerTitle.value || null,
-		notes: drawerNotes.value || null
-	})
-	current.value.title = drawerTitle.value || null
-	current.value.notes = drawerNotes.value || null
-	// reflect in table
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) { r.title = current.value.title; r.notes = current.value.notes }
-}
-
-async function savePassword() {
-	if (!current.value) return
-	await patchLink(current.value.id, { password: drawerPassword.value }) // server hashes → password_hash
-	drawerPassword.value = ''
-	// Optional: set passwordRequired flag true
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) r.passwordRequired = true
-}
-
-async function clearPassword() {
-	if (!current.value) return
-	await patchLink(current.value.id, { password: '' })
-	const r = rows.value.find(r => r.id === current.value!.id)
-	if (r) r.passwordRequired = false
+function applyLinkPatch(p: Partial<LinkItem> & { id: LinkItem['id'] }) {
+  if (!p?.id) return
+  // patch current
+  if (current.value?.id === p.id) Object.assign(current.value, p)
+  // patch list row
+  const idx = rows.value.findIndex(r => r.id === p.id)
+  if (idx >= 0) Object.assign(rows.value[idx], p)
 }
 
 /* ------------------- filters ------------------- */
@@ -661,7 +456,7 @@ async function applyCustom(it: LinkItem) {
 }
 
 async function makeNever(it: LinkItem) {
-	if (isExpired(it)) return
+
 	// Clear expiry so the link never expires
 	await patchLink(it.id, { expiresAtMs: null })
 	it.expiresAt = null
