@@ -159,6 +159,13 @@
 
                                 <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                             </div>
+                            <div class="flex items-center gap-3">
+                                <label class="whitespace-nowrap font-semibold">Link Network Availability:</label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                                    <input type="checkbox" v-model="usePublicBase" />
+                                    <span>{{ usePublicBase ? 'External Internet Access' : 'LAN Access' }}</span>
+                                </label>
+                            </div>
 
                             <!-- Password (optional) -->
                             <div class="flex items-center gap-3">
@@ -254,6 +261,8 @@ function clearAll() {
     files.value = []
     invalidateLink()
 }
+
+const usePublicBase = ref(true);
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
@@ -383,7 +392,8 @@ async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
-        externalBase: externalBase.value || undefined, // <— add this
+        externalBase: externalBase.value || undefined,
+        baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
     };
 
     if (files.value.length === 1) body.filePath = files.value[0];

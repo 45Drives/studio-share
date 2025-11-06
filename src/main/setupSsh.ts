@@ -89,39 +89,109 @@ export async function ensureBroadcasterInstalled(
   const q = (s: string) => `'${s.replace(/'/g, `'\"'\"'`)}'`;
   const PW = opts.password ?? "";
 
+  const REQUIRED = "2.0.0";
+
   const script = `
 set -euo pipefail
 
+REQUIRED_VERSION=${q(REQUIRED)}
 PW=${q(PW)}
 
-have_sudo() {
-  sudo -n true 2>/dev/null
-}
-
+have_sudo() { sudo -n true 2>/dev/null; }
 run_root() {
-  if have_sudo; then
-    sudo "$@"
-  else
-    # feed password via stdin for each sudo call
-    printf '%s\\n' "$PW" | sudo -S -p '' "$@"
-  fi
+  if have_sudo; then sudo "$@"; else printf '%s\\n' "$PW" | sudo -S -p '' "$@"; fi
 }
 
-# already installed?
-if command -v rpm >/dev/null 2>&1; then
-  if rpm -q houston-broadcaster >/dev/null 2>&1; then exit 0; fi
-elif command -v dpkg >/dev/null 2>&1; then
-  if dpkg -s houston-broadcaster >/dev/null 2>&1; then exit 0; fi
-fi
+# Generic version helpers (semver-ish), fine for x.y.z[-r] without epochs
+version_ge() {  # $1 >= $2 ?
+  [ "$(printf '%s\\n%s\\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+}
+version_gt() {  # $1 > $2 ?
+  [ "$1" != "$2" ] && version_ge "$1" "$2"
+}
 
-# pick pm + install
-if command -v dnf >/dev/null 2>&1; then
-  run_root dnf -y install houston-broadcaster
-elif command -v yum >/dev/null 2>&1; then
-  run_root yum -y install houston-broadcaster
-elif command -v apt-get >/dev/null 2>&1; then
+installed_ver=""
+candidate_ver=""
+
+if command -v rpm >/dev/null 2>&1; then
+  # ---------------- RPM family (RHEL/CentOS/Fedora/etc.) ----------------
+  if rpm -q houston-broadcaster >/dev/null 2>&1; then
+    installed_ver="$(rpm -q --qf '%{VERSION}-%{RELEASE}\\n' houston-broadcaster 2>/dev/null || true)"
+  fi
+
+  # Discover repo candidate
+  if command -v dnf >/dev/null 2>&1; then
+    # --refresh ensures fresh metadata; awk builds "version-release"
+    candidate_ver="$(dnf -q --refresh info houston-broadcaster 2>/dev/null | awk -F': *' '
+      /Version/ {v=$2} /Release/ {r=$2} END{ if (v) print v "-" r }')"
+  elif command -v yum >/dev/null 2>&1; then
+    candidate_ver="$(yum -q info houston-broadcaster 2>/dev/null | awk -F': *' '
+      /Version/ {v=$2} /Release/ {r=$2} END{ if (v) print v "-" r }')"
+  fi
+
+  if [ -z "$candidate_ver" ]; then
+    echo "Could not determine candidate version for houston-broadcaster" >&2
+    exit 2
+  fi
+
+  # Ensure candidate meets minimum
+  if ! version_ge "$candidate_ver" "$REQUIRED_VERSION"; then
+    echo "Repository candidate ($candidate_ver) is older than required >= $REQUIRED_VERSION" >&2
+    exit 2
+  fi
+
+  if [ -n "$installed_ver" ]; then
+    # Installed: upgrade only if newer candidate exists
+    if version_gt "$candidate_ver" "$installed_ver"; then
+      if command -v dnf >/dev/null 2>&1; then
+        run_root dnf -y --refresh install houston-broadcaster
+      else
+        run_root yum -y install houston-broadcaster
+      fi
+    fi
+    exit 0
+  fi
+
+  # Not installed: install candidate (already validated against minimum)
+  if command -v dnf >/dev/null 2>&1; then
+    run_root dnf -y --refresh install houston-broadcaster
+  else
+    run_root yum -y install houston-broadcaster
+  fi
+  exit 0
+
+elif command -v dpkg >/dev/null 2>&1; then
+  # ---------------- Debian/Ubuntu family ----------------
+  if dpkg -s houston-broadcaster >/dev/null 2>&1; then
+    installed_ver="$(dpkg-query -W -f='\${Version}\\n' houston-broadcaster 2>/dev/null || true)"
+  fi
+
   run_root apt-get update -y
+
+  candidate_ver="$(apt-cache policy houston-broadcaster | awk '/Candidate:/ {print $2}')"
+  if [ -z "$candidate_ver" ] || [ "$candidate_ver" = "(none)" ]; then
+    echo "No install candidate for houston-broadcaster" >&2
+    exit 2
+  fi
+
+  # Ensure candidate meets minimum
+  if ! version_ge "$candidate_ver" "$REQUIRED_VERSION"; then
+    echo "Repository candidate ($candidate_ver) is older than required >= $REQUIRED_VERSION" >&2
+    exit 2
+  fi
+
+  if [ -n "$installed_ver" ]; then
+    # Installed: upgrade only if newer candidate exists
+    if version_gt "$candidate_ver" "$installed_ver"; then
+      DEBIAN_FRONTEND=noninteractive run_root apt-get install -y houston-broadcaster
+    fi
+    exit 0
+  fi
+
+  # Not installed
   DEBIAN_FRONTEND=noninteractive run_root apt-get install -y houston-broadcaster
+  exit 0
+
 else
   echo "No supported package manager found" >&2
   exit 2
