@@ -46,13 +46,13 @@
 
 							<span class="text-sm opacity-75">({{ prettyExpiry }})</span>
 						</div>
-						<div class="flex items-center gap-3">
+						<!-- <div class="flex items-center gap-3">
 							<label class="whitespace-nowrap font-semibold">Link Network Availability:</label>
 							<label class="flex items-center gap-2 text-sm cursor-pointer select-none">
 								<input type="checkbox" v-model="usePublicBase" />
 								<span>{{ usePublicBase ? 'External Internet Access' : 'LAN Access' }}</span>
 							</label>
-						</div>
+						</div> -->
 
 						<!-- Password (optional) -->
 						<div class="flex items-center gap-3">
@@ -159,7 +159,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const result = ref<null | { url: string; code?: string; password?: boolean; expiresAt?: string }>(null)
 const canGenerate = computed(() => !!destFolderRel.value)
-const usePublicBase = ref(true);
+// const usePublicBase = ref(true);
 async function generateLink() {
 	if (!canGenerate.value) return
 	loading.value = true; error.value = null; result.value = null
@@ -169,7 +169,7 @@ async function generateLink() {
 			kind: 'folder',
 			allowUpload: true,
 			expiresSec: Number(expiresSec.value) || 0,
-			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
+			// baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 		}
 		if (password.value) body.password = password.value
 
