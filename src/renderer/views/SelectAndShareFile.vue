@@ -184,6 +184,18 @@
                                 </button>
                             </div>
                         </div>
+                        <!-- NEW: Link title (optional) -->
+<div class="flex items-center gap-3 mt-2">
+  <label class="whitespace-nowrap font-semibold">Link title:</label>
+  <input
+    type="text"
+    v-model.trim="linkTitle"
+    class="input-textlike border rounded px-3 py-2 bg-transparent"
+    placeholder="Optional title for the shared link"
+    style="min-width: 20rem"
+  />
+</div>
+
                         <div>
                             <div class="flex items-center gap-3">
                                 <button type="button" class="btn btn-primary" @click="openUserModal()">
@@ -265,6 +277,8 @@ const commenters = ref<Commenter[]>([])
 const noCommentAccess = ref(false)
 const commentCount = computed(() => commenters.value.length)
 const commentAccessSatisfied = computed(() => noCommentAccess.value || commentCount.value > 0)
+const linkTitle = ref('')
+
 
 function chooseProject(dirPath: string) {
     projectBase.value = dirPath
@@ -433,6 +447,7 @@ async function generateLink() {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
         externalBase: externalBase.value || undefined,
+        title: linkTitle.value || undefined,
         // baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
     };
 

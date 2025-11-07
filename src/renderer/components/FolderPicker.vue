@@ -10,9 +10,7 @@
         <span class="whitespace-nowrap">Destination folder:</span>
         <PathInput v-model="cwd" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChoose" />
       </div>
-      <div class="text-xs opacity-70 px-2 py-1">
-        debug: mode={{ browseMode }} roots={{ projectRoots.length }}
-      </div>
+
 
       <!-- Optional status for auto-detect -->
       <div v-if="!base && (autoDetectRoots ?? true)" class="text-xs opacity-70">
@@ -342,9 +340,16 @@ function onSelectFolder(rel: string) {
 function openRoot(mountpoint: string) {
   internalBase.value = mountpoint
   browseMode.value = 'dir'
-  cwd.value = ensureSlash(mountpoint)
+
+  const abs = ensureSlash(mountpoint)
+  cwd.value = abs
   emit('changed-cwd', cwd.value)
+
+  // NEW: auto-select this zpool as the destination
+  const normalized = abs.replace(/^\/+/, '').replace(/\/+$/, '') // "tank" or "tank/projects"
+  emit('update:modelValue', normalized)
 }
+
 
 /* IMPORTANT: also flip to 'dir' when using Select (not only Open) */
 function selectRoot(mountpoint: string) {

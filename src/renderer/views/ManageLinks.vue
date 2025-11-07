@@ -150,10 +150,10 @@
 
 							<!-- Created -->
 							<td class="p-2 border border-default">
-								<div>{{ new Date(it.createdAt).toLocaleDateString() }}</div>
-								<div class="text-xs text-muted">{{ new
-									Date(it.createdAt).toLocaleTimeString() }}</div>
-							</td>
+  <div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
+  <div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
+</td>
+
 
 							<!-- Actions -->
 							<td class="p-2 border border-default">
@@ -453,6 +453,39 @@ async function applyCustom(it: LinkItem) {
 	await patchLink(it.id, { expiresAtMs: newExp })
 	it.expiresAt = newExp
 	closeCustom(it)
+}
+function toDateUTC(ts: unknown): Date | null {
+  if (ts == null) return null;
+
+  if (ts instanceof Date) return Number.isFinite(ts.getTime()) ? ts : null;
+
+  if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts.trim()))) {
+    const n = Number(ts);
+    const ms = n < 1e12 ? n * 1000 : n; // seconds → ms
+    const d = new Date(ms);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+
+  const s = String(ts).trim();
+
+  // If it's already ISO with timezone, just parse it
+  if (/[zZ]$|[+\-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+
+  // If it looks like "YYYY-MM-DD HH:mm:ss" from SQLite, treat as UTC
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  // Fallback attempt
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
+  const d = toDateUTC(ts);
+  if (!d) return '—';
+  return new Intl.DateTimeFormat(undefined, { timeZone: userTZ, ...opts }).format(d);
 }
 
 async function makeNever(it: LinkItem) {

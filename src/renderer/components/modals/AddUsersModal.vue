@@ -210,6 +210,19 @@
       </div>
     </div>
   </div>
+  <ConfirmDeleteModal
+  v-model="deleteOpen"
+  :title="'Delete user'"
+  :message="userToDelete ? `Delete “${userToDelete.name || userToDelete.username}”? This cannot be undone.` : ''"
+  :danger="true"
+  :busy="deleting"
+  :error="deleteError"
+  :clickOutsideCancels="true"
+  confirmText="Delete"
+  cancelText="Cancel"
+  @confirm="performDelete"
+/>
+
 </template>
 
 <script setup lang="ts">
@@ -217,6 +230,7 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
 export type ExistingUser = { id?: string | number; username: string; name?: string; user_email?: string; display_color?: string }
+import ConfirmDeleteModal from './ConfirmDeleteModal.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -239,6 +253,10 @@ const error = ref('')
 const tempPin = ref('')
 const tempPinConfirm = ref('')
 const showCreate = ref(false)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+const deleteError = ref<string | null>(null)
+const userToDelete = ref<ExistingUser | null>(null)
 
 // Edit state
 const editing = ref<ExistingUser | null>(null)
@@ -410,22 +428,34 @@ async function saveEdit() {
 
 
 async function deleteUser(u: ExistingUser) {
-  const label = u.name || u.username
-  if (!confirm(`Delete "${label}"? This cannot be undone.`)) return
-  try {
-    const idOrUsername = u.id ?? u.username
-    await props.apiFetch(`/api/users/${idOrUsername}`, { method: 'DELETE' })
-    const k = userKey(u)
-    selectedKeys.value = selectedKeys.value.filter(x => x !== k)
-
-
-    await fetchUsers()
-  } catch (e: any) {
-    error.value = e?.message || 'Failed to delete user.'
-  }
+  openDelete(u)
 }
 
+function openDelete(u: ExistingUser) {
+  userToDelete.value = u
+  deleteError.value = null
+  deleteOpen.value = true
+}
+async function performDelete() {
+  if (!userToDelete.value) return
+  deleting.value = true
+  deleteError.value = null
+  try {
+    const idOrUsername = userToDelete.value.id ?? userToDelete.value.username
+    await props.apiFetch(`/api/users/${idOrUsername}`, { method: 'DELETE' })
 
+    const k = userKey(userToDelete.value)
+    selectedKeys.value = selectedKeys.value.filter(x => x !== k)
+
+    await fetchUsers()
+    deleteOpen.value = false
+    userToDelete.value = null
+  } catch (e: any) {
+    deleteError.value = e?.message || 'Failed to delete user.'
+  } finally {
+    deleting.value = false
+  }
+}
 // UX helpers
 function selectAll() {
   selectedKeys.value = users.value.map(userKey).filter(Boolean)
