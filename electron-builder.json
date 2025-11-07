@@ -28,7 +28,8 @@
   "win": {
     "target": "nsis",
     "compression": "maximum",
-    "icon": "icon.ico"
+    "icon": "icon.ico",
+    "signAndEditExecutable": false
   },
 
   "files": [

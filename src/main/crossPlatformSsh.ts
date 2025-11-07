@@ -25,7 +25,10 @@ export async function ensureKeyPair(pk: string, pub: string) {
         await fs.promises.access(pk);
         await fs.promises.access(pub);
         return;
-    } catch { /* fall through to generate */ }
+    } catch { /* generate */ }
+
+    // ensure parent dir exists
+    await fs.promises.mkdir(path.dirname(pk), { recursive: true });
 
     const sshKeygen = getOS() === 'win'
         ? await getAsset('static/bin', 'ssh-keygen.exe')
@@ -33,29 +36,26 @@ export async function ensureKeyPair(pk: string, pub: string) {
 
     if (getOS() !== 'win') {
         const which = spawnSync('which', [sshKeygen]);
-        if (which.status !== 0) {
-            throw new Error(`ssh-keygen binary not found in $PATH`);
-        }
+        if (which.status !== 0) throw new Error(`ssh-keygen binary not found in $PATH`);
     } else if (!fs.existsSync(sshKeygen)) {
         throw new Error(`ssh-keygen.exe not found at ${sshKeygen}`);
     }
 
-    await execFileAsync(
-        sshKeygen,
-        ['-t', 'rsa', '-b', '4096', '-f', pk, '-N', '', '-q'],
-        { windowsHide: true }
-    );
+    await execFileAsync(sshKeygen, ['-t', 'rsa', '-b', '4096', '-f', pk, '-N', '', '-q'], { windowsHide: true });
 }
 
 
-/* ---------- per-OS paths that your callers need ---------- */
+/* ---------- per-OS paths that the callers need ---------- */
 export function getKeyDir() {
     // one place under %APPDATA% / ~/.config / ~/Library
-    return path.join(app.getPath("userData"), ".ssh");
+    const dir = path.join(app.getPath("userData"), ".ssh");
+    try { fs.mkdirSync(dir, { recursive: true }); } catch { }
+    return dir;
 }
 
 
 export async function regeneratePemKeyPair(pk: string) {
+    await fs.promises.mkdir(path.dirname(pk), { recursive: true });
     const pub = `${pk}.pub`;
     // remove old pair (or back them up if you prefer)
     try { await fs.promises.unlink(pk); } catch { }

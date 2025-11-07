@@ -11,6 +11,18 @@
                         class="text-primary">houston-broadcaster</b>
                     service is enabled (It should be by default).<br /> If it is not, manual connection is required.
                 </span>
+                <div class="flex flex-row w-full items-center text-center gap-2 mt-2">
+                    <span class="text-danger text-base semibold">
+                        <b>ALSO:</b> To allow sharing links outside your network, <b>port
+                            443
+                            (HTTPS)</b> <u>must</u> be open or forwarded from your router.
+
+                    </span>
+                    <button type="button" @click.prevent="togglePortFwdModal" class="btn btn-danger w-fit text-base">
+                        Click here to find out how.
+                    </button>
+                </div>
+
             </div>
 
             <CardContainer class="col-span-1 bg-accent border-default rounded-md text-bold shadow-xl">
@@ -26,8 +38,7 @@
                 <span class="text-center items-center justify-self-center"> -- OR -- </span>
                 <div class="flex flex-col text-left">
                     <span>Connect to server manually via IP Address:</span>
-                    <input v-model="manualIp" type="text" placeholder="192.168.1.123"
-                        :disabled="isBusy"
+                    <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="isBusy"
                         class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
                 </div>
             </CardContainer>
@@ -76,6 +87,7 @@
             </div>
         </div>
     </form>
+    <PortForwardingModal v-if="showPortFwdModal" @close="togglePortFwdModal" />
 </template>
 
 <script setup lang="ts">
@@ -88,6 +100,7 @@ import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaIn
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 useHeader('Welcome to 45Studio Collab!');
 
 const router = useRouter();
@@ -122,6 +135,11 @@ const statusLine = ref<string>('');  // one line only
 const isBusy = ref(false);           // disables UI + button during whole flow
 const isBootstrapping = ref(false);  // shows spinner while remote deps/bootstrap running
 let unlistenProgress: (() => void) | null = null;
+
+const showPortFwdModal = ref(false);
+function togglePortFwdModal() {
+    showPortFwdModal.value = !showPortFwdModal.value;
+}
 
 function listenBootstrap(id: string) {
     const handler = (_: any, msg: any) => {

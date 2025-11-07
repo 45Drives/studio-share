@@ -16,7 +16,7 @@ function initLogging(resolvedLogDir: string) {
     ),
     transports: [new DailyRotateFile({
       dirname: resolvedLogDir,
-      filename: '45studio-collab-%DATE%.json',
+      filename: '45studio-share-%DATE%.json',
       datePattern: 'YYYY-MM-DD',
       maxFiles: '14d',
       zippedArchive: true,
@@ -47,7 +47,7 @@ function initLogging(resolvedLogDir: string) {
 }
 
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron';
-import { autoUpdater } from 'electron-updater';
+// import { autoUpdater } from 'electron-updater';
 import { createLogger, format } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path, { join } from 'path';
@@ -55,6 +55,7 @@ import mdns from 'multicast-dns';
 import os from 'os';
 import fs from 'fs';
 import net from 'net';
+import https from 'https';
 import { Server } from './types';
 import mountSmbPopup from './smbMountPopup';
 import { IPCRouter } from '../../houston-common/houston-common-lib/lib/electronIPC/IPCRouter';
@@ -69,7 +70,154 @@ import { getPin, isHostPinned, rememberPin } from './certPins'
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
 
+// ── EventSource (works with CJS, ESM, and the scoped package) ────────────────
+let EventSourceCtor: any;
+try {
+  // try the classic package first
+  const mod1 = require('eventsource');                       // v1/v2 commonjs
+  EventSourceCtor = mod1?.default || mod1?.EventSource || mod1;
+} catch { }
+
+if (!EventSourceCtor) {
+  try {
+    // some installs use the scoped modern package
+    const mod2 = require('@eventsource/eventsource');        // ESM-style
+    EventSourceCtor = mod2?.default || mod2?.EventSource || mod2;
+  } catch { }
+}
+
+if (typeof EventSourceCtor !== 'function') {
+  console.error(
+    '[SSE] No usable EventSource constructor found. ' +
+    'Install `eventsource@^2` or `@eventsource/eventsource`.'
+  );
+}
+
+// use this everywhere
+type ESMessageEvent = { data: string };
+type ESLike = {
+  addEventListener(type: string, listener: (ev: ESMessageEvent) => void): void;
+  close(): void;
+  onerror?: (err: any) => void;
+  onopen?: () => void;
+  onmessage?: (ev: ESMessageEvent) => void;
+};
+const EventSource = EventSourceCtor as new (url: string, init?: any) => ESLike;
+
+
+const setupStreams = new Map<string, ESLike>(); // key: ip
+let sseBackoffMs = 2000;
 // const blockerId = powerSaveBlocker.start("prevent-app-suspension");
+
+// function attachSetupSSE(ip: string) {
+//   if (setupStreams.has(ip)) return;
+
+//   // Use HTTP 9095 or nginx TLS:
+//   // const url = `https://${ip}/setup-status/stream`
+//   const url = `http://${ip}:9095/setup-status/stream`;
+
+
+//   const agent = new https.Agent({ rejectUnauthorized: false });
+
+//   const es = new EventSource(`${url}`, {
+//     https: { agent } as any
+//   });
+  
+//   es.addEventListener('hello', () => {
+//     // initial handshake; no-op
+//   });
+
+//   es.addEventListener('status', (ev: ESMessageEvent) => {
+//     sseBackoffMs = 2000; // reset backoff on success
+//     const { status } = JSON.parse(String(ev.data) || '{}');
+
+//     // upsert into discoveredServers and notify renderer
+//     const existing = discoveredServers.find(s => s.ip === ip);
+//     if (existing) {
+//       existing.status = status ?? 'unknown';
+//       existing.setupComplete = status === 'complete';
+//       existing.lastSeen = Date.now();
+//     } else {
+//       discoveredServers.push({
+//         ip,
+//         name: ip,
+//         status: status ?? 'unknown',
+//         setupComplete: status === 'complete',
+//         serverName: ip,
+//         shareName: '',
+//         setupTime: '',
+//         serverInfo: {
+//           moboMake: '', moboModel: '', serverModel: '',
+//           aliasStyle: '', chassisSize: '',
+//         },
+//         lastSeen: Date.now(),
+//         manuallyAdded: false,
+//         fallbackAdded: false,
+//       });
+//     }
+//     const win = BrowserWindow.getAllWindows()[0];
+//     win?.webContents.send('discovered-servers', discoveredServers);
+//   });
+
+//   es.onerror = () => {
+//     try { es.close(); } catch { }
+//     setupStreams.delete(ip);
+
+//     // simple backoff (cap at 30s), then try again
+//     const delay = Math.min(sseBackoffMs, 30000);
+//     setTimeout(() => attachSetupSSE(ip), delay);
+//     sseBackoffMs = delay * 2;
+//   };
+
+//   setupStreams.set(ip, es);
+// }
+
+function attachSetupSSE(ip: string) {
+  if (setupStreams.has(ip)) return;
+
+  const url = `http://${ip}:9095/setup-status/stream`;  // make sure this matches server
+  const es = new EventSource(url);                      // plain HTTP, no https agent
+
+  es.onopen = () => {
+    console.debug(`[SSE] open ${ip} ${url}`);
+    // optional: bump lastSeen on connect so it won't prune immediately
+    const existing = discoveredServers.find(s => s.ip === ip);
+    if (existing) existing.lastSeen = Date.now();
+  };
+
+  es.addEventListener('status', (ev: ESMessageEvent) => {
+    sseBackoffMs = 2000;
+    const { status } = JSON.parse(String(ev.data) || '{}');
+    const existing = discoveredServers.find(s => s.ip === ip);
+    if (existing) {
+      existing.status = status ?? 'unknown';
+      existing.setupComplete = status === 'complete';
+      existing.lastSeen = Date.now();                 // keep it fresh
+    }
+    BrowserWindow.getAllWindows()[0]?.webContents
+      .send('discovered-servers', discoveredServers);
+  });
+
+  es.onerror = (err: any) => {
+    console.warn(`[SSE] error ${ip} ${url}:`, err && (err.message || err));
+    try { es.close(); } catch { }
+    setupStreams.delete(ip);
+    const delay = Math.min(sseBackoffMs, 30000);
+    setTimeout(() => attachSetupSSE(ip), delay);
+    sseBackoffMs = delay * 2;
+  };
+
+  setupStreams.set(ip, es);
+}
+
+
+function detachSetupSSE(ip: string) {
+  const es = setupStreams.get(ip);
+  if (!es) return;
+  try { es.close(); } catch { }
+  setupStreams.delete(ip);
+}
+
 
 const idFile = path.join(app.getPath('userData'), 'client-id.txt');
 let installId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf-8').trim() : '';
@@ -87,9 +235,9 @@ ipcMain.handle('get-client-ident', async () => ({ installId }))
 app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
 
 function checkLogDir(): string {
-  // LINUX: /home/<username>/.config/45drives-setup-wizard/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
-  // MAC:   /Users/<username>/Library/Application Support/45drives-setup-wizard/logs
-  // WIN:   C:\Users\<username>\AppData\Roaming\45drives-setup-wizard\logs
+  // LINUX: /home/<username>/.config/studio-share/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
+  // MAC:   /Users/<username>/Library/Application Support/studio-share/logs
+  // WIN:   C:\Users\<username>\AppData\Roaming\studio-share\logs
   const baseLogDir = path.join(app.getPath('userData'), 'logs');
   try {
     if (!fs.existsSync(baseLogDir)) {
@@ -130,6 +278,22 @@ function isPortOpen(ip: string, port: number, timeout = 2000): Promise<boolean> 
 const TIMEOUT_DURATION = 30000;
 const serviceType = '_houstonserver._tcp.local'; // Define the service you're looking for
 
+// function getLocalIP() {
+//   const nets = os.networkInterfaces();
+//   for (const arr of Object.values(nets)) {
+//     for (const cfg of arr || []) {
+//       if (cfg.family === "IPv4" && !cfg.internal) {
+//         const o2 = Number(cfg.address.split('.')[1]);
+//         const isRfc1918 =
+//           cfg.address.startsWith('192.168.') ||
+//           cfg.address.startsWith('10.') ||
+//           (cfg.address.startsWith('172.') && o2 >= 16 && o2 <= 31);
+//         if (isRfc1918) return cfg.address;
+//       }
+//     }
+//   }
+//   return "127.0.0.1";
+// }
 const getLocalIP = () => {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
@@ -143,7 +307,6 @@ const getLocalIP = () => {
       }
     }
   }
-  
   return "127.0.0.1"; // Fallback
 };
 
@@ -257,9 +420,9 @@ function createWindow() {
     bufferedNotifications = [];
   });
 
-  ipcMain.on('check-for-updates', () => {
-    autoUpdater.checkForUpdatesAndNotify();
-  });
+  // ipcMain.on('check-for-updates', () => {
+  //   autoUpdater.checkForUpdatesAndNotify();
+  // });
 
   ipcMain.on('log:info', (_e, payload) => {
     jsonLogger.info(payload);        // structured JSON
@@ -380,7 +543,7 @@ function createWindow() {
               aliasStyle: '',
               chassisSize: '',
             },
-            manuallyAdded: manuallyAdded === true,
+            manuallyAdded: true,
             fallbackAdded: false,
           };
 
@@ -403,10 +566,14 @@ function createWindow() {
           } catch (error) {
             console.error('Add Manual Server-> Fetch error:', error);
           }
+          
+          attachSetupSSE(ip);
 
           mainWindow.webContents.send('discovered-servers', discoveredServers);
 
         } else if (message.type === 'rescanServers') {
+          // close any live SSE streams first
+          for (const s of discoveredServers) detachSetupSSE(s.ip);
           // clear & notify
           discoveredServers = [];
           mainWindow.webContents.send('discovered-servers', discoveredServers);
@@ -537,6 +704,13 @@ function createWindow() {
       mainWindow?.webContents.send('discovered-servers', discoveredServers);
       mainWindow?.webContents.send('client-ip', getLocalIP());
     })();
+
+    const existing = discoveredServers.find(x => x.ip === s.ip);
+    if (!existing) discoveredServers.push(s);
+    else Object.assign(existing, s, { lastSeen: Date.now(), fallbackAdded: false });
+    mainWindow?.webContents.send('discovered-servers', discoveredServers);
+    mainWindow?.webContents.send('client-ip', getLocalIP());
+    attachSetupSSE(s.ip);   // initial status comes via SSE immediately
   }
 
   // ---- Replace your current handler with this --------------------------------
@@ -548,10 +722,12 @@ function createWindow() {
       if (r.type === 'SRV' && r.name && r.name.toLowerCase().includes(SERVICE_TYPE)) {
         const inst = norm(r.name);
         const data = r.data as any;
-        srvByInstance.set(inst, {
-          target: norm(data?.target),                     // normalize host
-          port: Number(data?.port || 0),
-        });
+        const target = norm(data?.target);
+        srvByInstance.set(inst, { target, port: Number(data?.port || 0) });
+        mDNSClient.query([
+          { name: target, type: 'A' },
+          { name: target, type: 'AAAA' },
+        ]);
       } else if (r.type === 'TXT' && r.name && r.name.toLowerCase().includes(SERVICE_TYPE)) {
         txtByInstance.set(norm(r.name), parseTxt(r));
       } else if (r.type === 'A' && r.name && typeof r.data === 'string') {
@@ -577,12 +753,16 @@ function createWindow() {
 
   const clearInactiveServerInterval = setInterval(() => {
     const now = Date.now()
+    const stale = discoveredServers.filter(
+      srv => (now - srv.lastSeen > TIMEOUT_DURATION) && !(srv as any).manuallyAdded
+    );
 
-    // only keep servers that are still “fresh” OR that have manuallyAdded === true
-    discoveredServers = discoveredServers.filter(srv =>
-      now - srv.lastSeen <= TIMEOUT_DURATION
-      || (srv as any).manuallyAdded === true
-    )
+    // close streams for those we’re about to remove
+    for (const s of stale) detachSetupSSE(s.ip);
+    // keep the rest
+    discoveredServers = discoveredServers.filter(
+      srv => (now - srv.lastSeen <= TIMEOUT_DURATION) || (srv as any).manuallyAdded === true
+    );
 
     // push the updated list back to the renderer
     mainWindow.webContents.send('discovered-servers', discoveredServers)
@@ -636,6 +816,12 @@ function createWindow() {
     clearInterval(clearInactiveServerInterval);
     clearInterval(mdnsInterval);
     mDNSClient.destroy();
+
+    for (const es of setupStreams.values()) {
+      try { es.close(); } catch { }
+    }
+    setupStreams.clear();
+
     if (process.platform !== 'darwin') {
       app.quit();
     }
@@ -659,36 +845,6 @@ app.whenReady().then(() => {
   log.info("🟢 Logging initialized.");
   log.info("Log file path:", log.transports.file.getFile().path);
 
-
-  const { combine, timestamp, json } = format;
-  // structured JSON logger used alongside electron-log
-  // jsonLogger = createLogger({
-  //   level: 'info',
-  //   format: format.combine(
-  //     format.timestamp(),
-  //     format.json()
-  //   ),
-  //   transports: [
-  //     new DailyRotateFile({
-  //       dirname: resolvedLogDir,
-  //       filename: '45drives-setup-wizard-%DATE%.json',
-  //       datePattern: 'YYYY-MM-DD',
-  //       maxFiles: '14d',
-  //       zippedArchive: true,
-  //     })
-  //   ]
-  // });
-
-  // only let through events (which all have an "event" field)
-  const preserveEventsOrErrors = format((info) => {
-    // keep if it's an error or warning,
-    // or if we've attached an "event" property
-    if (['error', 'warn'].includes(info.level) || info.event) {
-      return info;
-    }
-    return false;
-  });
-
   jsonLogger = createLogger({
     level: 'info',
     format: format.combine(
@@ -710,7 +866,7 @@ app.whenReady().then(() => {
     transports: [
       new DailyRotateFile({
         dirname: resolvedLogDir,
-        filename: '45drives-setup-wizard-%DATE%.json',
+        filename: 'studio-share-%DATE%.json',
         datePattern: 'YYYY-MM-DD',
         maxFiles: '14d',
         zippedArchive: true,
@@ -759,52 +915,58 @@ app.whenReady().then(() => {
     });
   });
 
-  autoUpdater.logger = log;
-  (autoUpdater.logger as typeof log).transports.file.level = 'info';
+  // ─────────────────────────────────────────────────────────────────────────────
+  // AUTO-UPDATE DISABLED (commented out to avoid noisy logs / not implemented yet)
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  autoUpdater.on('checking-for-update', () => {
-    log.info('🔄 Checking for update...');
-  });
+  // autoUpdater.logger = log;
+  // (autoUpdater.logger as typeof log).transports.file.level = 'info';
 
-  autoUpdater.on('update-available', (info) => {
-    log.info('⬇️ Update available:', info);
+  // autoUpdater.on('checking-for-update', () => {
+  //   log.info('🔄 Checking for update...');
+  // });
 
-    if (process.platform === 'linux') {
-      // Notify renderer that a manual download is needed
-      const url = 'https://github.com/45Drives/houston-client-manager/releases/latest';
-      const win = BrowserWindow.getAllWindows()[0];
-      win?.webContents.send('update-available-linux', url);
-    }
-  });
+  // autoUpdater.on('update-available', (info) => {
+  //   log.info('⬇️ Update available:', info);
 
-  autoUpdater.on('update-not-available', (info) => {
-    log.info(' No update available:', info);
-  });
+  //   if (process.platform === 'linux') {
+  //     // Notify renderer that a manual download is needed
+  //     const url = 'https://github.com/45Drives/houston-client-manager/releases/latest';
+  //     const win = BrowserWindow.getAllWindows()[0];
+  //     win?.webContents.send('update-available-linux', url);
+  //   }
+  // });
 
-  autoUpdater.on('error', (err) => {
-    log.error(' Update error:', err);
-  });
+  // autoUpdater.on('update-not-available', (info) => {
+  //   log.info(' No update available:', info);
+  // });
 
-  autoUpdater.on('download-progress', (progressObj) => {
-    const logMsg = `📦 Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
-      1
-    )}% (${progressObj.transferred}/${progressObj.total})`;
-    log.info(logMsg);
-  });
+  // autoUpdater.on('error', (err) => {
+  //   log.error(' Update error:', err);
+  // });
 
-  if (process.platform !== 'linux') {
-    autoUpdater.on('update-downloaded', (info) => {
-      log.info(' Update downloaded. Will install on quit:', info);
-      // autoUpdater.quitAndInstall(); // Optional
-    });
+  // autoUpdater.on('download-progress', (progressObj) => {
+  //   const logMsg = `📦 Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
+  //     1
+  //   )}% (${progressObj.transferred}/${progressObj.total})`;
+  //   log.info(logMsg);
+  // });
 
-    autoUpdater.checkForUpdatesAndNotify();
-  } else {
-    autoUpdater.checkForUpdates(); // Only checks, doesn't download
-  }
+  // if (process.platform !== 'linux') {
+  //   autoUpdater.on('update-downloaded', (info) => {
+  //     log.info(' Update downloaded. Will install on quit:', info);
+  //     // autoUpdater.quitAndInstall(); // Optional
+  //   });
 
-  // Automatically check for updates and notify user if one is downloaded
-  autoUpdater.checkForUpdatesAndNotify();
+  //   autoUpdater.checkForUpdatesAndNotify();
+  // } else {
+  //   autoUpdater.checkForUpdates(); // Only checks, doesn't download
+  // }
+
+  // // Automatically check for updates and notify user if one is downloaded
+  // autoUpdater.checkForUpdatesAndNotify();
+  // ─────────────────────────────────────────────────────────────────────────────
+
 
   ipcMain.handle("is-dev", async () => process.env.NODE_ENV === 'development');
 
@@ -828,9 +990,10 @@ app.whenReady().then(() => {
 
 });
 
-ipcMain.on('check-for-updates', () => {
-  autoUpdater.checkForUpdatesAndNotify();
-});
+// ipcMain.on('check-for-updates', () => {
+//   autoUpdater.checkForUpdatesAndNotify();
+// });
+
 ipcMain.handle('dialog:pickFiles', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile', 'multiSelections']
@@ -1015,6 +1178,10 @@ ipcMain.on('rsync:cancel', (_event, { id }) => {
 })
 
 app.on('window-all-closed', () => {
+  for (const es of setupStreams.values()) {
+    try { es.close(); } catch { }
+  }
+  setupStreams.clear();
   //  This ensures your app fully quits on Windows
   if (process.platform !== 'darwin') {
     app.quit();
