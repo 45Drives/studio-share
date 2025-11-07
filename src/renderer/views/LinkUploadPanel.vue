@@ -70,6 +70,16 @@
 								{{ showPassword ? 'Hide' : 'Show' }}
 							</button>
 						</div>
+						<div class="flex items-center gap-3 mt-2">
+  <label class="whitespace-nowrap font-semibold">Link title:</label>
+  <input
+    type="text"
+    v-model.trim="linkTitle"
+    class="input-textlike border rounded px-3 py-2 bg-transparent"
+    placeholder="Optional title for the shared link"
+    style="min-width: 20rem"
+  />
+</div>
 					</div>
 				</div>
 
@@ -81,32 +91,26 @@
 							<button class="btn btn-secondary" :disabled="loading" @click="resetAll">
 								Reset
 							</button>
-							<button class="btn btn-primary grow" :disabled="!canGenerate || loading"
-								@click="generateLink" title="Create a magic link with the selected options">
-								{{ loading ? 'Generating…' : 'Generate Link' }}
-							</button>
+							<button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
+                        title="Create a magic link with the selected options">
+                        Generate magic link
+                    </button>
 						</div>
 
 						<!-- RESULT -->
-						<div v-if="result" class="p-3 border rounded bg-accent mt-3">
-							<div class="flex flex-col items-center gap-2">
-								<code class="font-mono break-all text-base">{{ result.url }}</code>
 
-								<div class="button-group-row">
-									<button class="btn btn-secondary" @click="copy(result.url)">Copy</button>
-									<a class="btn btn-primary text-center" :href="result.url" target="_blank"
-										rel="noreferrer">Open</a>
-								</div>
-
-								<div class="text-xs opacity-70 mt-1 text-center">
-									<div v-if="result.expiresAt">Expires at: {{ fmtDate(result.expiresAt) }}</div>
-									<div v-if="result.code">Code: {{ result.code }}</div>
-									<div v-if="result.password">Password required</div>
-								</div>
-							</div>
-
-							<div v-if="error" class="text-red-400 text-sm mt-2 text-center">{{ error }}</div>
-						</div>
+						<div v-if="result" class="flex flex-col">
+ 
+                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
+                        when protection is enabled.</p>
+                    <div v-if="result.url" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
+                        <code>{{ result.url }}</code>
+                        <div class="button-group-row">
+                            <button class="btn btn-secondary" @click="copyLink">Copy</button>
+                            <button class="btn btn-primary" @click="openInBrowser">Open</button>
+                        </div>
+                    </div>
+                </div>
 					</div>
 				</template>
 			</CardContainer>
@@ -145,6 +149,7 @@ const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 const protectWithPassword = ref(false)
 const password = ref('')
 const showPassword = ref(false)
+const linkTitle = ref('')
 const UNIT_TO_SECONDS = { hours: 3600, days: 86400, weeks: 604800 } as const
 const expiresSec = computed(() => Math.max(1, Math.floor(expiresValue.value || 0)) * UNIT_TO_SECONDS[expiresUnit.value])
 function setPreset(v: number, u: 'hours' | 'days' | 'weeks') { expiresValue.value = v; expiresUnit.value = u }
@@ -153,6 +158,7 @@ const prettyExpiry = computed(() => {
 	const u = expiresUnit.value
 	return `${v} ${v === 1 ? u.slice(0, -1) : u}`
 })
+
 
 // Link generation (unchanged)
 const loading = ref(false)
@@ -169,13 +175,14 @@ async function generateLink() {
 			kind: 'folder',
 			allowUpload: true,
 			expiresSec: Number(expiresSec.value) || 0,
+			title: linkTitle.value || undefined,
 			// baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 		}
 		if (password.value) body.password = password.value
 
 		const resp = await apiFetch('/api/create-upload-link', { method: 'POST', body: JSON.stringify(body) })
-		if (!resp?.url) throw new Error(resp?.error || 'Failed to create link')
-		result.value = { url: resp.url, code: resp.code, password: !!password.value, expiresAt: resp.expiresAt }
+		if (!resp?.shortUrl) throw new Error(resp?.error || 'Failed to create link')
+		result.value = { url: resp.shortUrl, code: resp.code, password: !!password.value, expiresAt: resp.expiresAt }
 	} catch (e: any) {
 		error.value = e?.message || String(e)
 	} finally {
@@ -193,7 +200,16 @@ function resetAll() {
 	error.value = null
 }
 
-function copy(text: string) { navigator.clipboard?.writeText(text).catch(() => { }); pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000)) }
+
+async function copyLink() {
+    if (!result.value) return
+    await navigator.clipboard.writeText(result.value.url)
+    pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
+}
+
+function openInBrowser() {
+    window.open(result.value?.url, '_blank')
+}
 function fmtDate(iso?: string) { if (!iso) return ''; try { return new Date(iso).toLocaleString() } catch { return iso } }
 function goBack() { router.push({ name: 'dashboard' }) }
 </script>

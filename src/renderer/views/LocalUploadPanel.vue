@@ -91,7 +91,7 @@
 								</tr>
 							</thead>
 
-							<tbody class="bg-default">
+							<tbody class="">
 								<!-- Empty state -->
 								<tr v-if="!uploads.length">
 									<td colspan="4" class="px-4 py-4 text-center text-muted border border-default">
@@ -123,8 +123,24 @@
 
 										<!-- Status -->
 										<td class="px-4 py-2 border border-default">
-											<span class="text-sm">{{ u.status === 'uploading' ? 'Uploading' :
-												u.status}}</span>
+											<span
+  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+  :class="{
+    'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
+    'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
+    'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
+    'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
+    'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
+  }"
+>
+  <template v-if="u.status === 'uploading'">
+    {{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+    <span v-if="u.speed" class="opacity-70">• {{ u.speed }}</span>
+    <span v-if="u.eta" class="opacity-70">• ETA {{ u.eta }}</span>
+  </template>
+  <template v-else>{{ u.status }}</template>
+</span>
+
 										</td>
 
 										<!-- Action -->

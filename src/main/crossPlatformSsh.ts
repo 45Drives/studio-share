@@ -21,6 +21,7 @@ export function getAgentSocket(): string | undefined {
 
 /* ---------- ssh-keygen ---------- */
 export async function ensureKeyPair(pk: string, pub: string) {
+    await fs.promises.mkdir(path.dirname(pk), { recursive: true });
     try {
         await fs.promises.access(pk);
         await fs.promises.access(pub);

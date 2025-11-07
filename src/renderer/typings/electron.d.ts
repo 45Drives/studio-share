@@ -52,6 +52,8 @@ export type AccessRow = {
   user_email?: string
   display_color?: string | null
   granted_at?: string | null
+  is_deleted?: boolean
+  is_disabled?: boolean
 }
 export type Commenter = {
   key: string
