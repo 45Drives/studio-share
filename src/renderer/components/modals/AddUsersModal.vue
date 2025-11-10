@@ -5,7 +5,7 @@
     <div class="relative w-full max-w-3xl bg-accent rounded-lg shadow-xl p-4">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-lg font-semibold">Give comment access</h3>
-     
+
         <button class="btn btn-secondary" @click="close()">Close</button>
       </div>
 
@@ -14,27 +14,18 @@
         <div class="border rounded p-3 bg-accent/60">
           <div class="flex items-center justify-between mb-2">
             <div class="font-semibold text-sm">Select existing users</div>
-            <input
-              type="text"
-              v-model.trim="userSearch"
+            <input type="text" v-model.trim="userSearch"
               class="input-textlike border rounded px-2 py-1 text-sm bg-transparent"
-              placeholder="Search by name/username/email"
-              @input="debouncedFetchUsers()"
-            />
+              placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
           </div>
 
           <div class="max-h-64 overflow-auto border rounded">
-            <div
-              v-for="u in users"
-              :key="u.id ?? u.username"
-              class="flex items-center justify-between px-3 py-2 border-b border-default text-sm"
-            >
+            <div v-for="u in users" :key="u.id ?? u.username"
+              class="flex items-center justify-between px-3 py-2 border-b border-default text-sm">
               <label class="flex items-center gap-2 cursor-pointer" @click.stop>
                 <input type="checkbox" :value="userKey(u)" v-model="selectedKeys" />
-                <span
-                  class="inline-block h-3 w-3 rounded-full"
-                  :style="{ backgroundColor: u.display_color || '#999' }"
-                ></span>
+                <span class="inline-block h-3 w-3 rounded-full"
+                  :style="{ backgroundColor: u.display_color || '#999' }"></span>
                 <div class="flex flex-col">
                   <span class="font-medium">{{ u.name || u.username }}</span>
                   <span class="opacity-70">
@@ -46,18 +37,12 @@
 
               <!-- Actions -->
               <div class="flex items-center gap-2">
-                <button
-                  class="px-2 py-1 text-xs border rounded hover:opacity-80"
-                  @click.stop="startEdit(u)"
-                  title="Edit user"
-                >
+                <button class="px-2 py-1 text-xs border rounded hover:opacity-80" @click.stop="startEdit(u)"
+                  title="Edit user">
                   <FontAwesomeIcon :icon="faEdit" />
                 </button>
-                <button
-                  class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
-                  @click.stop="deleteUser(u)"
-                  title="Delete user"
-                >
+                <button class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
+                  @click.stop="deleteUser(u)" title="Delete user">
                   <FontAwesomeIcon :icon="faTrash" />
                 </button>
               </div>
@@ -76,84 +61,60 @@
         <!-- Create new user -->
 
         <div>
-          <button v-if="!showCreate" class="px-3 py-2 rounded bg-[#5E56C5] text-white hover:bg-[#4d46a8] focus:outline-none focus:ring-2 focus:ring-[#5E56C5]/40 active:bg-[#433e97] transition" @click="openCreate()">Create new user</button>
-          <button v-else  class="px-3 py-2 rounded bg-[#E74C3C] text-white hover:bg-[#c0392b] focus:outline-none focus:ring-2 focus:ring-[#E74C3C]/40 active:bg-[#a93226] transition"
-            @click="closeCreate()"
-          >
-    Close create form
-  </button>
-          </div>
+          <button v-if="!showCreate"
+            class="px-3 py-2 rounded bg-[#5E56C5] text-white hover:bg-[#4d46a8] focus:outline-none focus:ring-2 focus:ring-[#5E56C5]/40 active:bg-[#433e97] transition"
+            @click="openCreate()">Create new user</button>
+          <button v-else
+            class="px-3 py-2 rounded bg-[#E74C3C] text-white hover:bg-[#c0392b] focus:outline-none focus:ring-2 focus:ring-[#E74C3C]/40 active:bg-[#a93226] transition"
+            @click="closeCreate()">
+            Close create form
+          </button>
+        </div>
         <div v-if="showCreate" class="border rounded p-3 bg-accent/60">
           <div class="font-semibold text-sm mb-2">Create new user</div>
           <div class="flex flex-col gap-2">
             <div class="text-xs opacity-70 mb-1">A temporary PIN is required. Share it securely with the user.</div>
             <div>
               <label class="text-xs opacity-80">Name</label>
-              <input
-                type="text"
-                v-model.trim="newUser.name"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="Jane Doe"
-              />
+              <input type="text" v-model.trim="newUser.name"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="Jane Doe" />
             </div>
             <div>
               <label class="text-xs opacity-80">Username <span class="text-red-500">*</span></label>
-              <input
-                type="text"
-                v-model.trim="newUser.username"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="jane"
-              />
+              <input type="text" v-model.trim="newUser.username"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane" />
             </div>
             <div>
               <label class="text-xs opacity-80">Email (optional)</label>
-              <input
-                type="email"
-                v-model.trim="newUser.user_email"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="jane@example.com"
-              />
+              <input type="email" v-model.trim="newUser.user_email"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane@example.com" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <label class="text-xs opacity-80">Temporary PIN <span class="text-red-500">*</span></label>
-                <input
-                  type="password"
-                  inputmode="numeric"
-                  pattern="\d*"
-                  v-model.trim="tempPin"
+                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPin"
                   :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinFormatInvalid ? 'border-red-500' : '')]"
-                  placeholder="4–8 digits"
-                  aria-invalid="true"
-                  v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}"
-                />
-                <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8 digits.</p>
+                  placeholder="4–8 digits" aria-invalid="true"
+                  v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}" />
+                <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8
+                  digits.</p>
               </div>
               <div>
                 <label class="text-xs opacity-80">Confirm PIN <span class="text-red-500">*</span></label>
-                <input
-                  type="password"
-                  inputmode="numeric"
-                  pattern="\d*"
-                  v-model.trim="tempPinConfirm"
+                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPinConfirm"
                   :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinMismatch ? 'border-red-500' : '')]"
-                  placeholder="Re-enter PIN"
-                  aria-invalid="true"
-                  v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}"
-                />
+                  placeholder="Re-enter PIN" aria-invalid="true"
+                  v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}" />
                 <p v-if="pinMismatch" id="pin-mismatch-error" class="mt-1 text-xs text-red-500">PINs do not match.</p>
               </div>
             </div>
             <div>
               <label class="text-xs opacity-80">Comment color</label>
               <div class="flex items-center gap-2">
-                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 bg-transparent border rounded" title="Pick a color" />
-                <input
-                  type="text"
-                  v-model.trim="newUser.display_color"
-                  class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                  placeholder="#aabbcc"
-                />
+                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 bg-transparent border rounded"
+                  title="Pick a color" />
+                <input type="text" v-model.trim="newUser.display_color"
+                  class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="#aabbcc" />
               </div>
               <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
             </div>
@@ -186,7 +147,8 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs opacity-80">Username</label>
-          <input class="input-textlike border rounded px-3 py-2 w-full bg-gray-600/20 opacity-70" :value="editing.username" disabled />
+          <input class="input-textlike border rounded px-3 py-2 w-full bg-gray-600/20 opacity-70"
+            :value="editing.username" disabled />
         </div>
         <div>
           <label class="text-xs opacity-80">Name</label>
@@ -194,35 +156,35 @@
         </div>
         <div>
           <label class="text-xs opacity-80">Email</label>
-          <input v-model.trim="editForm.user_email" type="email" class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+          <input v-model.trim="editForm.user_email" type="email"
+            class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
         </div>
         <div>
           <label class="text-xs opacity-80">Comment color</label>
           <div class="flex items-center gap-2">
             <input type="color" v-model="editForm.display_color" class="h-8 w-10 p-0 bg-transparent border rounded" />
-            <input v-model.trim="editForm.display_color" class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+            <input v-model.trim="editForm.display_color"
+              class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
           </div>
         </div>
+        <button class="btn btn-secondary" @click="openReset(editing)" title="Reset PIN for this user">
+          Reset PIN
+        </button>
       </div>
+
       <div class="flex justify-end gap-2 mt-4">
         <button class="btn btn-secondary" @click="editing = null">Cancel</button>
-        <button class="btn btn-primary" @click="saveEdit()">Save</button>
+        <button class="btn btn-primary" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPin)">
+          Save
+        </button>
       </div>
     </div>
   </div>
-  <ConfirmDeleteModal
-  v-model="deleteOpen"
-  :title="'Delete user'"
-  :message="userToDelete ? `Delete “${userToDelete.name || userToDelete.username}”? This cannot be undone.` : ''"
-  :danger="true"
-  :busy="deleting"
-  :error="deleteError"
-  :clickOutsideCancels="true"
-  confirmText="Delete"
-  cancelText="Cancel"
-  @confirm="performDelete"
-/>
-
+  <ConfirmDeleteModal v-model="deleteOpen" :title="'Delete user'"
+    :message="userToDelete ? `Delete “${userToDelete.name || userToDelete.username}”? This cannot be undone.` : ''"
+    :danger="true" :busy="deleting" :error="deleteError" :clickOutsideCancels="true" confirmText="Delete"
+    cancelText="Cancel" @confirm="performDelete" />
+  <ResetPinModal v-model="resetOpen" :user="userToReset" @confirm="onConfirmReset" />
 </template>
 
 <script setup lang="ts">
@@ -231,6 +193,7 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
 export type ExistingUser = { id?: string | number; username: string; name?: string; user_email?: string; display_color?: string }
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue'
+import ResetPinModal from './ResetPinModal.vue';
 
 const props = defineProps<{
   modelValue: boolean
@@ -257,6 +220,11 @@ const deleteOpen = ref(false)
 const deleting = ref(false)
 const deleteError = ref<string | null>(null)
 const userToDelete = ref<ExistingUser | null>(null)
+const resetOpen = ref(false)
+const userToReset = ref<{ id?: number | string; username?: string; name?: string } | null>(null)
+const pendingResetPin = ref<string | null>(null)
+const pendingResetUserId = ref<number | string | null>(null)
+
 
 // Edit state
 const editing = ref<ExistingUser | null>(null)
@@ -281,6 +249,15 @@ const pinFormatInvalid = computed(() => {
   const p = tempPin.value.trim()
   return p.length > 0 && !/^\d{4,8}$/.test(p)
 })
+const hasProfileEdits = computed(() => {
+  if (!editing.value) return false
+  const nameChanged = editForm.value.name.trim() !== (editing.value.name || '')
+  const emailChanged = (editForm.value.user_email.trim() || null) !== (editing.value.user_email ?? null)
+  const colorChanged = (normalizeHex(editForm.value.display_color) || null) !== (editing.value.display_color || null)
+  return nameChanged || emailChanged || colorChanged
+})
+
+
 watch([tempPin, tempPinConfirm], () => {
   if (error.value) error.value = ''
 })
@@ -297,8 +274,8 @@ watch(
       userSearch.value = ''
       error.value = ''
       selectedKeys.value = (props.preselected || [])
-      .map(p => userKey(p))
-       .filter(Boolean)
+        .map(p => userKey(p))
+        .filter(Boolean)
       fetchUsers()
     }
   }
@@ -366,7 +343,7 @@ async function createUser() {
         method: 'POST',
         body: JSON.stringify({ new_pin: pin }),
       })
-    } catch {}
+    } catch { }
 
     const u: ExistingUser = {
       id: created.id,
@@ -376,9 +353,9 @@ async function createUser() {
       display_color: created.display_color ?? payload.display_color,
     }
     const k = userKey(u)           // <- one canonical key
-if (!selectedKeys.value.includes(k)) {
-  selectedKeys.value.push(k)   // <- push the same canonical key
-}
+    if (!selectedKeys.value.includes(k)) {
+      selectedKeys.value.push(k)   // <- push the same canonical key
+    }
     await fetchUsers()
     resetNewUser()
   } catch (e: any) {
@@ -398,26 +375,65 @@ function startEdit(u: ExistingUser) {
 
 async function saveEdit() {
   if (!editing.value) return
-  try {
-   const id = Number(editing.value.id)
-   if (!Number.isFinite(id)) throw new Error('Missing numeric user id')
 
-   const payload: any = {}
-      if (editForm.value.name.trim() !== (editing.value.name || '')) {
-        payload.name = editForm.value.name.trim()
+  // allow either numeric id or username (string)
+  const idOrUsername = (editing.value.id ?? editing.value.username) as string | number
+  if (!idOrUsername) {
+    error.value = 'Missing user identifier'
+    return
+  }
+
+  try {
+    const ops: Promise<any>[] = []
+
+    // Only PATCH if something actually changed
+    if (hasProfileEdits.value) {
+      const payload: any = {}
+
+      const nextName = editForm.value.name.trim()
+      if (nextName !== (editing.value.name || '')) {
+        payload.name = nextName
       }
-      const newEmail = editForm.value.user_email.trim() || null
-      if ((newEmail || null) !== (editing.value.user_email ?? null)) {
-        payload.user_email = newEmail
+
+      const nextEmail = editForm.value.user_email.trim() || null
+      if ((nextEmail || null) !== (editing.value.user_email ?? null)) {
+        payload.user_email = nextEmail
       }
-      const newColor = normalizeHex(editForm.value.display_color)
-      if (newColor && newColor !== (editing.value.display_color || null)) {
-        payload.display_color = newColor
+
+      const nextColor = normalizeHex(editForm.value.display_color) || null
+      if (nextColor !== (editing.value.display_color || null)) {
+        payload.display_color = nextColor
       }
-   await props.apiFetch(`/api/users/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    })
+
+      ops.push(
+        props.apiFetch(`/api/users/${encodeURIComponent(String(idOrUsername))}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+      )
+    }
+
+    // Add reset-pin call if queued
+    if (pendingResetPin.value) {
+      const resetIdOrUsername = pendingResetUserId.value ?? idOrUsername
+      ops.push(
+        props.apiFetch(`/api/users/${encodeURIComponent(String(resetIdOrUsername))}/reset-pin`, {
+          method: 'POST',
+          body: JSON.stringify({ new_pin: pendingResetPin.value }),
+        })
+      )
+    }
+
+    if (!ops.length) {
+      error.value = 'No changes to save.'
+      return
+    }
+
+    await Promise.all(ops)
+
+    // Clear pending reset + refresh
+    pendingResetPin.value = null
+    pendingResetUserId.value = null
 
     await fetchUsers()
     editing.value = null
@@ -537,4 +553,19 @@ function normalizeHex(x?: string) {
   const full = v.length === 3 ? v.split('').map(c => c + c).join('') : v
   return `#${full.toLowerCase()}`
 }
+function openReset(u: any) {
+  userToReset.value = u
+  resetOpen.value = true
+}
+
+// handle confirmation (do your API call here)
+async function onConfirmReset(payload: { userId?: number | string; newPin: string }) {
+  const id = payload.userId ?? userToReset.value?.id
+  if (!id) return
+  pendingResetUserId.value = id
+  pendingResetPin.value = payload.newPin
+  resetOpen.value = false
+}
+
+
 </script>
