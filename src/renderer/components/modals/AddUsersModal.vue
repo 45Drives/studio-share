@@ -5,7 +5,7 @@
     <div class="relative w-full max-w-3xl bg-accent rounded-lg shadow-xl p-4">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-lg font-semibold">Give comment access</h3>
-     
+
         <button class="btn btn-secondary" @click="close()">Close</button>
       </div>
 
@@ -14,27 +14,18 @@
         <div class="border rounded p-3 bg-accent/60">
           <div class="flex items-center justify-between mb-2">
             <div class="font-semibold text-sm">Select existing users</div>
-            <input
-              type="text"
-              v-model.trim="userSearch"
+            <input type="text" v-model.trim="userSearch"
               class="input-textlike border rounded px-2 py-1 text-sm bg-transparent"
-              placeholder="Search by name/username/email"
-              @input="debouncedFetchUsers()"
-            />
+              placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
           </div>
 
           <div class="max-h-64 overflow-auto border rounded">
-            <div
-              v-for="u in users"
-              :key="u.id ?? u.username"
-              class="flex items-center justify-between px-3 py-2 border-b border-default text-sm"
-            >
+            <div v-for="u in users" :key="u.id ?? u.username"
+              class="flex items-center justify-between px-3 py-2 border-b border-default text-sm">
               <label class="flex items-center gap-2 cursor-pointer" @click.stop>
                 <input type="checkbox" :value="userKey(u)" v-model="selectedKeys" />
-                <span
-                  class="inline-block h-3 w-3 rounded-full"
-                  :style="{ backgroundColor: u.display_color || '#999' }"
-                ></span>
+                <span class="inline-block h-3 w-3 rounded-full"
+                  :style="{ backgroundColor: u.display_color || '#999' }"></span>
                 <div class="flex flex-col">
                   <span class="font-medium">{{ u.name || u.username }}</span>
                   <span class="opacity-70">
@@ -46,18 +37,12 @@
 
               <!-- Actions -->
               <div class="flex items-center gap-2">
-                <button
-                  class="px-2 py-1 text-xs border rounded hover:opacity-80"
-                  @click.stop="startEdit(u)"
-                  title="Edit user"
-                >
+                <button class="px-2 py-1 text-xs border rounded hover:opacity-80" @click.stop="startEdit(u)"
+                  title="Edit user">
                   <FontAwesomeIcon :icon="faEdit" />
                 </button>
-                <button
-                  class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
-                  @click.stop="deleteUser(u)"
-                  title="Delete user"
-                >
+                <button class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
+                  @click.stop="deleteUser(u)" title="Delete user">
                   <FontAwesomeIcon :icon="faTrash" />
                 </button>
               </div>
@@ -76,84 +61,60 @@
         <!-- Create new user -->
 
         <div>
-          <button v-if="!showCreate" class="px-3 py-2 rounded bg-[#5E56C5] text-white hover:bg-[#4d46a8] focus:outline-none focus:ring-2 focus:ring-[#5E56C5]/40 active:bg-[#433e97] transition" @click="openCreate()">Create new user</button>
-          <button v-else  class="px-3 py-2 rounded bg-[#E74C3C] text-white hover:bg-[#c0392b] focus:outline-none focus:ring-2 focus:ring-[#E74C3C]/40 active:bg-[#a93226] transition"
-            @click="closeCreate()"
-          >
-    Close create form
-  </button>
-          </div>
+          <button v-if="!showCreate"
+            class="px-3 py-2 rounded bg-[#5E56C5] text-white hover:bg-[#4d46a8] focus:outline-none focus:ring-2 focus:ring-[#5E56C5]/40 active:bg-[#433e97] transition"
+            @click="openCreate()">Create new user</button>
+          <button v-else
+            class="px-3 py-2 rounded bg-[#E74C3C] text-white hover:bg-[#c0392b] focus:outline-none focus:ring-2 focus:ring-[#E74C3C]/40 active:bg-[#a93226] transition"
+            @click="closeCreate()">
+            Close create form
+          </button>
+        </div>
         <div v-if="showCreate" class="border rounded p-3 bg-accent/60">
           <div class="font-semibold text-sm mb-2">Create new user</div>
           <div class="flex flex-col gap-2">
             <div class="text-xs opacity-70 mb-1">A temporary PIN is required. Share it securely with the user.</div>
             <div>
-              <label class="text-xs opacity-80">Name</label>
-              <input
-                type="text"
-                v-model.trim="newUser.name"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="Jane Doe"
-              />
+              <label class="text-xs opacity-80">Name <span class="text-red-500">*</span></label>
+              <input type="text" v-model.trim="newUser.name"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="Jane Doe" />
             </div>
             <div>
               <label class="text-xs opacity-80">Username <span class="text-red-500">*</span></label>
-              <input
-                type="text"
-                v-model.trim="newUser.username"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="jane"
-              />
+              <input type="text" v-model.trim="newUser.username"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane" />
             </div>
             <div>
               <label class="text-xs opacity-80">Email (optional)</label>
-              <input
-                type="email"
-                v-model.trim="newUser.user_email"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                placeholder="jane@example.com"
-              />
+              <input type="email" v-model.trim="newUser.user_email"
+                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane@example.com" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <label class="text-xs opacity-80">Temporary PIN <span class="text-red-500">*</span></label>
-                <input
-                  type="password"
-                  inputmode="numeric"
-                  pattern="\d*"
-                  v-model.trim="tempPin"
+                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPin"
                   :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinFormatInvalid ? 'border-red-500' : '')]"
-                  placeholder="4–8 digits"
-                  aria-invalid="true"
-                  v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}"
-                />
-                <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8 digits.</p>
+                  placeholder="4–8 digits" aria-invalid="true"
+                  v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}" />
+                <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8
+                  digits.</p>
               </div>
               <div>
                 <label class="text-xs opacity-80">Confirm PIN <span class="text-red-500">*</span></label>
-                <input
-                  type="password"
-                  inputmode="numeric"
-                  pattern="\d*"
-                  v-model.trim="tempPinConfirm"
+                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPinConfirm"
                   :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinMismatch ? 'border-red-500' : '')]"
-                  placeholder="Re-enter PIN"
-                  aria-invalid="true"
-                  v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}"
-                />
+                  placeholder="Re-enter PIN" aria-invalid="true"
+                  v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}" />
                 <p v-if="pinMismatch" id="pin-mismatch-error" class="mt-1 text-xs text-red-500">PINs do not match.</p>
               </div>
             </div>
             <div>
               <label class="text-xs opacity-80">Comment color</label>
               <div class="flex items-center gap-2">
-                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 bg-transparent border rounded" title="Pick a color" />
-                <input
-                  type="text"
-                  v-model.trim="newUser.display_color"
-                  class="input-textlike border rounded px-3 py-2 w-full bg-transparent"
-                  placeholder="#aabbcc"
-                />
+                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 bg-transparent border rounded"
+                  title="Pick a color" />
+                <input type="text" v-model.trim="newUser.display_color"
+                  class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="#aabbcc" />
               </div>
               <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
             </div>
@@ -186,7 +147,8 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs opacity-80">Username</label>
-          <input class="input-textlike border rounded px-3 py-2 w-full bg-gray-600/20 opacity-70" :value="editing.username" disabled />
+          <input class="input-textlike border rounded px-3 py-2 w-full bg-gray-600/20 opacity-70"
+            :value="editing.username" disabled />
         </div>
         <div>
           <label class="text-xs opacity-80">Name</label>
@@ -194,13 +156,15 @@
         </div>
         <div>
           <label class="text-xs opacity-80">Email</label>
-          <input v-model.trim="editForm.user_email" type="email" class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+          <input v-model.trim="editForm.user_email" type="email"
+            class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
         </div>
         <div>
           <label class="text-xs opacity-80">Comment color</label>
           <div class="flex items-center gap-2">
             <input type="color" v-model="editForm.display_color" class="h-8 w-10 p-0 bg-transparent border rounded" />
-            <input v-model.trim="editForm.display_color" class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+            <input v-model.trim="editForm.display_color"
+              class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
           </div>
         </div>
       </div>
@@ -210,18 +174,10 @@
       </div>
     </div>
   </div>
-  <ConfirmDeleteModal
-  v-model="deleteOpen"
-  :title="'Delete user'"
-  :message="userToDelete ? `Delete “${userToDelete.name || userToDelete.username}”? This cannot be undone.` : ''"
-  :danger="true"
-  :busy="deleting"
-  :error="deleteError"
-  :clickOutsideCancels="true"
-  confirmText="Delete"
-  cancelText="Cancel"
-  @confirm="performDelete"
-/>
+  <ConfirmDeleteModal v-model="deleteOpen" :title="'Delete user'"
+    :message="userToDelete ? `Delete “${userToDelete.name || userToDelete.username}”? This cannot be undone.` : ''"
+    :danger="true" :busy="deleting" :error="deleteError" :clickOutsideCancels="true" confirmText="Delete"
+    cancelText="Cancel" @confirm="performDelete" />
 
 </template>
 
