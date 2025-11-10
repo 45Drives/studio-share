@@ -117,7 +117,10 @@ const connectionMeta = inject(connectionMetaInjectionKey)!;
 
 const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
-)
+);
+
+const findServerByIp = (ip: string) =>
+    discoveryState.servers.find(s => s.ip === ip.trim());
 
 watch(() => discoveryState.servers.length, (len) => {
     if (len > 0 && !selectedServerIp.value && !manualIp.value) {
@@ -125,7 +128,19 @@ watch(() => discoveryState.servers.length, (len) => {
     }
 }, { immediate: true })
 
-watch(manualIp, () => { if (manualIp.value !== '') selectedServerIp.value = '' })
+watch(manualIp, (val) => {
+    const ip = val.trim();
+    const hit = ip ? findServerByIp(ip) : undefined;
+    if (hit) {
+        // If the user typed an IP we already discovered, switch to that entry.
+        selectedServerIp.value = hit.ip;
+        manualIp.value = '';
+    } else if (val !== '') {
+        // Ensure dropdown is disabled while user truly enters a different IP.
+        selectedServerIp.value = '';
+    }
+});
+
 watch(selectedServerIp, () => { if (selectedServerIp.value !== '') manualIp.value = '' })
 
 const isDev = import.meta.env.DEV === true;
@@ -169,16 +184,23 @@ async function connectToServer() {
 
     isBusy.value = true; // disable UI until we’re done
     statusLine.value = '';
+
     try {
-        const ip = (selectedServer.value?.ip || manualIp.value).trim();
+        const rawIp = (selectedServer.value?.ip || manualIp.value).trim();
+
+        // If the manual IP is already discovered, prefer that discovered record.
+        const discovered = findServerByIp(rawIp);
+        const effectiveServer = discovered ?? selectedServer.value;
+        const ip = effectiveServer?.ip || rawIp;
+
         const port = DEFAULT_API_PORT;
-
-        providedCurrentServer.value = selectedServer.value
-            ? selectedServer.value
-            : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true };
-
-
         const apiBase = `http://${ip}:${port}`;
+
+        // Set current server (avoid creating a "manual" entry if we already discovered it)
+        providedCurrentServer.value = effectiveServer ?? {
+            ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true
+        };
+
         connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
 
         window.appLog?.info('login.resolveApiBase', { isDev, ip, port, apiBase, href: location.href });
@@ -191,29 +213,33 @@ async function connectToServer() {
             } catch { return false; }
         };
 
-        const usedManual = !selectedServer.value;
+        // Be a bit patient before bootstrapping: fast retry to avoid needless installs
         let healthy = await probe();
+        if (!healthy) {
+            for (let i = 0; i < 2 && !healthy; i++) {
+                await new Promise(r => setTimeout(r, 750));
+                healthy = await probe();
+            }
+        }
 
-        // If API isn’t healthy or user used manual IP, run remote bootstrap
-        if (!healthy || usedManual) {
+        // IMPORTANT: only bootstrap if the API is NOT healthy.
+        if (!healthy) {
             const id = crypto.randomUUID();
             unlistenProgress?.();
             unlistenProgress = listenBootstrap(id);
             statusLine.value = 'Bootstrapping…';
             isBootstrapping.value = true;
 
-            if (isBootstrapping.value) {
-                setTimeout(() => {
-                    // force-unstick after 60s
-                    if (isBootstrapping.value) {
-                        isBootstrapping.value = false
-                        isBusy.value = false
-                        statusLine.value = ''
-                        unlistenProgress?.(); unlistenProgress = null
-                        pushNotification(new Notification('Error', 'Bootstrap timed out', 'error', 8000))
-                    }
-                }, 60_000)
-            }
+            // 60s failsafe
+            setTimeout(() => {
+                if (isBootstrapping.value) {
+                    isBootstrapping.value = false;
+                    isBusy.value = false;
+                    statusLine.value = '';
+                    unlistenProgress?.(); unlistenProgress = null;
+                    pushNotification(new Notification('Error', 'Bootstrap timed out', 'error', 8000));
+                }
+            }, 60_000);
 
             const result = await window.electron?.ipcRenderer.invoke(
                 "run-remote-bootstrap",
@@ -228,7 +254,7 @@ async function connectToServer() {
                 return;
             }
 
-            // quick retry loop for health
+            // Give the service a moment to come up
             for (let i = 0; i < 10; i++) {
                 await new Promise(r => setTimeout(r, 1000));
                 if (await probe()) break;
@@ -238,6 +264,7 @@ async function connectToServer() {
             unlistenProgress?.(); unlistenProgress = null;
         }
 
+        // Healthy now — proceed to login
         const res = await fetch(`${apiBase}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -247,16 +274,15 @@ async function connectToServer() {
         const { token } = await res.json();
 
         connectionMeta.value = { ...connectionMeta.value, token, ssh: { server: ip, username: username.value } };
-        try { sessionStorage.setItem('hb_token', token) } catch { }
+        try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }
         window.appLog?.info('login.success', { ip });
         router.push({ name: 'dashboard' });
-
     } catch (e: any) {
         window.appLog?.error('login.error', { error: e?.message });
         pushNotification(new Notification('Error', e?.message || 'Login failed', 'error', 8000));
     } finally {
-        isBootstrapping.value = false
-        isBusy.value = false
+        isBootstrapping.value = false;
+        isBusy.value = false;
     }
 }
 
