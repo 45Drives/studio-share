@@ -61,8 +61,9 @@ import mountSmbPopup from './smbMountPopup';
 import { IPCRouter } from '../../houston-common/houston-common-lib/lib/electronIPC/IPCRouter';
 import { getOS } from './utils';
 import { v4 as uuidv4 } from 'uuid';
-// import { BackUpManager, BackUpManagerLin, BackUpManagerMac, BackUpManagerWin, BackUpSetupConfigurator } from './backup';
-import { BackUpSetupConfig, BackUpTask, server, unwrap } from '@45drives/houston-common-lib';
+import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from './crossPlatformSsh';
+import { connectWithKey, connectWithPassword } from './setupSsh'; 
+import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { registerCredsIPC } from './creds.ipc';
@@ -175,6 +176,104 @@ export function detachAllSetupSSE() {
   setupStreams.clear();
 }
 
+
+// Helper to connect via agent or password-planted key (no install here)
+async function connectForPreflight(host: string, username: string, password: string) {
+  const agentSock = getAgentSocket();
+  // Try agent
+  if (agentSock) {
+    const trial = new NodeSSH();
+    try {
+      await trial.connect({ host, username, agent: agentSock, tryKeyboard: false, readyTimeout: 20000 });
+      return trial;
+    } catch { trial.dispose(); }
+  }
+
+  // Try password → plant key → reconnect with key
+  const planted = await connectWithPassword({ host, username, password });
+  try { planted.dispose(); } catch { }
+
+  const keyDir = getKeyDir();
+  const priv = path.join(keyDir, 'id_rsa');
+  await ensureKeyPair(priv, `${priv}.pub`);
+  try {
+    return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined });
+  } catch (e: any) {
+    const m = String(e?.message || e);
+    if (/unsupported key format/i.test(m)) {
+      await regeneratePemKeyPair(priv);
+      return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined });
+    }
+    throw e;
+  }
+}
+
+ipcMain.handle('remote-check-broadcaster', async (_event, { host, username, password }) => {
+  let ssh: NodeSSH | null = null;
+  try {
+    ssh = await connectForPreflight(host, username, password);
+
+    // Single portable script: checks pkg presence, unit presence/active, legacy presence/active, API health
+    const script = `
+set -euo pipefail
+
+bool() { [ "$1" -eq 0 ] && echo true || echo false; }
+
+is_rpm(){ command -v rpm >/dev/null 2>&1; }
+is_dpkg(){ command -v dpkg >/dev/null 2>&1; }
+
+pkg_installed=1
+if is_rpm; then
+  rpm -q houston-broadcaster >/dev/null 2>&1 && pkg_installed=0 || true
+elif is_dpkg; then
+  dpkg -s houston-broadcaster >/dev/null 2>&1 && pkg_installed=0 || true
+fi
+
+systemctl --version >/dev/null 2>&1 || { echo '{"hasPackage":false,"servicePresent":false,"serviceActive":false,"legacyPresent":false,"legacyActive":false,"apiHealthy":false}'; exit 0; }
+
+systemctl status houston-broadcaster >/dev/null 2>&1; svc_present=$?
+systemctl is-active --quiet houston-broadcaster >/dev/null 2>&1; svc_active=$? || true
+
+systemctl status houston-broadcaster-legacy >/dev/null 2>&1; legacy_present=$? || true
+systemctl is-active --quiet houston-broadcaster-legacy >/dev/null 2>&1; legacy_active=$? || true
+
+apiHealthy=1
+for i in {1..2}; do
+  curl -fsS --max-time 2 http://127.0.0.1:9095/healthz >/dev/null 2>&1 && { apiHealthy=0; break; }
+  sleep 1
+done
+
+printf '{"hasPackage":%s,"servicePresent":%s,"serviceActive":%s,"legacyPresent":%s,"legacyActive":%s,"apiHealthy":%s}\\n' \
+  "$(bool $pkg_installed)" \
+  "$(bool $svc_present)" \
+  "$(bool $svc_active)" \
+  "$(bool $legacy_present)" \
+  "$(bool $legacy_active)" \
+  "$(bool $apiHealthy)"
+`.trim();
+
+    const res = await ssh.execCommand(`bash -lc '${script.replace(/'/g, `'\"'\"'`)}'`);
+    if ((res.code ?? 0) !== 0) throw new Error(res.stderr || res.stdout || 'preflight failed');
+    // JSON parse in main so renderer doesn’t need to trust shell text
+    let parsed: any = {};
+    try { parsed = JSON.parse(res.stdout.trim()); } catch { }
+    return parsed;
+  } catch (e: any) {
+    jsonLogger.warn({ event: 'remote-check-broadcaster.error', host, error: e?.message || String(e) });
+    throw e;
+  } finally {
+    try { ssh?.dispose(); } catch { }
+  }
+});
+
+ipcMain.handle('probe-health', async (_e, { ip, port }) => {
+  try {
+    const r = await fetch(`http://${ip}:${port}/healthz`, { signal: AbortSignal.timeout(3000) });
+    return { ok: r.ok, status: r.status };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
 
 const idFile = path.join(app.getPath('userData'), 'client-id.txt');
 let installId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf-8').trim() : '';
@@ -1018,6 +1117,7 @@ ipcMain.on('upload:file:cancel', (event, { id }) => {
   event.sender.send(`upload-done-${id}`, { error: 'canceled' })
 })
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
+import { NodeSSH } from 'node-ssh';
 
 type RsyncStartOpts = {
   id: string

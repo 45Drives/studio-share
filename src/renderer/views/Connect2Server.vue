@@ -207,13 +207,11 @@ async function connectToServer() {
         window.appLog?.info('login.request', { url: `${apiBase}/api/login`, ip });
 
         const probe = async () => {
-            try {
-                const r = await fetch(`${apiBase}/healthz`, { signal: AbortSignal.timeout(3000) });
-                return r.ok;
-            } catch { return false; }
+            const r = await window.electron?.ipcRenderer.invoke('probe-health', { ip, port: DEFAULT_API_PORT });
+            return !!r?.ok;
         };
 
-        // Be a bit patient before bootstrapping: fast retry to avoid needless installs
+        // Be patient briefly to avoid transient false negatives
         let healthy = await probe();
         if (!healthy) {
             for (let i = 0; i < 2 && !healthy; i++) {
@@ -222,15 +220,40 @@ async function connectToServer() {
             }
         }
 
-        // IMPORTANT: only bootstrap if the API is NOT healthy.
-        if (!healthy) {
+        /**
+         * If this IP came from discovery, check whether the modern "houston-broadcaster"
+         * package is installed (vs. just the legacy service). If not installed → force bootstrap.
+         */
+        let mustBootstrap = false;
+        if (effectiveServer) {
+            try {
+                const preflight = await window.electron?.ipcRenderer.invoke(
+                    'remote-check-broadcaster',
+                    { host: ip, username: username.value, password: password.value }
+                );
+                // If package not installed (likely legacy present), we must bootstrap.
+                if (preflight && preflight.hasPackage === false) {
+                    mustBootstrap = true;
+                    window.appLog?.info('preflight', { ip, reason: 'no-package-installed', preflight });
+                } else {
+                    window.appLog?.info('preflight', { ip, reason: 'package-present', preflight });
+                }
+            } catch (err: any) {
+                // If SSH preflight fails, fall back to the old rule (health decides).
+                window.appLog?.warn('preflight.error', { ip, error: err?.message });
+            }
+        }
+
+        // Decide whether to bootstrap:
+        // - If preflight forced it (legacy/no pkg) → bootstrap
+        // - Else only bootstrap when API isn’t healthy (old behavior)
+        if (mustBootstrap || !healthy) {
             const id = crypto.randomUUID();
             unlistenProgress?.();
             unlistenProgress = listenBootstrap(id);
             statusLine.value = 'Bootstrapping…';
             isBootstrapping.value = true;
 
-            // 60s failsafe
             setTimeout(() => {
                 if (isBootstrapping.value) {
                     isBootstrapping.value = false;
@@ -254,7 +277,7 @@ async function connectToServer() {
                 return;
             }
 
-            // Give the service a moment to come up
+            // Post-bootstrap: give health a moment
             for (let i = 0; i < 10; i++) {
                 await new Promise(r => setTimeout(r, 1000));
                 if (await probe()) break;
