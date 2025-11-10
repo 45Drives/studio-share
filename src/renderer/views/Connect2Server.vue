@@ -177,20 +177,9 @@ async function connectToServer() {
             ? selectedServer.value
             : { ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true };
 
-        let apiBase = '';
-        if (isDev) {
-            apiBase = `http://${ip}:${port}`;
-            connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
-        } else {
-            if (ip === window.location.hostname || ip === '127.0.0.1' || ip === 'localhost') {
-                apiBase = '';
-                connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: location.host };
-            } else {
-                const brokerSeg = `broker/${encodeURIComponent(`${ip}:${port}`)}`;
-                apiBase = `/${brokerSeg}`;
-                connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: `${location.host}/${brokerSeg}` };
-            }
-        }
+
+        const apiBase = `http://${ip}:${port}`;
+        connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
 
         window.appLog?.info('login.resolveApiBase', { isDev, ip, port, apiBase, href: location.href });
         window.appLog?.info('login.request', { url: `${apiBase}/api/login`, ip });

@@ -70,30 +70,11 @@ import { getPin, isHostPinned, rememberPin } from './certPins'
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
 
-// ── EventSource (works with CJS, ESM, and the scoped package) ────────────────
-let EventSourceCtor: any;
-try {
-  // try the classic package first
-  const mod1 = require('eventsource');                       // v1/v2 commonjs
-  EventSourceCtor = mod1?.default || mod1?.EventSource || mod1;
-} catch { }
+// ===== EventSource + SSE (Electron main) =====================================
+// Requires: yarn add eventsource@^2
+import EventSource from 'eventsource';
 
-if (!EventSourceCtor) {
-  try {
-    // some installs use the scoped modern package
-    const mod2 = require('@eventsource/eventsource');        // ESM-style
-    EventSourceCtor = mod2?.default || mod2?.EventSource || mod2;
-  } catch { }
-}
-
-if (typeof EventSourceCtor !== 'function') {
-  console.error(
-    '[SSE] No usable EventSource constructor found. ' +
-    'Install `eventsource@^2` or `@eventsource/eventsource`.'
-  );
-}
-
-// use this everywhere
+// Minimal event typings for our usage
 type ESMessageEvent = { data: string };
 type ESLike = {
   addEventListener(type: string, listener: (ev: ESMessageEvent) => void): void;
@@ -102,106 +83,74 @@ type ESLike = {
   onopen?: () => void;
   onmessage?: (ev: ESMessageEvent) => void;
 };
-const EventSource = EventSourceCtor as new (url: string, init?: any) => ESLike;
 
+// Ensure the constructor exists (defensive)
+const hasEventSource = typeof (EventSource as any) === 'function';
 
-const setupStreams = new Map<string, ESLike>(); // key: ip
+// Track live SSE connections per IP
+const setupStreams = new Map<string, ESLike>();
+
+// Base backoff for reconnects
 let sseBackoffMs = 2000;
-// const blockerId = powerSaveBlocker.start("prevent-app-suspension");
 
-// function attachSetupSSE(ip: string) {
-//   if (setupStreams.has(ip)) return;
+// Call this to start listening for bootstrap status updates from a host
+export function attachSetupSSE(ip: string) {
+  if (!hasEventSource) {
+    console.warn(`[SSE] EventSource unavailable; cannot attach for ${ip}`);
+    return;
+  }
+  if (setupStreams.has(ip)) {
+    return; // already connected
+  }
 
-//   // Use HTTP 9095 or nginx TLS:
-//   // const url = `https://${ip}/setup-status/stream`
-//   const url = `http://${ip}:9095/setup-status/stream`;
+  // Use HTTP during bootstrap (no TLS agent needed)
+  const url = `http://${ip}:9095/setup-status/stream`;
 
-
-//   const agent = new https.Agent({ rejectUnauthorized: false });
-
-//   const es = new EventSource(`${url}`, {
-//     https: { agent } as any
-//   });
-  
-//   es.addEventListener('hello', () => {
-//     // initial handshake; no-op
-//   });
-
-//   es.addEventListener('status', (ev: ESMessageEvent) => {
-//     sseBackoffMs = 2000; // reset backoff on success
-//     const { status } = JSON.parse(String(ev.data) || '{}');
-
-//     // upsert into discoveredServers and notify renderer
-//     const existing = discoveredServers.find(s => s.ip === ip);
-//     if (existing) {
-//       existing.status = status ?? 'unknown';
-//       existing.setupComplete = status === 'complete';
-//       existing.lastSeen = Date.now();
-//     } else {
-//       discoveredServers.push({
-//         ip,
-//         name: ip,
-//         status: status ?? 'unknown',
-//         setupComplete: status === 'complete',
-//         serverName: ip,
-//         shareName: '',
-//         setupTime: '',
-//         serverInfo: {
-//           moboMake: '', moboModel: '', serverModel: '',
-//           aliasStyle: '', chassisSize: '',
-//         },
-//         lastSeen: Date.now(),
-//         manuallyAdded: false,
-//         fallbackAdded: false,
-//       });
-//     }
-//     const win = BrowserWindow.getAllWindows()[0];
-//     win?.webContents.send('discovered-servers', discoveredServers);
-//   });
-
-//   es.onerror = () => {
-//     try { es.close(); } catch { }
-//     setupStreams.delete(ip);
-
-//     // simple backoff (cap at 30s), then try again
-//     const delay = Math.min(sseBackoffMs, 30000);
-//     setTimeout(() => attachSetupSSE(ip), delay);
-//     sseBackoffMs = delay * 2;
-//   };
-
-//   setupStreams.set(ip, es);
-// }
-
-function attachSetupSSE(ip: string) {
-  if (setupStreams.has(ip)) return;
-
-  const url = `http://${ip}:9095/setup-status/stream`;  // make sure this matches server
-  const es = new EventSource(url);                      // plain HTTP, no https agent
+  let es: ESLike;
+  try {
+    es = new (EventSource as any)(url) as ESLike;
+  } catch (e: any) {
+    console.warn(`[SSE] Failed to construct EventSource for ${ip}:`, e?.message || e);
+    return;
+  }
 
   es.onopen = () => {
     console.debug(`[SSE] open ${ip} ${url}`);
-    // optional: bump lastSeen on connect so it won't prune immediately
-    const existing = discoveredServers.find(s => s.ip === ip);
-    if (existing) existing.lastSeen = Date.now();
+    // If you maintain a discoveredServers array elsewhere, you can refresh lastSeen here.
+    // e.g., const ex = discoveredServers.find(s => s.ip === ip); if (ex) ex.lastSeen = Date.now();
   };
 
+  // Server sends:  event: status\n data: {"status":"..."}\n\n
   es.addEventListener('status', (ev: ESMessageEvent) => {
-    sseBackoffMs = 2000;
-    const { status } = JSON.parse(String(ev.data) || '{}');
-    const existing = discoveredServers.find(s => s.ip === ip);
-    if (existing) {
-      existing.status = status ?? 'unknown';
-      existing.setupComplete = status === 'complete';
-      existing.lastSeen = Date.now();                 // keep it fresh
+    try {
+      sseBackoffMs = 2000; // reset backoff on healthy traffic
+      const payload = JSON.parse(String(ev.data) || '{}');
+      const status = payload?.status ?? 'unknown';
+
+      // Update your model and notify the renderer
+      // Example (adjust to your shape):
+      // const existing = discoveredServers.find(s => s.ip === ip);
+      // if (existing) {
+      //   existing.status = status;
+      //   existing.setupComplete = status === 'complete';
+      //   existing.lastSeen = Date.now();
+      // }
+      BrowserWindow.getAllWindows()[0]?.webContents.send('discovered-servers-status', {
+        ip,
+        status,
+        ts: Date.now(),
+      });
+    } catch (e: any) {
+      console.warn(`[SSE] parse error (${ip}):`, e?.message || e);
     }
-    BrowserWindow.getAllWindows()[0]?.webContents
-      .send('discovered-servers', discoveredServers);
   });
 
   es.onerror = (err: any) => {
     console.warn(`[SSE] error ${ip} ${url}:`, err && (err.message || err));
     try { es.close(); } catch { }
     setupStreams.delete(ip);
+
+    // simple capped exponential backoff
     const delay = Math.min(sseBackoffMs, 30000);
     setTimeout(() => attachSetupSSE(ip), delay);
     sseBackoffMs = delay * 2;
@@ -210,12 +159,20 @@ function attachSetupSSE(ip: string) {
   setupStreams.set(ip, es);
 }
 
-
-function detachSetupSSE(ip: string) {
+// Stop and remove a single stream
+export function detachSetupSSE(ip: string) {
   const es = setupStreams.get(ip);
   if (!es) return;
   try { es.close(); } catch { }
   setupStreams.delete(ip);
+}
+
+// Stop and clear all streams (e.g., during app shutdown or rescan)
+export function detachAllSetupSSE() {
+  for (const es of setupStreams.values()) {
+    try { es.close(); } catch { }
+  }
+  setupStreams.clear();
 }
 
 
@@ -811,10 +768,11 @@ function createWindow() {
 
 
   app.on('window-all-closed', function () {
-    ipcMain.removeAllListeners('message')
+    ipcMain.removeAllListeners('message');
     clearInterval(pollActionInterval);
     clearInterval(clearInactiveServerInterval);
     clearInterval(mdnsInterval);
+    detachAllSetupSSE();
     mDNSClient.destroy();
 
     for (const es of setupStreams.values()) {

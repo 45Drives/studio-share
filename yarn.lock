@@ -26,14 +26,14 @@ __metadata:
     autoprefixer: "npm:^10.4.19"
     chalk: "npm:^4.1.2"
     chokidar: "npm:^3.5.3"
-    dmg-license: "npm:^1.0.9"
+    dmg-license: "npm:^1.0.11"
     electron: "npm:^38.2.2"
     electron-builder: "npm:26.0.12"
     electron-log: "npm:^5.4.1"
     electron-osx-sign: "npm:^0.6.0"
     electron-updater: "npm:6.6.2"
     esbuild: "npm:^0.25.1"
-    eventsource: "npm:^4.0.0"
+    eventsource: "npm:^2"
     jsdom: "npm:^26.0.0"
     keytar: "npm:^7.9.0"
     monet: "npm:^0.9.3"
@@ -4274,7 +4274,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dmg-license@npm:^1.0.11, dmg-license@npm:^1.0.9":
+"dmg-license@npm:^1.0.11":
   version: 1.0.11
   resolution: "dmg-license@npm:1.0.11"
   dependencies:
@@ -4990,19 +4990,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eventsource-parser@npm:^3.0.1":
-  version: 3.0.6
-  resolution: "eventsource-parser@npm:3.0.6"
-  checksum: 10c0/70b8ccec7dac767ef2eca43f355e0979e70415701691382a042a2df8d6a68da6c2fca35363669821f3da876d29c02abe9b232964637c1b6635c940df05ada78a
-  languageName: node
-  linkType: hard
-
-"eventsource@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "eventsource@npm:4.0.0"
-  dependencies:
-    eventsource-parser: "npm:^3.0.1"
-  checksum: 10c0/908a3f64b60aadd053b9fd8ea8b6a896a4faf32dbbaf0150e91abbec179a9e2a3da261fb577ae296df8b744de91962d69a60b10e8d7092d7802e6e3e7a8b0f0e
+"eventsource@npm:^2":
+  version: 2.0.2
+  resolution: "eventsource@npm:2.0.2"
+  checksum: 10c0/0b8c70b35e45dd20f22ff64b001be9d530e33b92ca8bdbac9e004d0be00d957ab02ef33c917315f59bf2f20b178c56af85c52029bc8e6cc2d61c31d87d943573
   languageName: node
   linkType: hard
 

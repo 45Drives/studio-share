@@ -76,6 +76,7 @@
     "!**/node_modules/rollup/**",
     "!**/node_modules/webpack/**",
     "!**/node_modules/esbuild/**",
+    "!**/node_modules/@esbuild/**",
     "!**/node_modules/vite/**",
     "!**/node_modules/@vue/**",
     "!**/node_modules/typescript/**",
