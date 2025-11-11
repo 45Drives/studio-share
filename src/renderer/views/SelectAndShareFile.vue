@@ -126,13 +126,6 @@
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
-                            <!-- Max downloads -->
-                            <!-- <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Max downloads</label>
-                                <input type="number" min="1" step="1" v-model.number="maxDownloads"
-                                    class="input border rounded px-3 py-2 w-32 bg-transparent" />
-                            </div> -->
-
                             <!-- Expiry -->
                             <div class="flex items-center gap-3">
                                 <label class="whitespace-nowrap font-semibold">Expires in:</label>
@@ -159,62 +152,122 @@
 
                                 <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Link Availability:</label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                    <input type="checkbox" v-model="usePublicBase" />
-                                    <span>{{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}</span>
-                                </label>
-                            </div>
 
-                            <!-- Password (optional) -->
-                            <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Password:</label>
-                                <div class="flex items-center gap-2">
-                                    <input id="pw-enabled" type="checkbox" v-model="protectWithPassword" />
-                                    <label for="pw-enabled" class="text-sm">Protect with password</label>
-                                </div>
-                                <input :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
-                                    v-model.trim="password"
-                                    class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                                    placeholder="Enter password" style="min-width: 16rem" />
-                                <button type="button" class="btn btn-secondary" @click="showPassword = !showPassword"
-                                    :disabled="!protectWithPassword">
-                                    {{ showPassword ? 'Hide' : 'Show' }}
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Link title (optional) -->
-                        <div class="flex items-center gap-3 mt-2">
-                            <label class="whitespace-nowrap font-semibold">Link title:</label>
-                            <input
-                                type="text"
-                                v-model.trim="linkTitle"
-                                class="input-textlike border rounded px-3 py-2 bg-transparent"
-                                placeholder="Optional title for the shared link"
-                                style="min-width: 20rem"
-                            />
-                        </div>
-
-                        <div>
-                            <div class="flex items-center gap-3">
-                                <button type="button" class="btn btn-primary" @click="openUserModal()">
-                                    Manage comment access
-                                    <span v-if="commentCount"
-                                        class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
-                                        {{ commentCount }}
+                            <div class="flex flex-row justify-between">
+                                <!-- Link Access -->
+                                <div class="flex items-center gap-3">
+                                    <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link Access:</label>
+                                    <Switch
+                                        id="link-access-switch"
+                                        v-model="usePublicBase"
+                                        :class="[
+                                        usePublicBase ? 'bg-secondary' : 'bg-well',
+                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                        ]"
+                                    >
+                                        <span class="sr-only">Toggle link access</span>
+                                        <span
+                                        aria-hidden="true"
+                                        :class="[
+                                            usePublicBase ? 'translate-x-5' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                        ]"
+                                        />
+                                    </Switch>
+                                    <span class="text-sm select-none">
+                                        {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
                                     </span>
-                                </button>
+                                </div>
 
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" v-model="noCommentAccess" />
-                                    <span>No one can comment</span>
-                                </label>
+                                <!-- Password (optional) -->
+                                <div class="flex items-center gap-3">
+                                    <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+                                    <div class="flex items-center gap-2">
+                                        <Switch
+                                            id="use-password-switch"
+                                            v-model="protectWithPassword"
+                                            :class="[
+                                            protectWithPassword ? 'bg-secondary' : 'bg-well',
+                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]"
+                                        >
+                                            <span class="sr-only">Toggle use password</span>
+                                            <span
+                                            aria-hidden="true"
+                                            :class="[
+                                                protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                            ]"
+                                            />
+                                        </Switch>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-default font-semibold ">Password</label>
+                                        <div class="flex flex-col gap-1">
+                                            <div class="relative flex items-center h-[3rem] space-x-2">
+                                                <input 
+                                                 :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
+                                                v-model.trim="password"
+                                                placeholder="Enter your password"
+                                                class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed" />
+                                                <button type="button" @click="showPassword = !showPassword"
+                                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                       
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                            <div class="flex flex-row justify-between">
+                                <!-- Manage Comment Access -->
+                                <div class="flex items-center gap-4 justify-between">
+                                    <button type="button" class="btn btn-primary" @click="openUserModal()">
+                                        Manage comment access
+                                        <span v-if="commentCount"
+                                            class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                            {{ commentCount }}
+                                        </span>
+                                    </button>
 
-                            <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1">
-                                Select at least one commenter or check “No one can comment”.
-                            </p>
+                                    <label class="flex items-center gap-2 text-sm">
+                                        <Switch
+                                                id="allow-comments-switch"
+                                                v-model="noCommentAccess"
+                                                :class="[
+                                                !noCommentAccess ? 'bg-secondary' : 'bg-well',
+                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]"
+                                            >
+                                                <span class="sr-only">Toggle use password</span>
+                                                <span
+                                                aria-hidden="true"
+                                                :class="[
+                                                    !noCommentAccess ? 'translate-x-5' : 'translate-x-0',
+                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                ]"
+                                                />
+                                            </Switch>
+                                        <span>{{ !noCommentAccess ? 'Allow comments by users' : 'No one can comment' }}</span>
+                                    </label>
+                                </div>
+                                <!-- Link title (optional) -->
+                                <div class="flex items-center gap-2">
+                                    <label class="whitespace-nowrap font-semibold">Link title:</label>
+                                    <input
+                                        type="text"
+                                        v-model.trim="linkTitle"
+                                        class="input-textlike border rounded px-3 py-2 bg-transparent"
+                                        placeholder="Optional title for the shared link"
+                                        style="min-width: 20rem"
+                                    />
+                                </div>
+                            </div>
+                            <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1 justify-end">
+                                    Select at least one commenter or check “No one can comment”.
+                                </p>
 
                             <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
                                 id: c.id,
@@ -223,6 +276,7 @@
                                 user_email: c.user_email,
                                 display_color: c.display_color
                             }))" @apply="onApplyUsers" />
+                                
                         </div>
                     </div>
                 </template>
@@ -262,6 +316,9 @@ import { useProjectChoices } from '../composables/useProjectChoices'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import type { Commenter } from '../typings/electron'
 import { useHeader } from '../composables/useHeader'
+import { Switch } from '@headlessui/vue'
+import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
+
 useHeader('Select Files to Share');
 const { apiFetch } = useApi()
 
