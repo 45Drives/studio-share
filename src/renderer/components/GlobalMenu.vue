@@ -6,7 +6,7 @@
 
         <teleport to="body">
             <div v-if="show"
-                class="fixed z-50 right-0 mt-2 w-60 bg-well shadow-lg rounded-lg border p-4 text-left text-default"
+                class="fixed z-[1002] right-0 mt-2 w-60 bg-well shadow-lg rounded-lg border p-4 text-left text-default"
                 ref="menuRef" :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }">
                 <!-- Navigation -->
                 <div class="mb-2 text-center items-center">
@@ -15,7 +15,7 @@
                     <!-- Optional Dashboard -->
                     <button class="btn btn-secondary wizard-btn w-full mb-1" :class="buttonClass('dashboard')"
                         @click="gotoHome">
-                         {{ isLoggedIn ? 'Dashboard' : 'Home' }}
+                        {{ isLoggedIn ? 'Dashboard' : 'Home' }}
                     </button>
                 </div>
 
@@ -41,7 +41,7 @@
                             <component :is="darkMode ? SunIcon : MoonIcon" class="w-6 h-6" />
                         </transition>
                         <span class="mb-0.5 font-semibold" :class="darkMode ? 'ml-5' : 'ml-4'">{{ darkModeLabel
-                            }}</span>
+                        }}</span>
                     </button>
                 </div>
             </div>
@@ -112,7 +112,7 @@ const darkModeButtonClass = computed(() => (darkMode.value ? 'btn-sun' : 'btn-mo
 const { setTheme, currentTheme } = useThemeFromAlias()
 
 function selectTheme(theme: 'theme-default' | 'theme-homelab' | 'theme-professional' | 'theme-studio') {
-   setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
+    setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
 }
 
 function gotoHome() {

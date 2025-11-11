@@ -1,19 +1,33 @@
 <!-- FolderPicker.vue -->
 <template>
+  <!-- FolderPicker.vue template (only the changed/added blocks) -->
   <section class="flex flex-col gap-2 text-left text-base rounded-md">
-    <h2 v-if="title" class="font-semibold">{{ title }}</h2>
 
     <!-- Top summary + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
+      <!-- NEW: optional bypass -->
+      <label v-if="allowEntireTree" class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" v-model="showEntireTree" @change="changeProject" />
+        <span>Show entire directory tree from root</span>
+      </label>
       <div v-if="subtitle" class="opacity-80">{{ subtitle }}</div>
+
+
+
+      <div class="text-sm opacity-80 -mb-1 flex items-center justify-start gap-3 flex-wrap"
+        v-if="internalProject && internalProject.trim().length > 0">
+        <span class="font-semibold">Project:</span>
+        <code>{{ internalProject }}</code>
+        <button class="btn btn-secondary" @click="changeProject()">Change Project Directory</button>
+      </div>
       <div class="flex flex-row gap-2 items-center">
         <span class="whitespace-nowrap">Destination folder:</span>
         <PathInput v-model="cwd" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChoose" />
       </div>
 
 
-      <!-- Optional status for auto-detect -->
-      <div v-if="!base && (autoDetectRoots ?? true)" class="text-xs opacity-70">
+      <!-- Auto-detect status -->
+      <div v-if="(autoDetectRoots ?? true) && !showEntireTree" class="text-xs opacity-70">
         <template v-if="detecting">Detecting ZFS pools…</template>
         <template v-else-if="browseMode === 'roots' && !projectRoots.length">No ZFS pools found; browsing /</template>
       </div>
@@ -23,53 +37,33 @@
     <div class="border rounded overflow-auto bg-default" :class="containerHeights">
       <!-- Toolbar -->
       <div class="sticky top-0 bg-default z-[1000] border-b border-default px-2 py-1 flex items-center gap-2">
-        <button
-          class="btn btn-secondary"
-          :disabled="!canGoUp || browseMode === 'roots'"
-          @click="goUpOne"
-          title="Go up one directory"
-        >
+        <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
+          title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
         </button>
         <div class="text-xs opacity-75 truncate" :title="cwd">
           {{ browseMode === 'roots' ? 'Pick a ZFS pool…' : (cwd || '/') }}
         </div>
-
-        <!-- View toggle (hidden while picking roots) -->
         <div class="ml-auto flex items-center gap-1" v-if="browseMode !== 'roots'">
-          <button
-            type="button"
-            class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
-            :class="viewMode === 'tree' ? 'bg-white/10' : ''"
-            :aria-pressed="viewMode === 'tree'"
-            aria-label="List view"
-            title="List view"
-            @click="viewMode = 'tree'"
-          >
+          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
+            :class="viewMode === 'tree' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'tree'" aria-label="List view"
+            title="List view" @click="viewMode = 'tree'">
             <FontAwesomeIcon :icon="faList" />
             <span class="sr-only">List</span>
           </button>
-          <button
-            type="button"
+          <button type="button"
             class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5"
-            :class="viewMode === 'icons' ? 'bg-white/10' : ''"
-            :aria-pressed="viewMode === 'icons'"
-            aria-label="Grid view"
-            title="Grid view"
-            @click="viewMode = 'icons'"
-          >
+            :class="viewMode === 'icons' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'icons'"
+            aria-label="Grid view" title="Grid view" @click="viewMode = 'icons'">
             <FontAwesomeIcon :icon="faGrip" />
             <span class="sr-only">Grid</span>
           </button>
         </div>
       </div>
 
-      <!-- Column headers (only when not in roots mode) -->
-      <div
-        v-if="browseMode !== 'roots'"
-        class="grid sticky top-0 bg-well font-semibold border-b border-default
-               [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]"
-      >
+      <!-- Column headers -->
+      <div v-if="browseMode !== 'roots'" class="grid sticky top-0 bg-well font-semibold border-b border-default
+               [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
         <div class="px-2 py-2"></div>
         <div class="px-2 py-2">Name</div>
         <div class="px-2 py-2">Type</div>
@@ -77,70 +71,37 @@
         <div class="px-2 py-2">Modified</div>
       </div>
 
-      <!-- Roots list (auto-detect mode only) -->
-      <template v-if="browseMode === 'roots' && !base && (autoDetectRoots ?? true)">
-        <div
-          v-for="r in projectRoots"
-          :key="r.mountpoint"
-          class="grid items-center border-b border-default px-3 py-1
-                 [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]"
-        >
-          <div class="px-2 py-1"></div>
-          <div class="px-2 py-1">
-            <div class="truncate">
-              <code :title="`${r.name} → ${r.mountpoint}`">{{ r.mountpoint }}</code>
-            </div>
+      <!-- NEW: Roots list -->
+      <template v-if="browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
+        <div v-for="r in projectRoots" :key="r.mountpoint" class="grid items-center border-b border-default px-3 py-1
+                  [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
+          <div></div>
+          <div class="truncate">
+            <code :title="`${r.name} → ${r.mountpoint}`">{{ r.mountpoint }}</code>
           </div>
-          <div class="px-2 py-1">ZFS Pool</div>
-          <div class="px-2 py-1">—</div>
+          <div>ZFS Pool</div>
+          <div>—</div>
           <div class="px-2 py-1">
-            <button class="btn btn-secondary mr-2" @click="selectRoot(r.mountpoint)">Select</button>
-            <button class="btn btn-primary" @click="openRoot(r.mountpoint)">Open</button>
+            <button class="btn btn-secondary" @click="chooseProject(r.mountpoint)">Select</button>
           </div>
         </div>
       </template>
 
-      <!-- Tree view -->
+      <!-- Tree / Icon view -->
       <template v-if="browseMode !== 'roots' && viewMode === 'tree'">
-        <TreeNode
-          :key="'tree-'+cwd"
-          :apiFetch="apiFetch"
-          :selected="internalSelected"
-          :selectedVersion="selectedVersion"
-          :getFilesFor="getFilesForFolder"
-          :relPath="rootRel"
-          :depth="0"
-          :isRoot="true"
-          useCase="upload"
-          v-model:selectedFolder="selectedFolderBridge"
-          @select-folder="onSelectFolder"
-          @toggle="togglePath"
-          @navigate="navigateTo"
-        />
+        <TreeNode :key="'tree-' + cwd" :apiFetch="apiFetch" :selected="internalSelected"
+          :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
+          :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
+          @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
       </template>
 
-      <!-- Icon (grid) view -->
       <template v-if="browseMode !== 'roots' && viewMode === 'icons'">
-        <IconMode
-          :key="'icons-'+cwd"
-          :apiFetch="apiFetch"
-          :selected="internalSelected"
-          :selectedVersion="selectedVersion"
-          :getFilesFor="getFilesForFolder"
-          :relPath="rootRel"
-          :depth="0"
-          :isRoot="true"
-          useCase="upload"
-          v-model:selectedFolder="selectedFolderBridge"
-          @select-folder="onSelectFolder"
-          @toggle="togglePath"
-          @navigate="navigateTo"
-        />
+        <IconMode :key="'icons-' + cwd" :apiFetch="apiFetch" :selected="internalSelected"
+          :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
+          :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
+          @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
       </template>
     </div>
-
-    <!-- Selected summary -->
-
   </section>
 </template>
 
@@ -166,25 +127,44 @@ const props = defineProps<{
   autoDetectRoots?: boolean
   showSelection?: boolean
   heightClass?: string
+  allowEntireTree?: boolean
+
+  // ADD THESE (so v-model:project / v-model:dest are typed)
+  project?: string
+  dest?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: string): void
   (e: 'changed-cwd', v: string): void
+  (e: 'update:project', v: string): void
+  (e: 'update:dest', v: string): void
 }>()
-
 /* Bridge modelValue <-> v-model:selectedFolder on child components */
 const selectedFolderBridge = computed<string | null>({
-  get: () => (props.modelValue ? props.modelValue : null),
-  set: (v) => emit('update:modelValue', v ?? '')
+  get: () => (internalDest.value ? internalDest.value : null),
+  set: (v) => { internalDest.value = v ?? '' }
+})
+
+const internalProject = computed({
+  get: () => props.project ?? '',
+  set: (v: string) => emit('update:project', v),
+})
+
+const internalDest = computed({
+  get: () => (props.dest ?? props.modelValue ?? ''),
+  set: (v: string) => {
+    emit('update:dest', v)
+    emit('update:modelValue', v)
+  },
 })
 
 /* Roots auto-detect */
 const showEntireTree = ref(false)
 const { detecting, projectRoots, loadProjectChoices } = useProjectChoices(showEntireTree)
+const clampBase = computed(() => (internalProject.value || props.base || ''))
 
 /* Local state */
-const internalBase = ref<string>(props.base ?? '')
 const browseMode = ref<'roots' | 'dir'>('dir')
 const viewMode = ref<ViewMode>('icons') // persisted below
 const cwd = ref<string>(props.startDir ?? props.base ?? '/')
@@ -202,30 +182,22 @@ watch(viewMode, (m) => localStorage.setItem('folderpicker:viewMode', m))
 
 /* Initial mount logic */
 onMounted(async () => {
-  const wantRoots = !props.base && (props.autoDetectRoots ?? true)
-  if (wantRoots) {
-    await loadProjectChoices()
-    browseMode.value = projectRoots.value.length > 0 ? 'roots' : 'dir'
-    if (browseMode.value === 'dir') {
-      cwd.value = '/'
-      emit('changed-cwd', cwd.value)
-    }
+  await loadProjectChoices()
+  if (internalProject.value) {
+    browseMode.value = 'dir'
+    cwd.value = ensureSlash(internalProject.value)
+  } else if (props.autoDetectRoots ?? true) {
+    browseMode.value = 'roots'
+    cwd.value = '/'
   } else {
     browseMode.value = 'dir'
+    cwd.value = '/'
   }
-
-  if (props.startDir) {
-    cwd.value = ensureSlash(props.startDir)
-    emit('changed-cwd', cwd.value)
-  } else if (props.base) {
-    cwd.value = ensureSlash(props.base)
-    emit('changed-cwd', cwd.value)
-  }
+  emit('changed-cwd', cwd.value)
 })
 
-/* React to prop changes */
 watch(() => props.base, (v) => {
-  internalBase.value = v ?? ''
+  clampBase.value = v ?? ''
   if (v) {
     browseMode.value = 'dir'
     cwd.value = ensureSlash(v)
@@ -276,7 +248,7 @@ async function getFilesForFolder(folder: string): Promise<string[]> {
 function onChoose(pick: { path: string; isDir: boolean }) {
   const next = pick.isDir ? ensureSlash(pick.path)
     : ensureSlash(pick.path.replace(/\/[^/]+$/, '') || '/')
-  const clamped = internalBase.value ? ensureSlash(toAbsUnder(internalBase.value, next)) : next
+  const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, next)) : next
   cwd.value = clamped
   emit('changed-cwd', cwd.value)
 }
@@ -284,7 +256,7 @@ function onChoose(pick: { path: string; isDir: boolean }) {
 /* Navigation from children */
 function navigateTo(rel: string) {
   const absLike = ensureSlash('/' + rel.replace(/^\/+/, ''))
-  const clamped = internalBase.value ? ensureSlash(toAbsUnder(internalBase.value, absLike)) : absLike
+  const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, absLike)) : absLike
   cwd.value = clamped
   emit('changed-cwd', cwd.value)
 }
@@ -294,16 +266,12 @@ async function togglePath({ path, isDir }: { path: string; isDir: boolean }) {
   await getFilesForFolder(path)
 }
 
-function clearTreeCache() {
-  expandCache.clear()
-  selectedVersion.value++
-}
 
 /* Up clamp */
 const canGoUp = computed(() => {
   if (!cwd.value || cwd.value === '/') return false
-  if (!internalBase.value) return cwd.value !== '/'
-  const base = ensureSlash(internalBase.value)
+  if (!clampBase.value) return cwd.value !== '/'
+  const base = ensureSlash(clampBase.value)
   return cwd.value !== base
 })
 
@@ -316,8 +284,8 @@ function parentPath(absLike: string): string {
 
 function goUpOne() {
   const parent = parentPath(cwd.value || '/')
-  if (internalBase.value) {
-    const base = ensureSlash(internalBase.value)
+  if (clampBase.value) {
+    const base = ensureSlash(clampBase.value)
     cwd.value = parent.startsWith(base) ? parent : base
   } else {
     cwd.value = parent
@@ -331,14 +299,14 @@ function onSelectFolder(rel: string) {
   emit('update:modelValue', normalized)
 
   const abs = '/' + normalized
-  const clamped = internalBase.value ? ensureSlash(toAbsUnder(internalBase.value, abs)) : ensureSlash(abs)
+  const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, abs)) : ensureSlash(abs)
   cwd.value = clamped
   emit('changed-cwd', cwd.value)
 }
 
 /* ZFS root picking */
 function openRoot(mountpoint: string) {
-  internalBase.value = mountpoint
+  clampBase.value = mountpoint
   browseMode.value = 'dir'
 
   const abs = ensureSlash(mountpoint)
@@ -351,23 +319,33 @@ function openRoot(mountpoint: string) {
 }
 
 
-/* IMPORTANT: also flip to 'dir' when using Select (not only Open) */
-function selectRoot(mountpoint: string) {
-  internalBase.value = mountpoint
-  browseMode.value = 'dir'
-
-  const normalized = mountpoint.replace(/^\/+/, '')
-  emit('update:modelValue', normalized)
-
-  cwd.value = ensureSlash(mountpoint)
-  emit('changed-cwd', cwd.value)
-}
-
 /* UI */
 const selectedAbs = computed(() => {
   if (!props.modelValue) return ''
   const abs = '/' + props.modelValue.replace(/^\/+/, '')
   return abs.endsWith('/') ? abs : abs + '/'
 })
+function chooseProject(dirPath: string) {
+  const abs = ensureSlash(dirPath).replace(/\/+$/, '')
+  internalProject.value = abs
+  browseMode.value = 'dir'
+  internalDest.value = abs.replace(/^\/+/, '')
+  cwd.value = ensureSlash(abs)
+  emit('changed-cwd', cwd.value)
+}
+
+function openRootBrowse(mountpoint: string) {
+  browseMode.value = 'dir'
+  const abs = ensureSlash(mountpoint)
+  cwd.value = abs
+  emit('changed-cwd', cwd.value)
+}
+function changeProject() {
+  internalProject.value = ''
+  internalDest.value = ''
+  browseMode.value = (props.autoDetectRoots ?? true) && !showEntireTree.value ? 'roots' : 'dir'
+  cwd.value = showEntireTree.value ? '/' : '/'
+  emit('changed-cwd', cwd.value)
+}
 const containerHeights = computed(() => props.heightClass || 'max-h-[28rem] min-h-[18rem]')
 </script>

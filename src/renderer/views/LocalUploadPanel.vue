@@ -25,6 +25,7 @@
 
 						<span class="wizard-muted">
 							{{ selected.length ? `${selected.length} item(s) • ${formatSize(totalSelectedBytes)}` : 'No files selected' }}
+
 						</span>
 
 						<div class="grow"></div>
@@ -53,7 +54,7 @@
 										<div class="truncate" :title="f.path">{{ f.name }}</div>
 									</td>
 									<td class="wizard-td"><span class="text-sm opacity-75">{{
-											formatSize(f.size)}}</span></td>
+										formatSize(f.size) }}</span></td>
 									<td class="wizard-td">
 										<div class="flex justify-end">
 											<button class="btn btn-secondary" @click="removeSelected(f)">Remove</button>
@@ -69,9 +70,10 @@
 				<section v-show="step === 2" class="wizard-pane">
 					<h2 class="wizard-heading">Choose destination on server</h2>
 
-					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload" title="Destination" :auto-detect-roots="true"
-						subtitle="Pick the folder on the server where these files will be uploaded." :key="'picker-'+step"
-						:showSelection="true" @changed-cwd="v => (cwd = v)" />
+					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
+						subtitle="Pick the folder on the server where these files will be uploaded."
+						:auto-detect-roots="true" :allow-entire-tree="true" v-model:project="projectBase"
+						v-model:dest="destFolderRel" />
 				</section>
 
 
@@ -131,8 +133,7 @@
 													'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
 													'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
 													'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
-												}"
-												>
+												}">
 
 												<template v-if="u.status === 'uploading'">
 													{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
@@ -226,7 +227,7 @@ const isUploading = ref(false)
 
 const { apiFetch } = useApi()
 /** ── Step control ───────────────────────────────────────── */
-const step = ref<1|2|3>(1)
+const step = ref<1 | 2 | 3>(1)
 
 const nextLabel = computed(() => {
 	if (step.value === 1) return 'Next';
@@ -254,7 +255,7 @@ async function nextStep() {
 	return startUploads();
 }
 
-function goStep(s: 1|2|3) {
+function goStep(s: 1 | 2 | 3) {
 	step.value = s
 	if (s === 3) {
 		// build rows for review
@@ -263,32 +264,32 @@ function goStep(s: 1|2|3) {
 }
 function stepClass(n: number) {
 	return [
-	'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
-	step.value >= n ? 'bg-[#584c91] text-white' : 'bg-slate-700 text-slate-300'
+		'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
+		step.value >= n ? 'bg-[#584c91] text-white' : 'bg-slate-700 text-slate-300'
 	].join(' ')
 }
 
 /** ── Step 1: local files ───────────────────────────────── */
 const selected = ref<LocalFile[]>([])
 function addToSelection(files?: LocalFile[]) {
-const seen = new Set(selected.value.map(f => f.path))
-const append: LocalFile[] = []
-for (const f of (files || [])) if (!seen.has(f.path)) { append.push(f); seen.add(f.path) }
+	const seen = new Set(selected.value.map(f => f.path))
+	const append: LocalFile[] = []
+	for (const f of (files || [])) if (!seen.has(f.path)) { append.push(f); seen.add(f.path) }
 	if (append.length) selected.value = [...selected.value, ...append]
 }
-function pickFiles () { window.electron.pickFiles().then(addToSelection) }
-function pickFolder () { window.electron.pickFolder().then(addToSelection) }
+function pickFiles() { window.electron.pickFiles().then(addToSelection) }
+function pickFolder() { window.electron.pickFolder().then(addToSelection) }
 function removeSelected(file: LocalFile) { selected.value = selected.value.filter(f => f.path !== file.path) }
-function clearSelected(){ selected.value = [] }
+function clearSelected() { selected.value = [] }
 
 const totalSelectedBytes = computed(() =>
 	selected.value.reduce((sum, f) => sum + (f.size || 0), 0)
 )
 function formatSize(size: number) {
-	const u = ['B','KB','MB','GB','TB']
-	let i=0; let v=size
-	while(v>=1024&&i<u.length-1){ v/=1024; i++ }
-	return `${v.toFixed(v<10&&i>0?1:0)} ${u[i]}`
+	const u = ['B', 'KB', 'MB', 'GB', 'TB']
+	let i = 0; let v = size
+	while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
+	return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`
 }
 
 // Step 2: destination
@@ -296,9 +297,10 @@ const cwd = ref<string>('')                 // for the breadcrumb text the picke
 const destDir = computed(() => cwd.value) 	// alias used in UI
 const destFolderRel = ref<string>('')       // FolderPicker v-model
 const canNext = computed(() => !!destFolderRel.value)
+const projectBase = ref<string>('')
 
 
-/** ── Step 3: upload & progress ─────────────────────────── */	
+/** ── Step 3: upload & progress ─────────────────────────── */
 function finish() {
 	// Reset the wizard (or route away)
 	selected.value = []
@@ -381,7 +383,7 @@ function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: str
 }
 
 const rafState = new Map<string, { p?: number; speed?: string; eta?: string; scheduled?: number }>();
-	async function startUploads() {
+async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
 
 	for (const row of uploads.value) {
@@ -400,18 +402,18 @@ const rafState = new Map<string, { p?: number; speed?: string; eta?: string; sch
 			},
 			p => {
 				console.log('rsync progress', row.name, p);
-				console.log("typeof",typeof p.percent, p.bytesTransferred, row.size);
+				console.log("typeof", typeof p.percent, p.bytesTransferred, row.size);
 				let pct: number | undefined = typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
 
 				// Fallback: compute from bytesTransferred if present
 				if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
-				pct = (p.bytesTransferred / row.size) * 100;
+					pct = (p.bytesTransferred / row.size) * 100;
 				}
 
 				// parse from raw line if library sometimes only gives raw text
 				if (pct === undefined && typeof p.raw === 'string') {
-				const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
-				if (m) pct = parseFloat(m[1]);
+					const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
+					if (m) pct = parseFloat(m[1]);
 				}
 
 				updateRowProgress(row, pct, p.rate, p.eta);
@@ -422,17 +424,17 @@ const rafState = new Map<string, { p?: number; speed?: string; eta?: string; sch
 
 		done.then(res => {
 			if ((res as any).ok) {
-			row.status = row.status === 'canceled' ? 'canceled' : 'done';
-			row.progress = 100;
+				row.status = row.status === 'canceled' ? 'canceled' : 'done';
+				row.progress = 100;
 			} else if (row.status !== 'canceled') {
-			row.status = 'error';
-			row.error = (res as any).error || 'rsync failed';
+				row.status = 'error';
+				row.error = (res as any).error || 'rsync failed';
 			}
 		}).catch(err => {
 			isUploading.value = false
 			if (row.status !== 'canceled') {
-			row.status = 'error';
-			row.error = err?.message || String(err);
+				row.status = 'error';
+				row.error = err?.message || String(err);
 			}
 		});
 	}
