@@ -311,17 +311,17 @@ import { useApi } from '../composables/useApi'
 import CardContainer from '../components/CardContainer.vue'
 import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
-import { router } from '../../app/routes'
 import { useProjectChoices } from '../composables/useProjectChoices'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import type { Commenter } from '../typings/electron'
 import { useHeader } from '../composables/useHeader'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
-
+import { useResilientNav } from '../composables/useResilientNav'
+const { to } = useResilientNav()
 useHeader('Select Files to Share');
-const { apiFetch } = useApi()
 
+const { apiFetch } = useApi()
 // ================== Project selection state ==================
 const projectSelected = ref(false)
 const showEntireTree = ref(false)
@@ -557,8 +557,9 @@ function openInBrowser() {
 //     resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
 // }
 
-function goBack() {
-    router.push({ name: 'dashboard' })
+async function goBack() {
+    // router.push({ name: 'dashboard' })
+    to('dashboard');
 }
 
 const userModalOpen = ref(false)

@@ -213,7 +213,8 @@ import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
-import { router } from '../../app/routes'
+import { useResilientNav } from '../composables/useResilientNav'
+const { to } = useResilientNav()
 useHeader('Upload Files')
 
 type LocalFile = { path: string; name: string; size: number }
@@ -458,7 +459,8 @@ const allDone = computed(() =>
 )
 
 function goBack() {
-	router.push({ name: 'dashboard' })
+	// router.push({ name: 'dashboard' })
+	to('dashboard');
 }
 </script>
 

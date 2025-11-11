@@ -127,8 +127,9 @@ import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import { useHeader } from '../composables/useHeader';
-import { router } from '../../app/routes'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { useResilientNav } from '../composables/useResilientNav'
+const { to } = useResilientNav()
 useHeader('Upload Files via Link')
 
 // --- Injections / API ---
@@ -204,5 +205,8 @@ async function copyLink() {
 function openInBrowser() {
     window.open(result.value?.url, '_blank')
 }
-function goBack() { router.push({ name: 'dashboard' }) }
+function goBack() { 
+	// router.push({ name: 'dashboard' }) 
+	to('dashboard');
+}
 </script>

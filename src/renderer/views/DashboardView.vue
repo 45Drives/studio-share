@@ -27,25 +27,31 @@
 <script setup lang="ts">
 import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
-import { router } from '../../app/routes'
+import { useResilientNav } from '../composables/useResilientNav'
 import ManageLinks from './ManageLinks.vue'
 
 useHeader('Dashboard')
+const { to } = useResilientNav()
 
 const leaveServer = () => {
-	router.push({ name: 'server-selection'});
+	// router.push({ name: 'server-selection'});
+	to('server-selection');
 }
 
 const goToShareFiles = () => {
-	router.push({ name: 'select-file'})
+	// router.push({ name: 'select-file'})
+	to('select-file');
 }
 
 const goToUploadFiles = () => {
-	router.push({ name: 'upload-file'});
+	// router.push({ name: 'upload-file'});
+	to('upload-file');
+
 }
 
 const goToLinkUploadPanel = () => {
-	router.push({ name: 'create-upload-link' });
+	// router.push({ name: 'create-upload-link' });
+	to('create-upload-link');
 }
 
 </script>

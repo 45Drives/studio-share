@@ -57,7 +57,8 @@ import { Bars3Icon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { toggleDarkMode, useDarkModeState } from '@45drives/houston-common-ui'
 import { useThemeFromAlias } from '../composables/useThemeFromAlias'
 import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
-
+import { useResilientNav } from '../composables/useResilientNav'
+const { to } = useResilientNav()
 interface GlobalMenuProps {
     server?: boolean;
 }
@@ -116,9 +117,10 @@ function selectTheme(theme: 'theme-default' | 'theme-homelab' | 'theme-professio
 
 function gotoHome() {
     const target = isLoggedIn.value
-        ? { name: 'dashboard' }          // already authenticated → Dashboard
-    : { name: 'server-selection' }   // not logged in → Login/Server select
-    router.push(target)
+        ? 'dashboard'      // already authenticated → Dashboard
+    : 'server-selection'  // not logged in → Login/Server select
+    // router.push(target)
+    to(target);
     show.value = false
 }
 

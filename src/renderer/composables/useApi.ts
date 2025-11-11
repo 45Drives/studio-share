@@ -1,29 +1,27 @@
 // src/renderer/composables/useApi.ts
 import { inject, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Ref } from 'vue'
 import type { Server, ConnectionMeta } from '../types'
 import { currentServerInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
-import { router } from '../../app/routes'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 type ApiInit = RequestInit & {
     timeoutMs?: number
-    retry?: number               // how many retries on network errors (idempotent only)
-    retryDelayMs?: number        // backoff base
-    parse?: 'json' | 'text' | 'auto' // default 'auto'
+    retry?: number
+    retryDelayMs?: number
+    parse?: 'json' | 'text' | 'auto'
 }
 
 const DEFAULT_TIMEOUT = 12_000
 
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 function shouldRetry(method?: string, err?: any) {
     const m = String(method || 'GET').toUpperCase() as HttpMethod
-    // only retry safe/idempotent
     if (!['GET', 'HEAD', 'OPTIONS'].includes(m)) return false
-    // retry on fetch/network/timeout errors (no Response)
-    return !err || !('status' in err)
+    return !err || !('status' in err) // network/timeout errors (no Response)
 }
 
 async function parseAuto(res: Response, mode: 'json' | 'text' | 'auto' = 'auto') {
@@ -33,7 +31,6 @@ async function parseAuto(res: Response, mode: 'json' | 'text' | 'auto' = 'auto')
         const t = await res.text()
         return t ? JSON.parse(t) : undefined
     }
-    // auto
     const ct = res.headers.get('content-type') || ''
     if (ct.includes('application/json')) {
         if (res.status === 204) return undefined
@@ -43,31 +40,26 @@ async function parseAuto(res: Response, mode: 'json' | 'text' | 'auto' = 'auto')
     return res.text()
 }
 
+let authRedirectInFlight = false
+
 export function useApi() {
+    const router = useRouter() // ← use the live router instance
+
     const currentServer = inject<Ref<Server | null>>(currentServerInjectionKey)!
     const meta = inject<Ref<ConnectionMeta>>(connectionMetaInjectionKey)!
 
-    // no host building here; use what Connect2Server decided.
     const baseUrl = computed(() => meta.value.apiBase ?? '')
 
     async function apiFetch(path: string, init: ApiInit = {}) {
         if (!currentServer.value) throw new Error('No server selected')
+        if (!baseUrl.value) throw new Error('API base URL is not set')
 
         const headers = new Headers(init.headers || {})
-        // Only set JSON by default if sending a body
-        if (init.body && !headers.has('Content-Type')) {
-            headers.set('Content-Type', 'application/json')
-        }
-        if (meta.value.token && !headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${meta.value.token}`)
-        }
+        if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+        if (meta.value.token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${meta.value.token}`)
 
         const urlPath = path.startsWith('/') ? path : `/${path}`
         const url = `${baseUrl.value}${urlPath}`
-
-        const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT
-        const ctrl = new AbortController()
-        const timer = setTimeout(() => ctrl.abort(new DOMException('Timeout', 'AbortError')), timeoutMs)
 
         const method = (init.method || 'GET').toUpperCase()
         const retry = init.retry ?? 1
@@ -77,47 +69,63 @@ export function useApi() {
         let lastErr: any
 
         for (let attempt = 0; attempt <= retry; attempt++) {
+            const ctrl = new AbortController()
+            const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT
+            const timer = setTimeout(() => ctrl.abort(new DOMException('Timeout', 'AbortError')), timeoutMs)
+
             try {
                 window.appLog?.info('api.request', { url, method, attempt })
                 const res = await fetch(url, { ...init, method, headers, signal: ctrl.signal })
-
                 window.appLog?.info('api.response', { url, status: res.status })
 
                 if (res.status === 401) {
-                    // Token expired/invalid → clear and bounce to login once
+                    // One-time bounce to login
                     try { sessionStorage.removeItem('hb_token') } catch { }
                     meta.value = { ...meta.value, token: undefined }
-                    pushNotification(new Notification('Session expired', 'Please log in again.', 'warning', 6000))
-                    router.push({ name: 'server-selection' })
-                    throw Object.assign(new Error('Unauthorized'), { status: 401 })
+
+                    if (!authRedirectInFlight) {
+                        authRedirectInFlight = true
+                        pushNotification(new Notification('Session expired', 'Please log in again.', 'warning', 6000))
+                        // Prefer named route; adjust name if yours differs
+                        router.push({ name: 'server-selection' }).finally(() => {
+                            // small delay so multiple 401s in flight don’t spam redirects
+                            setTimeout(() => { authRedirectInFlight = false }, 500)
+                        })
+                    }
+
+                    clearTimeout(timer)
+                    const e = Object.assign(new Error('Unauthorized'), { status: 401 })
+                    throw e
                 }
 
                 if (!res.ok) {
-                    // attempt to pull text for better error detail
                     const detail = await res.text().catch(() => res.statusText)
-                    throw Object.assign(new Error(detail || `HTTP ${res.status}`), { status: res.status })
+                    const e = Object.assign(new Error(detail || `HTTP ${res.status}`), { status: res.status })
+                    throw e
                 }
 
                 clearTimeout(timer)
                 return await parseAuto(res, parseMode)
 
             } catch (err: any) {
+                clearTimeout(timer)
                 lastErr = err
-                // Timeout or network? maybe retry if safe
                 const aborted = err?.name === 'AbortError'
                 const networkish = aborted || (err instanceof TypeError && !('status' in err))
                 const canRetry = attempt < retry && (networkish || shouldRetry(method, err))
-                window.appLog?.warn?.('api.request.error', { url, message: String(err?.message || err), attempt, canRetry })
-                if (!canRetry) {
-                    clearTimeout(timer)
-                    throw err
-                }
-                await sleep(retryDelay * Math.pow(2, attempt)) // backoff
-                // loop and try again (controller still valid)
+
+                window.appLog?.warn?.('api.request.error', {
+                    url,
+                    message: String(err?.message || err),
+                    attempt,
+                    willRetry: canRetry
+                })
+
+                if (!canRetry) break
+                await sleep(retryDelay * Math.pow(2, attempt))
             }
         }
 
-        clearTimeout(timer)
         throw lastErr
     }
 

@@ -103,8 +103,6 @@
                     </svg>
                     <span>{{ statusLine }}</span>
                 </div>
-
-
             </div>
         </div>
     </form>
@@ -113,7 +111,6 @@
 
 <script setup lang="ts">
 import { computed, inject, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
@@ -121,9 +118,10 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
+import { useResilientNav } from '../composables/useResilientNav';
 useHeader('Welcome to the 45Studio Share App!');
 
-const router = useRouter();
+const { to } = useResilientNav()
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
 const manualIp = ref('');
 const username = ref('');
@@ -176,7 +174,6 @@ const showPortFwdModal = ref(false);
 function togglePortFwdModal() {
     showPortFwdModal.value = !showPortFwdModal.value;
 }
-
 
 const tryingUpnp = ref(false);
 
@@ -416,7 +413,7 @@ async function connectToServer() {
         }
 
         window.appLog?.info('login.success', { ip });
-        router.push({ name: 'dashboard' });
+        to('dashboard');
     } catch (e: any) {
         window.appLog?.error('login.error', { error: e?.message });
         pushNotification(new Notification('Error', e?.message || 'Login failed', 'error', 8000));
