@@ -95,7 +95,7 @@
                         <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
                             :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
 
-                        <!-- Selected files panel (unchanged except we ensure paths remain under project when restricted) -->
+                        <!-- Selected files panel (we ensure paths remain under project when restricted) -->
                         <div v-if="files.length" class="border rounded bg-accent">
                             <div class="flex items-center gap-2 p-2">
                                 <!-- <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
@@ -184,17 +184,17 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- NEW: Link title (optional) -->
-<div class="flex items-center gap-3 mt-2">
-  <label class="whitespace-nowrap font-semibold">Link title:</label>
-  <input
-    type="text"
-    v-model.trim="linkTitle"
-    class="input-textlike border rounded px-3 py-2 bg-transparent"
-    placeholder="Optional title for the shared link"
-    style="min-width: 20rem"
-  />
-</div>
+                        <!-- Link title (optional) -->
+                        <div class="flex items-center gap-3 mt-2">
+                            <label class="whitespace-nowrap font-semibold">Link title:</label>
+                            <input
+                                type="text"
+                                v-model.trim="linkTitle"
+                                class="input-textlike border rounded px-3 py-2 bg-transparent"
+                                placeholder="Optional title for the shared link"
+                                style="min-width: 20rem"
+                            />
+                        </div>
 
                         <div>
                             <div class="flex items-center gap-3">
@@ -283,7 +283,7 @@ const linkTitle = ref('')
 function chooseProject(dirPath: string) {
     projectBase.value = dirPath
     projectSelected.value = true
-    // Optional: clear previously selected files when switching projects
+    // clear previously selected files when switching projects
     files.value = []
     invalidateLink()
 }
@@ -312,15 +312,15 @@ function clearAll() {
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
-    const bName = (base || '').replace(/\/+$/, '').replace(/^\/+/, ''); // "tank"
-    const clean = (p || '').replace(/^\/+/, '');                         // "tank/foo" or "foo"
-    if (!bName) return '/' + clean;                                      // no project root picked
+    const bName = (base || '').replace(/\/+$/, '').replace(/^\/+/, '');     // "tank"
+    const clean = (p || '').replace(/^\/+/, '');                            // "tank/foo" or "foo"
+    if (!bName) return '/' + clean;                                         // no project root picked
 
     // If the path already starts with the base name, don't duplicate it.
     if (clean === bName || clean.startsWith(bName + '/')) {
-        return '/' + clean;                                                // "/tank/..."
+        return '/' + clean;                                                 // "/tank/..."
     }
-    return '/' + bName + '/' + clean;                                    // "/tank/foo"
+    return '/' + bName + '/' + clean;                                       // "/tank/foo"
 }
 
 
@@ -341,8 +341,7 @@ function onExplorerAdd(paths: string[]) {
     scheduleAutoRegen();
 }
 
-const externalBase = ref<string>(''); // e.g., "https://demo123.collab.45d.io"
-
+const externalBase = ref<string>(''); // e.g., "https://demo123.collab.45d.io" or public ip
 
 function removeFile(i: number) {
     files.value.splice(i, 1)
@@ -382,7 +381,7 @@ const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 // const maxDownloads = ref(5)
 
-// NEW: password state
+// password state
 const protectWithPassword = ref(false)
 const password = ref('')
 const showPassword = ref(false)
@@ -434,13 +433,11 @@ function scheduleAutoRegen() {
     }, 350)
 }
 
-
 // Set preset helper
 function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
     expiresValue.value = v
     expiresUnit.value = u
 }
-
 
 async function generateLink() {
     const body: any = {
@@ -454,7 +451,7 @@ async function generateLink() {
     if (files.value.length === 1) body.filePath = files.value[0];
     else body.filePaths = files.value.slice();
 
-    // NEW: include password if enabled
+    // include password if enabled
     if (protectWithPassword.value && password.value) {
         body.password = password.value
     }
@@ -481,12 +478,10 @@ async function generateLink() {
 
 }
 
-
 onMounted(() => {
     // Initial: land on project selection
     loadProjectChoices()
 })
-
 
 async function copyLink() {
     if (!viewUrl.value) return
@@ -498,12 +493,12 @@ function openInBrowser() {
     window.open(viewUrl.value, '_blank')
 }
 
-function resetToProjectPicker() {
-    // ensure we’re not in the “entire tree” mode, and drop the chosen root
-    showEntireTree.value = false
-    backToRoots()            // show ZFS pools list UI
-    resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
-}
+// function resetToProjectPicker() {
+//     // ensure we’re not in the “entire tree” mode, and drop the chosen root
+//     showEntireTree.value = false
+//     backToRoots()            // show ZFS pools list UI
+//     resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
+// }
 
 function goBack() {
     router.push({ name: 'dashboard' })
@@ -521,6 +516,7 @@ function makeKey(name?: string, user_email?: string, username?: string) {
     const n = (name ?? '').trim().toLowerCase()
     return (u || n) + '|' + e
 }
+
 // Called when the modal emits @apply
 function onApplyUsers(
     users: Array<{ id?: number; username: string; name?: string; user_email?: string; display_color?: string }>
@@ -544,12 +540,11 @@ function onApplyUsers(
         dedup.push(c)
     }
 
-    // REPLACE (not merge): reflect exactly what's selected in the modal
+    // reflect exactly what's selected in the modal
     commenters.value = dedup
 
     invalidateLink()
     scheduleAutoRegen()
 }
-
 
 </script>

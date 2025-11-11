@@ -34,7 +34,6 @@ import GlobalMenu from '../renderer/components/GlobalMenu.vue'
 import { divisionCodeInjectionKey, currentServerInjectionKey, discoveryStateInjectionKey, thisOsInjectionKey, connectionMetaInjectionKey } from '../renderer/keys/injection-keys'
 import type { Server, DivisionType, DiscoveryState, ConnectionMeta } from '../renderer/types'
 import { useServerDiscovery } from '../renderer/composables/useServerDiscovery'
-import { useIpcActions } from '../renderer/composables/useIpcActions'
 import { useThemeFromAlias } from '../renderer/composables/useThemeFromAlias'
 import { useRoute, useRouter } from 'vue-router'
 import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
@@ -53,22 +52,17 @@ provide(currentServerInjectionKey, currentServer)
 provide(divisionCodeInjectionKey, divisionCode)
 provide(thisOsInjectionKey, thisOS)
 
-// discovery (optional to provide globally)
 const { discoveryState } = useServerDiscovery()
 provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 
 const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
 provide(connectionMetaInjectionKey, connectionMeta)
 
-// 🌈 THEME: hook composable and reflect division into provided ref
 const { currentTheme, currentDivision, applyThemeFromAlias } = useThemeFromAlias()
 
 watch(currentDivision, (d) => { divisionCode.value = d as DivisionType }, { immediate: true })
 
 let unregisterIpcListener: (() => void) | null = null
-
-// IPC → router navigation (uses currentServer IP)
-useIpcActions(() => currentServer.value?.ip)
 
 onMounted(() => {
   const isJson = (s: string) => { try { JSON.parse(s); return true } catch { return false } }
@@ -85,7 +79,6 @@ onMounted(() => {
 
   window.electron?.ipcRenderer.on('notification', notificationHandler)
 
-  // IPC → router navigation listener
   unregisterIpcListener = registerIpcActionListener({
     vueRouter: router,
   })

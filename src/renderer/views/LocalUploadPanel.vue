@@ -124,22 +124,24 @@
 										<!-- Status -->
 										<td class="px-4 py-2 border border-default">
 											<span
-  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-  :class="{
-    'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
-    'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
-    'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
-    'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
-    'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
-  }"
->
-  <template v-if="u.status === 'uploading'">
-    {{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
-    <span v-if="u.speed" class="opacity-70">• {{ u.speed }}</span>
-    <span v-if="u.eta" class="opacity-70">• ETA {{ u.eta }}</span>
-  </template>
-  <template v-else>{{ u.status }}</template>
-</span>
+												class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+												:class="{
+													'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
+													'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
+													'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
+													'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
+													'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
+												}"
+												>
+
+												<template v-if="u.status === 'uploading'">
+													{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+													<span v-if="u.speed" class="opacity-70">• {{ u.speed }}</span>
+													<span v-if="u.eta" class="opacity-70">• ETA {{ u.eta }}</span>
+												</template>
+
+												<template v-else>{{ u.status }}</template>
+											</span>
 
 										</td>
 
@@ -252,7 +254,6 @@ async function nextStep() {
 	return startUploads();
 }
 
-
 function goStep(s: 1|2|3) {
 	step.value = s
 	if (s === 3) {
@@ -289,15 +290,13 @@ function formatSize(size: number) {
 	while(v>=1024&&i<u.length-1){ v/=1024; i++ }
 	return `${v.toFixed(v<10&&i>0?1:0)} ${u[i]}`
 }
-// Step 2: destination (just these)
+
+// Step 2: destination
 const cwd = ref<string>('')                 // for the breadcrumb text the picker emits
-const destDir = computed(() => cwd.value) // alias used in UI
+const destDir = computed(() => cwd.value) 	// alias used in UI
 const destFolderRel = ref<string>('')       // FolderPicker v-model
 const canNext = computed(() => !!destFolderRel.value)
-// Optional: mirror selection to cwd (FolderPicker already does it via @changed-cwd)
-function onSelectFolder(rel: string) {
-	destFolderRel.value = rel
-}
+
 
 /** ── Step 3: upload & progress ─────────────────────────── */	
 function finish() {
@@ -311,13 +310,12 @@ function finish() {
 	goBack();
 }
 
-// When you enter step 3, seed the rows once:
+// When user enters step 3, seed the rows once:
 watch(step, (s) => {
 	if (s === 3 && uploads.value.length === 0) {
 		uploads.value = prepareRows()
 	}
 })
-
 
 // ----- TYPES -----
 type UploadRow = {
@@ -410,7 +408,7 @@ const rafState = new Map<string, { p?: number; speed?: string; eta?: string; sch
 				pct = (p.bytesTransferred / row.size) * 100;
 				}
 
-				// Optional: parse from raw line if library sometimes only gives raw text
+				// parse from raw line if library sometimes only gives raw text
 				if (pct === undefined && typeof p.raw === 'string') {
 				const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
 				if (m) pct = parseFloat(m[1]);
@@ -446,14 +444,14 @@ function cancelOne(row: UploadRow) {
 	row.status = 'canceled'
 }
 
-function cancelAll() {
-	for (const r of uploads.value) {
-		if (r.rsyncId && r.status === 'uploading') {
-			window.electron.rsyncCancel(r.rsyncId)
-			r.status = 'canceled'
-		}
-	}
-}
+// function cancelAll() {
+// 	for (const r of uploads.value) {
+// 		if (r.rsyncId && r.status === 'uploading') {
+// 			window.electron.rsyncCancel(r.rsyncId)
+// 			r.status = 'canceled'
+// 		}
+// 	}
+// }
 
 const allDone = computed(() =>
 	uploads.value.length > 0 &&

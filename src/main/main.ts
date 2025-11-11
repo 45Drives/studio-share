@@ -46,8 +46,9 @@ function initLogging(resolvedLogDir: string) {
   });
 }
 
-import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron';
+// requires yarn add electron-updater (not added/implmemented yet)
 // import { autoUpdater } from 'electron-updater';
+import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron';
 import { createLogger, format } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path, { join } from 'path';
@@ -55,9 +56,7 @@ import mdns from 'multicast-dns';
 import os from 'os';
 import fs from 'fs';
 import net from 'net';
-import https from 'https';
 import { Server } from './types';
-import mountSmbPopup from './smbMountPopup';
 import { IPCRouter } from '../../houston-common/houston-common-lib/lib/electronIPC/IPCRouter';
 import { getOS } from './utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -67,7 +66,10 @@ import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { registerCredsIPC } from './creds.ipc';
-import { getPin, isHostPinned, rememberPin } from './certPins'
+import { getPin, rememberPin } from './certPins'
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
+import { NodeSSH } from 'node-ssh';
+
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
 
@@ -117,8 +119,6 @@ export function attachSetupSSE(ip: string) {
 
   es.onopen = () => {
     console.debug(`[SSE] open ${ip} ${url}`);
-    // If you maintain a discoveredServers array elsewhere, you can refresh lastSeen here.
-    // e.g., const ex = discoveredServers.find(s => s.ip === ip); if (ex) ex.lastSeen = Date.now();
   };
 
   // Server sends:  event: status\n data: {"status":"..."}\n\n
@@ -127,15 +127,6 @@ export function attachSetupSSE(ip: string) {
       sseBackoffMs = 2000; // reset backoff on healthy traffic
       const payload = JSON.parse(String(ev.data) || '{}');
       const status = payload?.status ?? 'unknown';
-
-      // Update your model and notify the renderer
-      // Example (adjust to your shape):
-      // const existing = discoveredServers.find(s => s.ip === ip);
-      // if (existing) {
-      //   existing.status = status;
-      //   existing.setupComplete = status === 'complete';
-      //   existing.lastSeen = Date.now();
-      // }
       BrowserWindow.getAllWindows()[0]?.webContents.send('discovered-servers-status', {
         ip,
         status,
@@ -177,7 +168,7 @@ export function detachAllSetupSSE() {
 }
 
 
-// Helper to connect via agent or password-planted key (no install here)
+// Helper to connect via agent or password-planted key
 async function connectForPreflight(host: string, username: string, password: string) {
   const agentSock = getAgentSocket();
   // Try agent
@@ -285,7 +276,6 @@ ipcMain.on('renderer-ready', (e) => {
   e.sender.send('client-ident', clientIdent);
 });
 
-// NEW: request/response path
 ipcMain.handle('get-client-ident', async () => ({ installId }))
 
 app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
@@ -332,31 +322,14 @@ function isPortOpen(ip: string, port: number, timeout = 2000): Promise<boolean> 
 
 // Timeout duration in milliseconds (e.g., 30 seconds)
 const TIMEOUT_DURATION = 30000;
-const serviceType = '_houstonserver._tcp.local'; // Define the service you're looking for
+const serviceType = '_houstonserver._tcp.local';
 
-// function getLocalIP() {
-//   const nets = os.networkInterfaces();
-//   for (const arr of Object.values(nets)) {
-//     for (const cfg of arr || []) {
-//       if (cfg.family === "IPv4" && !cfg.internal) {
-//         const o2 = Number(cfg.address.split('.')[1]);
-//         const isRfc1918 =
-//           cfg.address.startsWith('192.168.') ||
-//           cfg.address.startsWith('10.') ||
-//           (cfg.address.startsWith('172.') && o2 >= 16 && o2 <= 31);
-//         if (isRfc1918) return cfg.address;
-//       }
-//     }
-//   }
-//   return "127.0.0.1";
-// }
 const getLocalIP = () => {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     const something = nets[name];
     if (something) {
       for (const net of something) {
-        // Only return the IPv4 address (ignoring internal/loopback addresses)
         if (net.family === "IPv4" && !net.internal && net.address.startsWith("192")) {
           return net.address;
         }
@@ -385,14 +358,12 @@ function createWindow() {
       webviewTag: true,
       javascript: true,
       backgroundThrottling: false,  // Disable throttling
-      partition: 'persist:your-cookie-partition',
       webSecurity: true,                  // Enforces origin security
       allowRunningInsecureContent: false, // Prevents HTTP inside HTTPS
     }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Only allow URLs we trust (optional but recommended)
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url); // Opens in the user's default browser
     }
@@ -476,13 +447,10 @@ function createWindow() {
     bufferedNotifications = [];
   });
 
-  // ipcMain.on('check-for-updates', () => {
-  //   autoUpdater.checkForUpdatesAndNotify();
-  // });
 
   ipcMain.on('log:info', (_e, payload) => {
-    jsonLogger.info(payload);        // structured JSON
-    log.info(payload.event, payload.data); // human file
+    jsonLogger.info(payload);
+    log.info(payload.event, payload.data);
   });
   ipcMain.on('log:warn', (_e, payload) => {
     jsonLogger.warn(payload);
@@ -501,7 +469,7 @@ function createWindow() {
       send('Probing SSH…', 'probe');
       const res = await installServerDepsRemotely({
         host, username, password,
-        onProgress: ({ step, label }: any) => send(label, step), // bubble up labels
+        onProgress: ({ step, label }: any) => send(label, step),
       });
       send(res.success ? 'Bootstrap complete.' : 'Bootstrap failed.', res.success ? 'done' : 'error');
       return res;
@@ -521,10 +489,8 @@ function createWindow() {
   function notify(message: string) {
     if (!mainWindow || mainWindow.webContents?.isDestroyed()) return;
 
-    // always send to the standard channel
     mainWindow.webContents.send("notification", message);
 
-    // mirror to your IPCRouter bus; if nothing is listening, no harm done
     try {
       IPCRouter.getInstance().send(
         'renderer', 'action',
@@ -548,10 +514,7 @@ function createWindow() {
     }
     else {
       try {
-        // console.debug("[Main] 📩 Raw message received:", data);
-
         const message = JSON.parse(data);
-        // console.debug("[Main] 📩 Parsed message:", message);
         if (message.type === 'addManualIP') {
           const { ip, manuallyAdded } = message as { ip: string; manuallyAdded?: boolean };
 
@@ -577,7 +540,7 @@ function createWindow() {
             // console.debug(`SSH probe ${reachable ? 'succeeded' : 'failed'}`);
           }
 
-          // 3) If _still_ unreachable, bail
+          // 3) If still unreachable, bail
           if (!reachable) {
             return notify(`Error: Unable to reach ${ip} via HTTPS (9090) or SSH (22)`);
           }
@@ -603,7 +566,6 @@ function createWindow() {
             fallbackAdded: false,
           };
 
-          // let existingServer = discoveredServers.find((eServer) => eServer.ip === server.ip && eServer.name === server.name);
           let existingServer = discoveredServers.find(eServer => eServer.ip === server.ip);
 
           try {
@@ -673,11 +635,10 @@ function createWindow() {
   mainWindow.webContents.send('client-ip', getLocalIP());
 
   // Set up mDNS for service discovery
-  const mDNSClient = mdns(); // Correctly call as a function
+  const mDNSClient = mdns();
   mDNSClient.query({ questions: [{ name: serviceType, type: 'PTR' }] });
   
-  // ---- Add these utilities near the top (once) -------------------------------
-  const SERVICE_TYPE = '_houstonserver._tcp.local'; // your existing value
+  const SERVICE_TYPE = '_houstonserver._tcp.local'; 
 
   const norm = (s?: string) =>
     (s || '').toLowerCase().replace(/\.$/, ''); // strip trailing dot
@@ -704,7 +665,7 @@ function createWindow() {
   }
 
   function upsertServerFrom(instanceRaw: string) {
-    const instance = norm(instanceRaw);                   // e.g. "f8x1-rnd._houstonserver._tcp.local"
+    const instance = norm(instanceRaw);
     const srv = srvByInstance.get(instance);
     if (!srv) return;
 
@@ -712,13 +673,12 @@ function createWindow() {
     let ip = txt.ip && isGoodV4(txt.ip) ? txt.ip : null;
 
     if (!ip) {
-      const target = norm(srv.target);                   // e.g. "f8x1-rnd.local"
+      const target = norm(srv.target);
       const a = aByHost.get(target);
       if (a && isGoodV4(a)) ip = a;
     }
 
-    if (!ip) return;                                     // not ready yet
-
+    if (!ip) return;
     // Nice display name from the SRV instance
     const [bare] = instance.split('._');
     const displayName = `${bare}.local`;
@@ -743,7 +703,6 @@ function createWindow() {
       fallbackAdded: false,
     };
 
-    // Optional probe to label 'complete'
     (async () => {
       try {
         const r = await fetch(`http://${s.ip}:9095/setup-status`);
@@ -769,7 +728,6 @@ function createWindow() {
     attachSetupSSE(s.ip);   // initial status comes via SSE immediately
   }
 
-  // ---- Replace your current handler with this --------------------------------
   mDNSClient.on('response', (response) => {
     const items = [...(response.answers || []), ...(response.additionals || [])];
 
@@ -823,52 +781,10 @@ function createWindow() {
     // push the updated list back to the renderer
     mainWindow.webContents.send('discovered-servers', discoveredServers)
   }, 5000)
-  
-
-  async function pollActions(server: Server) {
-    try {
-      const response = await fetch(`http://${server.ip}:9095/actions?client_ip=${getLocalIP()}`);
-      const data = await response.json();
-
-      if (data.action) {
-        // console.debug("New action received:", server, data);
-
-        if (data.action === "mount_samba_client") {
-          mountSmbPopup(data.smb_host, data.smb_share, data.smb_user, data.smb_pass, mainWindow);
-        } else {
-          console.debug("Unknown new actions.", server);
-        }
-      }
-    } catch (error) {
-      // console.error(` [pollActions] fetch failed for ${server.ip}`, error);
-    }
-  }
-
-  IPCRouter.getInstance().addEventListener('mountSambaClient', async (data) => {
-    let result
-    try {
-     result = await mountSmbPopup(data.smb_host, data.smb_share, data.smb_user, data.smb_pass, mainWindow, "silent");
-
-    } catch (e: any) {
-      result = { error: e && e.message ? e.message : "Failed to mount" };
-    }
-    IPCRouter.getInstance().send("renderer", "action", JSON.stringify({
-      action: "mountSmbResult",
-      result: result
-    }))
-  });
-
-  const pollActionInterval = setInterval(async () => {
-    for (let server of discoveredServers) {
-      if ((server as any).manuallyAdded || (server as any).fallbackAdded) continue
-      await pollActions(server)
-    }
-  }, 5000);
 
 
   app.on('window-all-closed', function () {
     ipcMain.removeAllListeners('message');
-    clearInterval(pollActionInterval);
     clearInterval(clearInactiveServerInterval);
     clearInterval(mdnsInterval);
     detachAllSetupSSE();
@@ -906,7 +822,7 @@ app.whenReady().then(() => {
     level: 'info',
     format: format.combine(
       format.timestamp(),
-      // <-- this filter will DROP any record whose message includes your TLS warning
+      // <-- this filter will DROP any record whose message includes the TLS warning
       format((info) => {
         if (
           typeof info.message === 'string' &&
@@ -1024,7 +940,6 @@ app.whenReady().then(() => {
   // autoUpdater.checkForUpdatesAndNotify();
   // ─────────────────────────────────────────────────────────────────────────────
 
-
   ipcMain.handle("is-dev", async () => process.env.NODE_ENV === 'development');
 
   ipcMain.handle('dialog:openFolder', async () => {
@@ -1073,51 +988,96 @@ ipcMain.handle('dialog:pickFolder', async () => {
   });
 });
 
-
 // upload file (streamed)
 // Track inflight streams so we can cancel
 const inflightUploads = new Map<string, fs.ReadStream>()
 
-ipcMain.on('upload-file', async (event, { filePath, destDir, id }) => {
-  try {
-    const fileName = path.basename(filePath)
-    const url = `http://yourserver:9095/api/upload?dest=${encodeURIComponent(destDir)}&name=${encodeURIComponent(fileName)}`
-    const stat = fs.statSync(filePath)
-    const total = stat.size
-    let sent = 0
+type UploadTarget = {
+  host: string            // IP or hostname, e.g. "192.168.1.50" or "server.local"
+  port?: number           // defaults to 9095
+  protocol?: 'http' | 'https' // defaults to 'http' (bootstrap API is typically http)
+}
 
-    const stream = fs.createReadStream(filePath)
-    inflightUploads.set(id, stream)
+ipcMain.on(
+  'upload-file',
+  async (
+    event,
+    {
+      filePath,
+      destDir,
+      id,
+      target,
+    }: {
+      filePath: string
+      destDir: string
+      id: string
+      target: UploadTarget
+    }
+  ) => {
+    try {
+      if (!target || !target.host) {
+        event.sender.send(`upload-done-${id}`, { error: 'missing upload target host' })
+        return
+      }
 
-    stream.on('data', (chunk) => {
-      sent += chunk.length
-      event.sender.send(`upload-progress-${id}`, Math.floor((sent / total) * 100))
-    })
-    stream.on('error', (err) => {
-      event.sender.send(`upload-done-${id}`, { error: err?.message || 'stream error' })
+      const protocol = target.protocol ?? 'http'
+      const port = target.port ?? 9095
+      const base = `${protocol}://${target.host}:${port}`
+
+      const fileName = path.basename(filePath)
+      const stat = fs.statSync(filePath)
+      const total = stat.size
+
+      const url =
+        `${base}/api/upload` +
+        `?dest=${encodeURIComponent(destDir)}` +
+        `&name=${encodeURIComponent(fileName)}`
+
+      let sent = 0
+      const stream = fs.createReadStream(filePath)
+      inflightUploads.set(id, stream)
+
+      stream.on('data', (chunk) => {
+        sent += chunk.length
+        event.sender.send(`upload-progress-${id}`, Math.floor((sent / total) * 100))
+      })
+      stream.on('error', (err) => {
+        event.sender.send(`upload-done-${id}`, { error: err?.message || 'stream error' })
+        inflightUploads.delete(id)
+      })
+
+      // Some servers prefer a Content-Length for streamed bodies; provide it.
+      const res = await fetch(url, {
+        method: 'POST',
+        body: stream as any,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': String(total),
+        },
+      })
+
+      // Try to parse JSON; if not JSON, return a minimal shape
+      let json: any = {}
+      try { json = await res.json() } catch { json = { ok: res.ok, status: res.status } }
+
+      event.sender.send(`upload-done-${id}`, json)
+    } catch (err: any) {
+      event.sender.send(`upload-done-${id}`, { error: err?.message || String(err) })
+    } finally {
       inflightUploads.delete(id)
-    })
-
-    const res = await fetch(url, { method: 'POST', body: stream as any })
-    const json = await res.json().catch(() => ({}))
-    event.sender.send(`upload-done-${id}`, json)
-  } catch (err: any) {
-    event.sender.send(`upload-done-${id}`, { error: err?.message || String(err) })
-  } finally {
-    inflightUploads.delete(id)
+    }
   }
-})
+)
 
 ipcMain.on('upload:file:cancel', (event, { id }) => {
   const s = inflightUploads.get(id)
   if (s) {
-    try { s.destroy(new Error('canceled')) } catch {}
+    try { s.destroy(new Error('canceled')) } catch { }
     inflightUploads.delete(id)
   }
   event.sender.send(`upload-done-${id}`, { error: 'canceled' })
 })
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
-import { NodeSSH } from 'node-ssh';
+
 
 type RsyncStartOpts = {
   id: string
@@ -1240,7 +1200,7 @@ app.on('window-all-closed', () => {
     try { es.close(); } catch { }
   }
   setupStreams.clear();
-  //  This ensures your app fully quits on Windows
+  //  This ensures the app fully quits on Windows
   if (process.platform !== 'darwin') {
     app.quit();
   }

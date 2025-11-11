@@ -150,10 +150,9 @@
 
 							<!-- Created -->
 							<td class="p-2 border border-default">
-  <div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
-  <div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
-</td>
-
+								<div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
+								<div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
+							</td>
 
 							<!-- Actions -->
 							<td class="p-2 border border-default">
@@ -182,11 +181,11 @@
 
 	<!--  /////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
 	<LinkDetailsModal
-  v-model="showModal"
-  :link="current"
-  :apiFetch="apiFetch"
-  @updated="applyLinkPatch"
-/>
+		v-model="showModal"
+		:link="current"
+		:apiFetch="apiFetch"
+		@updated="applyLinkPatch"
+	/>
 </template>
 	
 <script setup lang="ts">
@@ -196,7 +195,6 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 
-	
 	
 const { apiFetch } = useApi()
 async function refresh() {
@@ -364,11 +362,6 @@ async function openDetails(it: LinkItem) {
   showModal.value = true
 }
 
-
-
-function closeModal() {
-  showModal.value = false
-}
 function applyLinkPatch(p: Partial<LinkItem> & { id: LinkItem['id'] }) {
   if (!p?.id) return
   // patch current
@@ -454,6 +447,7 @@ async function applyCustom(it: LinkItem) {
 	it.expiresAt = newExp
 	closeCustom(it)
 }
+
 function toDateUTC(ts: unknown): Date | null {
   if (ts == null) return null;
 
@@ -482,6 +476,7 @@ function toDateUTC(ts: unknown): Date | null {
 }
 
 const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
   const d = toDateUTC(ts);
   if (!d) return '—';
@@ -489,7 +484,6 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 }
 
 async function makeNever(it: LinkItem) {
-
 	// Clear expiry so the link never expires
 	await patchLink(it.id, { expiresAtMs: null })
 	it.expiresAt = null

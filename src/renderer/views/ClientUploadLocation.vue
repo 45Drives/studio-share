@@ -8,29 +8,21 @@
         </header>
   
         <!-- DESTINATION PICKER -->
-        <!-- <FolderPicker
-        v-model="destFolderRel"
-        :apiFetch="apiFetch"
-        useCase="upload"
-        title="Choose destination on server"
-        subtitle="Pick the folder on the server where these files will be uploaded."
-        @changed-cwd="val => (cwd = val)"
-      /> -->
-      <IconMode
-  :key="cwd"
-  :apiFetch="apiFetch"
-  :selected="internalSelected"
-  :selectedVersion="selectedVersion"
-  :getFilesFor="getFilesForFolder"
-  :relPath="rootRel"
-  :depth="0"
-  v-model:selectedFolder="destFolder"
-  useCase="upload"
-  :isRoot="true"
-  @select-folder="onSelectFolder"
-  @toggle="togglePath"
-  @navigate="navigateTo"
-/>
+        <IconMode
+          :key="cwd"
+          :apiFetch="apiFetch"
+          :selected="internalSelected"
+          :selectedVersion="selectedVersion"
+          :getFilesFor="getFilesForFolder"
+          :relPath="rootRel"
+          :depth="0"
+          v-model:selectedFolder="destFolderRel"
+          useCase="upload"
+          :isRoot="true"
+          @select-folder="onSelectFolder"
+          @toggle="togglePath"
+          @navigate="navigateTo"
+        />
   
         <!-- OPTIONS -->
         <section class="flex flex-col gap-4">
@@ -97,9 +89,8 @@
 </template>
   
   <script setup lang="ts">
-  import { ref, computed, inject, Ref } from 'vue'
+  import { ref, computed } from 'vue'
   import { useApi } from '../composables/useApi'
-  import { connectionMetaInjectionKey } from '../keys/injection-keys'
   import IconMode from '../components/IconMode.vue'
   
   // --- Injections / API ---
@@ -113,11 +104,11 @@
   const expandCache = new Map<string, string[]>()
   const destFolderRel = ref<string>('')
   
-  const selectedAbs = computed(() => {
-    if (!destFolderRel.value) return ''
-    const abs = '/' + destFolderRel.value.replace(/^\/+/, '')
-    return abs.endsWith('/') ? abs : abs + '/'
-  })
+  // const selectedAbs = computed(() => {
+  //   if (!destFolderRel.value) return ''
+  //   const abs = '/' + destFolderRel.value.replace(/^\/+/, '')
+  //   return abs.endsWith('/') ? abs : abs + '/'
+  // })
   
   async function getFilesForFolder(folder: string): Promise<string[]> {
     if (expandCache.has(folder)) return expandCache.get(folder)!
@@ -129,15 +120,6 @@
     } catch {
       expandCache.set(folder, [])
       return []
-    }
-  }
-  
-  function onChoose(pick: { path: string; isDir: boolean }) {
-    if (pick.isDir) {
-      cwd.value = pick.path.endsWith('/') ? pick.path : pick.path + '/'
-    } else {
-      const parent = pick.path.replace(/\/[^/]+$/, '') || '/'
-      cwd.value = parent.endsWith('/') ? parent : parent + '/'
     }
   }
   
@@ -153,15 +135,13 @@
   
   function clearTreeCache() { expandCache.clear(); selectedVersion.value++ }
   
-  const canGoUp = computed(() => cwd.value && cwd.value !== '/' && cwd.value !== '')
-  function parentPath(absLike: string): string {
-    const p = (absLike || '/').replace(/\/+$/, '')
-    if (!p || p === '/') return '/'
-    const parent = p.replace(/\/[^/]*$/, '') || '/'
-    return parent.endsWith('/') ? parent : parent + '/'
-  }
-  function goUpOne() { cwd.value = parentPath(cwd.value || '/') }
-  
+  // function parentPath(absLike: string): string {
+  //   const p = (absLike || '/').replace(/\/+$/, '')
+  //   if (!p || p === '/') return '/'
+  //   const parent = p.replace(/\/[^/]*$/, '') || '/'
+  //   return parent.endsWith('/') ? parent : parent + '/'
+  // }
+
   function onSelectFolder(rel: string) {
     destFolderRel.value = rel
     const abs = '/' + rel.replace(/^\/+/, '')
@@ -195,7 +175,7 @@
       }
       if (password.value) body.password = password.value
   
-      // POST to your API that creates a magic link for a folder
+      // POST to API that creates a magic link for a folder
       // Expected response shape: { url: string, code?: string, expiresAt?: string }
       const resp = await apiFetch('/api/create-upload-link', {
         method: 'POST',
@@ -237,7 +217,6 @@
     if (!iso) return ''
     try { return new Date(iso).toLocaleString() } catch { return iso }
   }
-
   
   </script>
   

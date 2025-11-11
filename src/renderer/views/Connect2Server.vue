@@ -11,16 +11,23 @@
                         class="text-primary">houston-broadcaster</b>
                     service is enabled (It should be by default).<br /> If it is not, manual connection is required.
                 </span>
-                <div class="flex flex-row w-full items-center text-center gap-2 mt-2">
+                <div class="flex flex-col w-full items-center text-center gap-2 mt-2">
                     <span class="text-danger text-base semibold">
                         <b>ALSO:</b> To allow sharing links outside your network, <b>port
                             443
                             (HTTPS)</b> <u>must</u> be open or forwarded from your router.
-
                     </span>
-                    <button type="button" @click.prevent="togglePortFwdModal" class="btn btn-danger w-fit text-base">
-                        Click here to find out how.
-                    </button>
+                    <div class="button-group-row">
+                        <button type="button" @click.prevent="togglePortFwdModal"
+                            class="btn btn-primary w-fit text-base">
+                            Click here to find out how.
+                        </button>
+                        <button type="button" @click.prevent="tryAutomaticPortMapping" :title="`Uses UPNP (Universal Plug N' Play) to automatically open necessary ports on router (not all routers support this).`"
+                            class="btn btn-danger w-fit text-base">
+                            Port Forward with UPNP<br/>**EXPERIMENTAL - USE AT OWN RISK**
+                        </button>
+                    </div>
+
                 </div>
 
             </div>
@@ -93,7 +100,6 @@
 <script setup lang="ts">
 import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { IPCRouter } from '@45drives/houston-common-lib';
 import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
@@ -156,19 +162,61 @@ function togglePortFwdModal() {
     showPortFwdModal.value = !showPortFwdModal.value;
 }
 
+
+const tryingUpnp = ref(false);
+
+async function tryAutomaticPortMapping() {
+    // Must be called after you’ve resolved apiBase + token (your connect flow already does this).
+    const token = connectionMeta.value?.token;
+    const apiBase = connectionMeta.value?.apiBase || '';
+    if (!token) {
+        pushNotification(new Notification('Error', 'Please log in first.', 'error', 7000));
+        return;
+    }
+
+    tryingUpnp.value = true;
+    statusLine.value = 'Attempting UPnP/NAT-PMP mapping (experimental)…';
+    try {
+        const r = await fetch(`${apiBase}/api/portmap`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            // You can flip also80 to true if you want the script to attempt port 80 too.
+            body: JSON.stringify({ also80: false })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            const det = data.details;
+            const via = det?.tool ? ` via ${det.tool}` : '';
+            pushNotification(new Notification('Success', `Port 443 mapped${via}.`, 'success', 8000));
+        } else {
+            const reason = data?.details?.reason || data?.error || 'Unknown reason';
+            pushNotification(new Notification('Notice', `Couldn’t create port mapping (${reason}).`, 'warning', 10000));
+        }
+        if (import.meta.env.DEV && data?.raw?.stdout) {
+            console.debug('[portmap] stdout:', data.raw.stdout);
+            console.debug('[portmap] stderr:', data.raw.stderr);
+        }
+    } catch (err: any) {
+        pushNotification(new Notification('Error', err?.message || 'UPnP/NAT-PMP request failed', 'error', 10000));
+    } finally {
+        statusLine.value = '';
+        tryingUpnp.value = false;
+    }
+}
+
 function listenBootstrap(id: string) {
     const handler = (_: any, msg: any) => {
         if (msg.id !== id) return;
         if (msg.label) statusLine.value = msg.label;
-        // If your bootstrap progress emits phases, you can also refine:
-        // isBootstrapping.value = !!(msg.phase || msg.label);
     };
     window.electron?.ipcRenderer.on('bootstrap-progress', handler);
     return () => window.electron?.ipcRenderer.removeListener('bootstrap-progress', handler);
 }
 
 async function connectToServer() {
-    // quick validation (don’t enter busy state if we’re about to bail)
     if (!selectedServer.value && !manualIp.value) {
         pushNotification(new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000))
         return
@@ -182,7 +230,7 @@ async function connectToServer() {
         return
     }
 
-    isBusy.value = true; // disable UI until we’re done
+    isBusy.value = true;
     statusLine.value = '';
 
     try {
@@ -246,7 +294,7 @@ async function connectToServer() {
 
         // Decide whether to bootstrap:
         // - If preflight forced it (legacy/no pkg) → bootstrap
-        // - Else only bootstrap when API isn’t healthy (old behavior)
+        // - Else only bootstrap when API isn’t healthy
         if (mustBootstrap || !healthy) {
             const id = crypto.randomUUID();
             unlistenProgress?.();

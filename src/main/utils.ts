@@ -93,71 +93,11 @@ export function getAppPath() {
   return basePath;
 }
 
-export function getMountSmbScript() {
-  if (getOS() === "win") {
-    if (isDev()) {
-
-      return path.join(getAppPath(), "mount_smb.bat");
-    } else {
-
-      return path.join(getAppPath(), "static", "mount_smb.bat");
-    }
-  } else if (getOS() === "mac") {
-    return path.join(getAppPath(), "mount_smb_mac.sh");
-  } else {
-    return path.join(getAppPath(), "mount_smb_lin.sh")
-  }
-}
 
 export function isDev() {
   return process.env.NODE_ENV === 'development';
 }
 
-export function getSmbTargetFromSmbTarget(target: string) {
-  // console.debug('[getSmbTargetFromSmbTarget] raw target:', target);
-  // let targetPath = "/tank/" + target.split(":")[1];
-  // console.debug("[getSmbTargetFromSmbTarget] targetPath", targetPath)
-  let [smbHost, smbShare] = target.split(":");
-  // console.debug("[getSmbTargetFromSmbTarget] smbHost", smbHost)
-  // console.debug("[getSmbTargetFromSmbTarget] smbShare before", smbShare)
-  smbShare = smbShare.split("/")[0]; 
-  // console.debug("[getSmbTargetFromSmbTarget] smbShare after", smbShare)
-  const result = target.replace(smbHost + ":" + smbShare, "");
-  // console.debug("[getSmbTargetFromSmbTarget] result", result)
-  return result;
-}
-
-export function getSSHTargetFromSmbTarget(target: string) {
-  return target.replace(":", ":'\"\"/tank/") + "\"\"'";
-}
-
-export function getSmbTargetFromSSHTarget(target: string) {
-  return target.replace(":/tank/", ":");
-}
-
-export function reconstructFullTarget(scriptPath: string): string {
-  try {
-    const content = fs.readFileSync(scriptPath, 'utf-8');
-
-    const hostMatch = content.match(/SMB_HOST=['"]([^'"]+)['"]/);
-    const shareMatch = content.match(/SMB_SHARE=['"]([^'"]+)['"]/);
-    const targetMatch = content.match(/TARGET=['"]([^'"]+)['"]/);
-
-    if (!hostMatch || !shareMatch || !targetMatch) {
-      console.warn(" Missing SMB_HOST, SMB_SHARE, or TARGET in script:", scriptPath);
-      return '';
-    }
-
-    const smbHost = hostMatch[1];
-    const smbShare = shareMatch[1];
-    const targetPath = targetMatch[1].replace(/^\/+/, ''); // Remove leading slashes
-
-    return `${smbHost}:${smbShare}/${targetPath}`;
-  } catch (err) {
-    console.error(" Failed to read or parse script:", err);
-    return '';
-  }
-}
 
 export function getScp() {
   const sshKeyPath = getSSHKey();
@@ -183,34 +123,6 @@ export function getNoneQuotedScp() {
   const scpPath = "scp";
   const scp = `${scpPath} -o StrictHostKeyChecking=no -o PasswordAuthentication=no -i "${sshKeyPath}" -r`
   return scp;
-}
-
-export function formatDateForTask(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-}
-
-export function formatDateForTask2(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 function slugHost(h) {

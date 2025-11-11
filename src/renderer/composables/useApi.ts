@@ -47,7 +47,7 @@ export function useApi() {
     const currentServer = inject<Ref<Server | null>>(currentServerInjectionKey)!
     const meta = inject<Ref<ConnectionMeta>>(connectionMetaInjectionKey)!
 
-    // IMPORTANT: no host building here; use what Connect2Server decided.
+    // no host building here; use what Connect2Server decided.
     const baseUrl = computed(() => meta.value.apiBase ?? '')
 
     async function apiFetch(path: string, init: ApiInit = {}) {

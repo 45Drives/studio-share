@@ -98,7 +98,7 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
 
     /**
      * Main entry: load either ZFS roots or '/' depending on showEntireTree
-     * Call this on mount and whenever the checkbox changes.
+     * Calls on mount and whenever the checkbox changes.
      */
     async function loadProjectChoices() {
         detecting.value = true

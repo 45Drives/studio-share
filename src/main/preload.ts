@@ -52,9 +52,6 @@ export type ElectronApi = {
   pickFiles: () => Promise<Array<{ path: string; name: string; size: number }>>
   pickFolder: () => Promise<Array<{ path: string; name: string; size: number }>>
 
-  
- 
-
   // New: rsync over SSH
   rsyncStart: (
     opts: RsyncOpts,
@@ -83,11 +80,6 @@ const api: ElectronApi = {
   // local picks
   pickFiles: () => ipcRenderer.invoke('dialog:pickFiles'),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
-
-  /** ========== Legacy HTTP upload path (optional) ========== */
-  // Keep these only if your main.ts still implements 'upload:file' with progress channels.
-
- 
 
 
   /** ========== rsync over SSH ========== */

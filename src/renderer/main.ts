@@ -23,7 +23,7 @@ console.error = (...args: any[]) => {
 import { IPCRouter } from '@45drives/houston-common-lib'
 IPCRouter.initRenderer()
 
-import { createApp, onMounted } from 'vue';
+import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import "@45drives/houston-common-css/src/index.css"; 
 import "@45drives/houston-common-ui/style.css"; 

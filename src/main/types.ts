@@ -20,7 +20,6 @@ export interface Server {
 
 export type DivisionType = 'default' | 'enterprise' | 'homelab' | 'professional' | 'studio';
 
-
 export type SavedServer = {
   id: string;
   host: string;
@@ -28,5 +27,4 @@ export type SavedServer = {
   username: string;
   favorite?: boolean;
   lastUsedAt?: number;
-  // future: token?: string;
 };

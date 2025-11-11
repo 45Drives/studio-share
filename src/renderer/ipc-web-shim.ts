@@ -4,8 +4,8 @@ type Listener = (event: any, payload: any) => void;
     if (typeof window === 'undefined') return;
     if ((window as any).electron) return; // Electron present → do nothing
 
-    // You can centralize your API base here. If UI & API are on the same origin,
-    // leave it as '' so fetch('/api/...') is same-origin (no CORS headaches).
+    // Centralizes your API base here. If UI & API are on the same origin,
+    // leave as '' so fetch('/api/...') is same-origin (no CORS headaches).
     const API_BASE = (window as any).__API_BASE__ || '';
 
     // Minimal EventEmitter
@@ -32,7 +32,7 @@ type Listener = (event: any, payload: any) => void;
             // Specific typed events (optional – you can also stick to 'message')
             sse.addEventListener('hello', () => { /* ignore */ });
 
-            // If your server uses `ssePush({type:'discovered-servers', payload:[...]})`
+            // If server uses `ssePush({type:'discovered-servers', payload:[...]})`
             sse.addEventListener('discovered-servers', (e: MessageEvent) => {
                 try { emit('discovered-servers', JSON.parse((e as any).data)); } catch { }
             });
@@ -53,8 +53,7 @@ type Listener = (event: any, payload: any) => void;
         removeListener(channel: string, cb: Listener) {
             listeners.get(channel)?.delete(cb);
         },
-        // Your code calls: invoke('scan-network-fallback')
-        // Map that to the HTTP endpoints you already have.
+
         async invoke(channel: string, ...args: any[]) {
             switch (channel) {
                 case 'scan-network-fallback': {
@@ -65,7 +64,6 @@ type Listener = (event: any, payload: any) => void;
                     return json.servers || [];
                 }
                 default:
-                    // For any other invoke you add later, support a generic POST /ipc
                     const r = await fetch(`${API_BASE}/ipc/${encodeURIComponent(channel)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -75,8 +73,7 @@ type Listener = (event: any, payload: any) => void;
                     return r.json();
             }
         },
-        // Your code does: send('renderer-ready')
-        // We can no-op or notify the server if you want telemetry.
+
         send(channel: string, payload?: any) {
             if (channel === 'renderer-ready') return;
             fetch(`${API_BASE}/ipc/${encodeURIComponent(channel)}`, {

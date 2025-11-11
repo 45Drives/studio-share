@@ -71,18 +71,17 @@
 							</button>
 						</div>
 						<div class="flex items-center gap-3 mt-2">
-  <label class="whitespace-nowrap font-semibold">Link title:</label>
-  <input
-    type="text"
-    v-model.trim="linkTitle"
-    class="input-textlike border rounded px-3 py-2 bg-transparent"
-    placeholder="Optional title for the shared link"
-    style="min-width: 20rem"
-  />
-</div>
+							<label class="whitespace-nowrap font-semibold">Link title:</label>
+							<input
+								type="text"
+								v-model.trim="linkTitle"
+								class="input-textlike border rounded px-3 py-2 bg-transparent"
+								placeholder="Optional title for the shared link"
+								style="min-width: 20rem"
+							/>
+						</div>
 					</div>
 				</div>
-
 
 				<!-- ACTIONS -->
 				<template #footer>
@@ -92,25 +91,23 @@
 								Reset
 							</button>
 							<button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
-                        title="Create a magic link with the selected options">
-                        Generate magic link
-                    </button>
+								title="Create a magic link with the selected options">
+								Generate magic link
+							</button>
 						</div>
 
 						<!-- RESULT -->
-
 						<div v-if="result" class="flex flex-col">
- 
-                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
-                        when protection is enabled.</p>
-                    <div v-if="result.url" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
-                        <code>{{ result.url }}</code>
-                        <div class="button-group-row">
-                            <button class="btn btn-secondary" @click="copyLink">Copy</button>
-                            <button class="btn btn-primary" @click="openInBrowser">Open</button>
-                        </div>
-                    </div>
-                </div>
+							<p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
+								when protection is enabled.</p>
+							<div v-if="result.url" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
+								<code>{{ result.url }}</code>
+								<div class="button-group-row">
+									<button class="btn btn-secondary" @click="copyLink">Copy</button>
+									<button class="btn btn-primary" @click="openInBrowser">Open</button>
+								</div>
+							</div>
+						</div>
 					</div>
 				</template>
 			</CardContainer>
@@ -125,10 +122,9 @@
 
 
 <script setup lang="ts">
-import { ref, computed, inject, Ref, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
-import { connectionMetaInjectionKey } from '../keys/injection-keys'
 import FolderPicker from '../components/FolderPicker.vue'
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
@@ -143,7 +139,7 @@ const { apiFetch } = useApi()
 const cwd = ref<string>('')                 // purely for the breadcrumb text
 const destFolderRel = ref<string>('')       // FolderPicker v-model
 
-// Share options (unchanged)
+// Share options
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 const protectWithPassword = ref(false)
@@ -160,7 +156,7 @@ const prettyExpiry = computed(() => {
 })
 
 
-// Link generation (unchanged)
+// Link generation
 const loading = ref(false)
 const error = ref<string | null>(null)
 const result = ref<null | { url: string; code?: string; password?: boolean; expiresAt?: string }>(null)
@@ -200,7 +196,6 @@ function resetAll() {
 	error.value = null
 }
 
-
 async function copyLink() {
     if (!result.value) return
     await navigator.clipboard.writeText(result.value.url)
@@ -210,6 +205,5 @@ async function copyLink() {
 function openInBrowser() {
     window.open(result.value?.url, '_blank')
 }
-function fmtDate(iso?: string) { if (!iso) return ''; try { return new Date(iso).toLocaleString() } catch { return iso } }
 function goBack() { router.push({ name: 'dashboard' }) }
 </script>

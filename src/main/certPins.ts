@@ -1,4 +1,3 @@
-// src/main/security/certPins.ts
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';

@@ -37,7 +37,7 @@ function applyThemeFromAlias(aliasStyle?: string) {
   currentTheme.value = aliasToTheme[normalized] ?? 'theme-studio'
 }
 
-/** Directly set a theme (if you ever need to switch by hand) */
+/** Directly set a theme */
 function setTheme(theme: Theme) {
   currentTheme.value = theme
 }
@@ -47,6 +47,6 @@ export function useThemeFromAlias() {
     currentTheme,         // reactive (theme-homelab|theme-studio|theme-professional|theme-default)
     currentDivision,      // reactive (homelab|studio|professional|default)
     applyThemeFromAlias,  // call with aliasStyle from server info
-    setTheme,             // optional manual setter
+    setTheme,             // manual setter
   }
 }

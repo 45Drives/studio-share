@@ -9,7 +9,6 @@ export function useHeader(text: string, opts: { clearOnLeave?: boolean } = { cle
     onMounted(apply)
     onActivated(apply)
 
-    // Only clear if you *really* want to show a default between views.
     if (opts.clearOnLeave) {
         onDeactivated(clearHeaderTitle)
     }

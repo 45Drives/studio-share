@@ -91,9 +91,6 @@ export interface ElectronApi {
   pickFiles: () => Promise<Array<{ path: string; name: string; size: number }>>
   pickFolder: () => Promise<Array<{ path: string; name: string; size: number }>>
 
-
-
-
   /** -------- rsync over SSH (recommended path) -------- */
   rsyncStart: (
     opts: RsyncOpts,
