@@ -159,13 +159,13 @@
 
                                 <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                             </div>
-                            <!-- <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Link Network Availability:</label>
+                            <div class="flex items-center gap-3">
+                                <label class="whitespace-nowrap font-semibold">Link Availability:</label>
                                 <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
                                     <input type="checkbox" v-model="usePublicBase" />
-                                    <span>{{ usePublicBase ? 'External Internet Access' : 'LAN Access' }}</span>
+                                    <span>{{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}</span>
                                 </label>
-                            </div> -->
+                            </div>
 
                             <!-- Password (optional) -->
                             <div class="flex items-center gap-3">
@@ -261,7 +261,8 @@ import { router } from '../../app/routes'
 import { useProjectChoices } from '../composables/useProjectChoices'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import type { Commenter } from '../typings/electron'
-
+import { useHeader } from '../composables/useHeader'
+useHeader('Select Files to Share');
 const { apiFetch } = useApi()
 
 // ================== Project selection state ==================
@@ -270,8 +271,7 @@ const showEntireTree = ref(false)
 const projectBase = ref<string>('')
 const {
     detecting, detectError, projectRoots, projectDirs,
-    browseMode, currentRoot, browsePath, canGoUp,
-    listDirs, backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
+    browseMode, browsePath, canGoUp,  backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
 } = useProjectChoices(showEntireTree)
 const commenters = ref<Commenter[]>([])
 const noCommentAccess = ref(false)
@@ -308,7 +308,7 @@ function clearAll() {
     invalidateLink()
 }
 
-// const usePublicBase = ref(true);
+const usePublicBase = ref(true);
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
@@ -443,7 +443,7 @@ async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
-        externalBase: externalBase.value || undefined,
+        baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
         title: linkTitle.value || undefined,
         // baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
     };
@@ -519,7 +519,7 @@ function makeKey(name?: string, user_email?: string, username?: string) {
 
 // Called when the modal emits @apply
 function onApplyUsers(
-    users: Array<{ id?: number; username: string; name?: string; user_email?: string; display_color?: string }>
+    users: any[]
 ) {
     // Normalize the selection coming back from the modal
     const next = users.map(u => {

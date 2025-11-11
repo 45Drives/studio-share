@@ -129,7 +129,6 @@ import FolderPicker from '../components/FolderPicker.vue'
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
-
 useHeader('Upload Files via Link')
 
 // --- Injections / API ---

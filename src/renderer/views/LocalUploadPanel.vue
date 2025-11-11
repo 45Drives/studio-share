@@ -214,7 +214,6 @@ import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { router } from '../../app/routes'
-
 useHeader('Upload Files')
 
 type LocalFile = { path: string; name: string; size: number }

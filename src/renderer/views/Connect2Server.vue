@@ -1,6 +1,6 @@
 <template>
-    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-16" :aria-busy="isBusy">
-        <div class="grid grid-cols-2 gap-10 text-2xl w-9/12 mx-auto">
+    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-16" :aria-busy="anyBusy">
+        <div class="grid grid-cols-2 gap-6 text-2xl w-9/12 mx-auto">
             <div class="col-span-2 mx-auto text-3xl">
                 <span>Share files with your collaborators easily through secure links.<br /> Log into your server to
                     begin.</span>
@@ -11,31 +11,12 @@
                         class="text-primary">houston-broadcaster</b>
                     service is enabled (It should be by default).<br /> If it is not, manual connection is required.
                 </span>
-                <div class="flex flex-col w-full items-center text-center gap-2 mt-2">
-                    <span class="text-danger text-base semibold">
-                        <b>ALSO:</b> To allow sharing links outside your network, <b>port
-                            443
-                            (HTTPS)</b> <u>must</u> be open or forwarded from your router.
-                    </span>
-                    <div class="button-group-row">
-                        <button type="button" @click.prevent="togglePortFwdModal"
-                            class="btn btn-primary w-fit text-base">
-                            Click here to find out how.
-                        </button>
-                        <button type="button" @click.prevent="tryAutomaticPortMapping" :title="`Uses UPNP (Universal Plug N' Play) to automatically open necessary ports on router (not all routers support this).`"
-                            class="btn btn-danger w-fit text-base">
-                            Port Forward with UPNP<br/>**EXPERIMENTAL - USE AT OWN RISK**
-                        </button>
-                    </div>
-
-                </div>
-
             </div>
 
             <CardContainer class="col-span-1 bg-accent border-default rounded-md text-bold shadow-xl">
                 <div class="flex flex-col text-left">
                     <span>Select a server to connect to:</span>
-                    <select v-model="selectedServerIp" :disabled="isBusy || manualIp !== ''"
+                    <select v-model="selectedServerIp" :disabled="anyBusy || manualIp !== ''"
                         class="bg-default h-[3rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
                         <option v-for="server in discoveryState.servers" :key="server.ip" :value="server.ip">
                             {{ server.name }} ({{ server.ip }})
@@ -45,7 +26,7 @@
                 <span class="text-center items-center justify-self-center"> -- OR -- </span>
                 <div class="flex flex-col text-left">
                     <span>Connect to server manually via IP Address:</span>
-                    <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="isBusy"
+                    <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
                         class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
                 </div>
             </CardContainer>
@@ -53,16 +34,16 @@
             <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left shadow-xl">
                 <div class="flex flex-col text-bold">
                     <span>Username:</span>
-                    <input v-model="username" type="text" placeholder="root" :disabled="isBusy"
+                    <input v-model="username" type="text" placeholder="root" :disabled="anyBusy"
                         class="text-default input-textlike px-4 py-1 rounded text-xl w-full border" />
                     <span class="text-center items-center justify-self-center"><br /></span>
                     <span>Password:</span>
                     <div class="w-full relative">
                         <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
-                            :disabled="isBusy"
+                            :disabled="anyBusy"
                             class="text-default input-textlike px-4 py-1 rounded text-xl w-full border"
                             placeholder="••••••••" />
-                        <button type="button" @click="togglePassword" :disabled="isBusy"
+                        <button type="button" @click="togglePassword" :disabled="anyBusy"
                             class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
                             <EyeIcon v-if="!showPassword" class="w-5 h-5" />
                             <EyeSlashIcon v-else class="w-5 h-5" />
@@ -71,19 +52,50 @@
                 </div>
             </CardContainer>
 
-            <div class="col-span-2 items-center flex flex-col">
-                <button type="submit"
-                    class="btn btn-secondary w-60 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    :disabled="isBusy">
-                    <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                            opacity=".25" />
-                        <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                    </svg>
-                    <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
-                </button>
+            <div class="col-span-2 grid grid-cols-2 gap-4">
+                <div class="flex flex-row justify-between w-full items-center text-center gap-2 col-span-2">
+                    <span class="text-danger text-base semibold justify-center">
+                        <b>ALSO:</b> To allow sharing links outside your network, <b>port
+                            443
+                            (HTTPS)</b> <u>must</u> be open or forwarded from your router.
+                    </span>
+                    <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
+                        class="btn btn-secondary w-fit text-base justify-end">
+                        Click here to find out how.
+                    </button>
+                </div>
+                <div class="col-start-2 flex flex-row justify-end">
+                    <button type="button" @click.prevent="tryAutomaticPortMapping"
+                        :title="`Uses UPNP (Universal Plug N' Play) to automatically open necessary ports on router (not all routers support this).`"
+                        class="btn btn-danger w-fit text-base justify-end items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        :disabled="anyBusy">
+                        <svg v-if="tryingUpnp" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
+                                opacity=".25" />
+                            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                        </svg>
+                        <span>
+                            {{ tryingUpnp ? 'Connecting + Mapping…' : 'Connect and Port Forward with UPNP' }}
+                        </span>
+                        <br v-if="!tryingUpnp" />
+                        <span v-if="!tryingUpnp">**EXPERIMENTAL - USE AT OWN RISK**</span>
+                    </button>
+                </div>
+                <div class="flex flex-row justify-center col-span-2">
+                    <button type="submit"
+                        class="btn btn-success w-80 h-12 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        :disabled="anyBusy">
+                        <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
+                                opacity=".25" />
+                            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                        </svg>
+                        <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
+                    </button>
+                </div>
 
-                <div v-if="statusLine" class="mt-2 text-sm opacity-80 flex items-center gap-2">
+                <div v-if="statusLine"
+                    class="mt-2 text-sm opacity-80 flex items-center gap-2 col-span-2 justify-center text-center">
                     <svg v-if="isBootstrapping" class="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
                             opacity=".25" />
@@ -91,6 +103,8 @@
                     </svg>
                     <span>{{ statusLine }}</span>
                 </div>
+
+
             </div>
         </div>
     </form>
@@ -107,7 +121,7 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
-useHeader('Welcome to 45Studio Collab!');
+useHeader('Welcome to the 45Studio Share App!');
 
 const router = useRouter();
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
@@ -156,6 +170,7 @@ const statusLine = ref<string>('');  // one line only
 const isBusy = ref(false);           // disables UI + button during whole flow
 const isBootstrapping = ref(false);  // shows spinner while remote deps/bootstrap running
 let unlistenProgress: (() => void) | null = null;
+const anyBusy = computed(() => isBusy.value || tryingUpnp.value);
 
 const showPortFwdModal = ref(false);
 function togglePortFwdModal() {
@@ -166,12 +181,48 @@ function togglePortFwdModal() {
 const tryingUpnp = ref(false);
 
 async function tryAutomaticPortMapping() {
-    // Must be called after you’ve resolved apiBase + token (your connect flow already does this).
-    const token = connectionMeta.value?.token;
-    const apiBase = connectionMeta.value?.apiBase || '';
-    if (!token) {
-        pushNotification(new Notification('Error', 'Please log in first.', 'error', 7000));
+    // Try to resolve apiBase from connectionMeta or current IP selection.
+    const resolveApiBase = () => {
+        const rawIp = (selectedServer.value?.ip || manualIp.value).trim();
+        if (!rawIp) return '';
+        return `http://${rawIp}:${DEFAULT_API_PORT}`;
+    };
+
+    let apiBase = connectionMeta.value?.apiBase || resolveApiBase();
+    if (!apiBase) {
+        pushNotification(new Notification('Error', 'Please select or enter a server first.', 'error', 8000));
         return;
+    }
+
+    // Prefer an existing token; otherwise try a one-off login if creds were entered.
+    let token = connectionMeta.value?.token;
+
+    if (!token) {
+        const u = username.value.trim();
+        const p = password.value.trim();
+        if (!u || !p) {
+            pushNotification(new Notification('Error', 'Please enter a Username and Password.', 'error', 8000));
+            return;
+        }
+
+        try {
+            const loginRes = await fetch(`${apiBase}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p }),
+            });
+            if (!loginRes.ok) {
+                const txt = await loginRes.text().catch(() => '');
+                throw new Error(txt || `Login failed (${loginRes.status})`);
+            }
+            const j = await loginRes.json();
+            token = j?.token || '';
+            if (!token) throw new Error('No token returned from login.');
+            // IMPORTANT: don’t persist this token to app state/session.
+        } catch (err: any) {
+            pushNotification(new Notification('Error', err?.message || 'Login failed.', 'error', 10000));
+            return;
+        }
     }
 
     tryingUpnp.value = true;
@@ -183,10 +234,9 @@ async function tryAutomaticPortMapping() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
             },
-            // You can flip also80 to true if you want the script to attempt port 80 too.
-            body: JSON.stringify({ also80: false })
+            body: JSON.stringify({ also80: false }),
         });
-        const data = await r.json();
+        const data = await r.json().catch(() => ({}));
         if (data.ok) {
             const det = data.details;
             const via = det?.tool ? ` via ${det.tool}` : '';
@@ -206,6 +256,7 @@ async function tryAutomaticPortMapping() {
         tryingUpnp.value = false;
     }
 }
+
 
 function listenBootstrap(id: string) {
     const handler = (_: any, msg: any) => {
@@ -346,6 +397,24 @@ async function connectToServer() {
 
         connectionMeta.value = { ...connectionMeta.value, token, ssh: { server: ip, username: username.value } };
         try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }
+
+        // Seed internal/external base on the server for later link generation
+        try {
+            const hdrs = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            };
+
+            // One shot: let the server detect both. Internal = LAN IP, External = WAN IP.
+            await fetch(`${apiBase}/api/settings`, {
+                method: 'POST',
+                headers: hdrs,
+                body: JSON.stringify({ internalBase: 'auto', externalBase: 'auto' }),
+            });
+        } catch (e: any) {
+            window.appLog?.warn('settings.seed.failed', { message: e?.message });
+        }
+
         window.appLog?.info('login.success', { ip });
         router.push({ name: 'dashboard' });
     } catch (e: any) {

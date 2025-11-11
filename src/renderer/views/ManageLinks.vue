@@ -150,8 +150,8 @@
 
 							<!-- Created -->
 							<td class="p-2 border border-default">
-  <div>{{ formatEpochMs(it.createdAt, { dateStyle: 'medium' }) }}</div>
-  <div class="text-xs text-muted">{{ formatEpochMs(it.createdAt, { timeStyle: 'short' }) }}</div>
+  <div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
+  <div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
 </td>
 
 
@@ -196,7 +196,7 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
-	
+
 const { apiFetch } = useApi()
 async function refresh() {
 	loading.value = true
