@@ -31,7 +31,17 @@
 
 			<!-- table -->
 			<div class="overflow-x-auto">
-				<table class="min-w-full text-sm border border-default border-collapse">
+				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
+					<colgroup>
+						<col class="w-[30%]" /> <!-- Title -->
+						<col class="w-[10%]" /> <!-- Type -->
+						<col class="w-[22%]" /> <!-- Short Link -->
+						<col class="w-[12%]" /> <!-- Expires -->
+						<col class="w-[10%]" /> <!-- Status -->
+						<col class="w-[6%]" /> <!-- Password -->
+						<col class="w-[10%]" /> <!-- Created -->
+						<col class="w-[10%]" /> <!-- Actions -->
+					</colgroup>
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
 							<th class="text-left p-2 font-semibold border border-default">Title</th>
@@ -47,66 +57,73 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="!loading && filteredRows.length === 0">
-							<td colspan="8" class="px-2 py-4 text-center text-default font-bold border border-default">
+							<td colspan="8"
+								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
 						</tr>
 
 						<tr v-for="it in filteredRows" :key="it.id"
-							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
+							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
 							<!-- Title -->
-							<td class="p-2 border border-default">
-								<div v-if="editingId !== it.id" class="flex items-center justify-between gap-2">
-									<span class="font-medium cursor-pointer hover:underline" @click="openDetails(it)">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div v-if="editingId !== it.id" class="min-w-0 flex items-center justify-between gap-2">
+									<span
+										class="font-medium cursor-pointer hover:underline block truncate max-w-[28ch] md:max-w-[40ch]"
+										@click="openDetails(it)">
 										{{ it.title || fallbackTitle(it) }}
 									</span>
-									<button class="text-xs text-blue-500 hover:underline" @click="startEdit(it)">Edit
-										Title</button>
+									<button class="text-xs text-blue-500 hover:underline shrink-0"
+										@click="startEdit(it)">
+										Edit Title
+									</button>
 								</div>
+
 								<div v-else class="flex items-center gap-2">
 									<input v-model="editTitle"
-										class="px-2 py-1 rounded bg-default border border-default w-56" />
-									<button class="btn btn-secondary text-xs" @click=" saveTitle(it)">Save</button>
-									<button class="btn btn-danger text-xs" @click="cancelEdit">Cancel</button>
+										class="px-2 py-1 rounded bg-default border border-default w-56 h-8" />
+									<button class="btn btn-secondary text-xs h-8 px-2"
+										@click="saveTitle(it)">Save</button>
+									<button class="btn btn-danger text-xs h-8 px-2" @click="cancelEdit">Cancel</button>
 								</div>
 							</td>
 
+
 							<!-- Type -->
-							<td class="p-2 border border-default">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
 							</td>
 
 							<!-- Short link -->
-							<td class="p-2 border border-default">
-								<div class="flex items-center gap-2 justify-between">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="min-w-0 flex items-center gap-2 justify-between">
 									<a :href="it.shortUrl" target="_blank" rel="noopener"
-										class="hover:underline truncate max-w-[22rem]">
+										class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
 										{{ it.shortUrl }}
 									</a>
-									<button class="text-blue-500 hover:underline text-xs"
+									<button class="text-blue-500 hover:underline text-xs shrink-0"
 										@click="copy(it.shortUrl)">Copy</button>
 								</div>
 							</td>
 
+
 							<!-- Expires -->
-							<td class="p-2 border border-default ">
-								<div v-if="!expEditor[it.id]?.open" class="flex flex-row items-center">
-									<div class="justify-start text-left" :class="expiresClass(it)">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div v-if="!expEditor[it.id]?.open" class="flex items-center gap-2 min-w-0">
+									<div class="truncate" :class="expiresClass(it)">
 										{{ expiresLabel(it) }}
 									</div>
-									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" @click="makeNever(it)">
-											Never
-										</button>
-										<button class="btn btn-primary text-xs" @click="openCustom(it)">
-											Custom
-										</button>
+									<div class="ml-auto flex items-center gap-2 flex-nowrap">
+										<button class="btn btn-secondary text-xs h-7 px-2"
+											@click="makeNever(it)">Never</button>
+										<button class="btn btn-primary text-xs h-7 px-2"
+											@click="openCustom(it)">Custom</button>
 									</div>
 								</div>
 
 								<!-- custom editor -->
-								<div v-if="expEditor[it.id]?.open" class="flex flex-col items-center gap-1 text-xs">
+								<div v-else class="flex flex-col items-center gap-1 text-xs">
 									<div class="flex flex-row justify-between w-full">
 										<label class="flex items-center gap-1">
 											<span class="opacity-70">Days</span>
@@ -133,42 +150,43 @@
 
 
 							<!-- Status -->
-							<td class="p-2 border border-default">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="statusChipClass(statusOf(it))">{{ statusOf(it).toUpperCase() }}</span>
 							</td>
 
 							<!-- Password -->
-							<td class="p-2 border border-default">
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="text-xs">{{ it.passwordRequired ? 'Yes' : 'No' }}</span>
 								<!-- <button class="ml-2 text-blue-500 hover:underline text-xs" @click="openDetails(it)">Manage</button> -->
 							</td>
 
 							<!-- Created -->
-							<td class="p-2 border border-default">
-  <div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
-  <div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
-</td>
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="flex flex-col leading-tight">
+									<div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
+									<div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' })
+										}}</div>
+								</div>
+							</td>
 
 
 							<!-- Actions -->
-							<td class="p-2 border border-default">
-								<div class="flex flex-wrap justify-around items-center">
-									<button class="btn btn-primary px-2 py-1 rounded-md" @click="openDetails(it)">
-										View Details
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="flex items-center justify-around gap-2 flex-nowrap">
+									<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">View
+										Details</button>
+									<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
+										@click="viewLink(it)">
+										Open
 									</button>
-									<button :disabled="isDisabled(it)" class="btn btn-success px-2 py-1 rounded-md"
-										@click="viewLink(it)">Open</button>
-									<!-- <button class="btn btn-primary px-2 py-1 rounded-md"
-										@click="copy(it.shortUrl)">Copy</button> -->
-									<button class="btn btn-danger px-2 py-1 rounded-md"
+									<button class="btn btn-danger h-8 px-2 rounded-md"
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
 									</button>
-
 								</div>
-							</td>
+								</td>
 						</tr>
 					</tbody>
 				</table>
