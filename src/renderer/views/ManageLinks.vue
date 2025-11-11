@@ -91,19 +91,15 @@
 
 							<!-- Expires -->
 							<td class="p-2 border border-default ">
-								<div v-if="!expEditor[it.id]?.open"
-									class="flex flex-row items-center">
+								<div v-if="!expEditor[it.id]?.open" class="flex flex-row items-center">
 									<div class="justify-start text-left" :class="expiresClass(it)">
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="button-group-row justify-between items-center gap-2 ml-auto">
-										<button class="btn btn-secondary text-xs" 
-
-											@click="makeNever(it)">
+										<button class="btn btn-secondary text-xs" @click="makeNever(it)">
 											Never
 										</button>
-										<button class="btn btn-primary text-xs" 
-											@click="openCustom(it)">
+										<button class="btn btn-primary text-xs" @click="openCustom(it)">
 											Custom
 										</button>
 									</div>
@@ -165,7 +161,7 @@
 										@click="viewLink(it)">Open</button>
 									<!-- <button class="btn btn-primary px-2 py-1 rounded-md"
 										@click="copy(it.shortUrl)">Copy</button> -->
-									<button class="btn btn-danger px-2 py-1 rounded-md" 
+									<button class="btn btn-danger px-2 py-1 rounded-md"
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
@@ -181,12 +177,7 @@
 	</div>
 
 	<!--  /////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
-	<LinkDetailsModal
-		v-model="showModal"
-		:link="current"
-		:apiFetch="apiFetch"
-		@updated="applyLinkPatch"
-	/>
+	<LinkDetailsModal v-model="showModal" :link="current" :apiFetch="apiFetch" @updated="applyLinkPatch" />
 </template>
 	
 <script setup lang="ts">
@@ -196,6 +187,7 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
+
 
 const { apiFetch } = useApi()
 async function refresh() {
@@ -209,7 +201,7 @@ async function refresh() {
 			limit: pageSize.value,
 		})
 		rows.value = items
-	} catch (e:any) {
+	} catch (e: any) {
 		error.value = e?.message || String(e)
 	} finally {
 		loading.value = false
@@ -218,11 +210,11 @@ async function refresh() {
 // const showDrawer = ref(false)
 const showModal = ref(false)
 const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
-const {formatEpochMs } = useTime();
+const { formatEpochMs } = useTime();
 onMounted(refresh);
 
 /* ----------- fetch/list endpoints ----------- */
-async function listLinks(params: { q?: string; type?: ''|LinkType; status?: ''|Status; limit?: number; offset?: number }) {
+async function listLinks(params: { q?: string; type?: '' | LinkType; status?: '' | Status; limit?: number; offset?: number }) {
 	const qs = new URLSearchParams()
 	if (params.q) qs.set('q', params.q)
 	if (params.type) qs.set('type', params.type)
@@ -232,18 +224,18 @@ async function listLinks(params: { q?: string; type?: ''|LinkType; status?: ''|S
 	return apiFetch(`/api/links?${qs.toString()}`)
 }
 
-async function patchLink(id: number|string, body: any) {
+async function patchLink(id: number | string, body: any) {
 	return apiFetch(`/api/links/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 }
 
 
 /* ------------------- state ------------------- */
 const loading = ref(false)
-const error = ref<string|null>(null)
+const error = ref<string | null>(null)
 const rows = ref<LinkItem[]>([])
 const q = ref('')
-const typeFilter = ref<''|LinkType>('')
-const statusFilter = ref<''|Status>('active') // match “Currently Active Links” by default
+const typeFilter = ref<'' | LinkType>('')
+const statusFilter = ref<'' | Status>('active') // match “Currently Active Links” by default
 const pageSize = ref(200)
 const detailsLoading = ref(false)
 const files = ref<any[]>([])
@@ -300,8 +292,8 @@ function expiresLabel(it: LinkItem) {
 	// show minutes granularity:
 	if (ms < 60e3) return '< 1 Minute'
 	if (ms < 3600e3) {
-	  const m = Math.max(1, Math.floor(ms / 60e3))
-	  return m === 1 ? '1 Minute left' : `${m} Minutes left`
+		const m = Math.max(1, Math.floor(ms / 60e3))
+		return m === 1 ? '1 Minute left' : `${m} Minutes left`
 	}
 
 	if (ms < 86400e3) {
@@ -321,7 +313,7 @@ function expiresClass(it: LinkItem) {
 	return ms <= 86400000 ? 'text-red-400 font-semibold' : ''
 }
 
-async function copy(txt?: string|null) {
+async function copy(txt?: string | null) {
 	if (!txt) return
 	await navigator.clipboard.writeText(txt)
 	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
@@ -335,41 +327,41 @@ async function toggleDisable(it: LinkItem) {
 }
 
 
-  function viewLink(it: LinkItem) {
-    if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
-  }
-  /* ------------------- inline title edit ------------------- */
-  const editingId = ref<number|string|null>(null)
-  const editTitle = ref('')
-  function startEdit(it: LinkItem) {
-    editingId.value = it.id
-    editTitle.value = it.title || ''
-  }
-  function cancelEdit() {
-    editingId.value = null
-    editTitle.value = ''
-  }
-  async function saveTitle(it: LinkItem) {
-    await patchLink(it.id, { title: editTitle.value || null })
-    it.title = editTitle.value || null
-    cancelEdit()
-  }
-  
-  /* ------------------- details drawer ------------------- */
-  const current = ref<LinkItem|null>(null)
+function viewLink(it: LinkItem) {
+	if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
+}
+/* ------------------- inline title edit ------------------- */
+const editingId = ref<number | string | null>(null)
+const editTitle = ref('')
+function startEdit(it: LinkItem) {
+	editingId.value = it.id
+	editTitle.value = it.title || ''
+}
+function cancelEdit() {
+	editingId.value = null
+	editTitle.value = ''
+}
+async function saveTitle(it: LinkItem) {
+	await patchLink(it.id, { title: editTitle.value || null })
+	it.title = editTitle.value || null
+	cancelEdit()
+}
+
+/* ------------------- details drawer ------------------- */
+const current = ref<LinkItem | null>(null)
 
 async function openDetails(it: LinkItem) {
-  current.value = it
-  showModal.value = true
+	current.value = it
+	showModal.value = true
 }
 
 function applyLinkPatch(p: Partial<LinkItem> & { id: LinkItem['id'] }) {
-  if (!p?.id) return
-  // patch current
-  if (current.value?.id === p.id) Object.assign(current.value, p)
-  // patch list row
-  const idx = rows.value.findIndex(r => r.id === p.id)
-  if (idx >= 0) Object.assign(rows.value[idx], p)
+	if (!p?.id) return
+	// patch current
+	if (current.value?.id === p.id) Object.assign(current.value, p)
+	// patch list row
+	const idx = rows.value.findIndex(r => r.id === p.id)
+	if (idx >= 0) Object.assign(rows.value[idx], p)
 }
 
 /* ------------------- filters ------------------- */
@@ -390,13 +382,13 @@ const filteredRows = computed(() => {
 				JSON.stringify(r.target?.files || [])
 			return hay.toLowerCase().includes(needle)
 		})
-		.sort((a,b) => {
+		.sort((a, b) => {
 			// soonest expiring first (Never at end)
 			const ea = a.expiresAt ?? Number.POSITIVE_INFINITY
 			const eb = b.expiresAt ?? Number.POSITIVE_INFINITY
 			return ea - eb
 		})
-	})
+})
 
 function ensureExpEntry(it: LinkItem) {
 	if (!expEditor.value[it.id]) {
@@ -405,7 +397,6 @@ function ensureExpEntry(it: LinkItem) {
 }
 
 function openCustom(it: LinkItem) {
-	if (isExpired(it)) return
 	ensureExpEntry(it)
 	expEditor.value[it.id].open = true
 
@@ -450,38 +441,38 @@ async function applyCustom(it: LinkItem) {
 }
 
 function toDateUTC(ts: unknown): Date | null {
-  if (ts == null) return null;
+	if (ts == null) return null;
 
-  if (ts instanceof Date) return Number.isFinite(ts.getTime()) ? ts : null;
+	if (ts instanceof Date) return Number.isFinite(ts.getTime()) ? ts : null;
 
-  if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts.trim()))) {
-    const n = Number(ts);
-    const ms = n < 1e12 ? n * 1000 : n; // seconds → ms
-    const d = new Date(ms);
-    return Number.isFinite(d.getTime()) ? d : null;
-  }
+	if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts.trim()))) {
+		const n = Number(ts);
+		const ms = n < 1e12 ? n * 1000 : n; // seconds → ms
+		const d = new Date(ms);
+		return Number.isFinite(d.getTime()) ? d : null;
+	}
 
-  const s = String(ts).trim();
+	const s = String(ts).trim();
 
-  // If it's already ISO with timezone, just parse it
-  if (/[zZ]$|[+\-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+	// If it's already ISO with timezone, just parse it
+	if (/[zZ]$|[+\-]\d{2}:\d{2}$/.test(s)) return new Date(s);
 
-  // If it looks like "YYYY-MM-DD HH:mm:ss" from SQLite, treat as UTC
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
-    return new Date(s.replace(' ', 'T') + 'Z');
-  }
+	// If it looks like "YYYY-MM-DD HH:mm:ss" from SQLite, treat as UTC
+	if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+		return new Date(s.replace(' ', 'T') + 'Z');
+	}
 
-  // Fallback attempt
-  const d = new Date(s);
-  return Number.isFinite(d.getTime()) ? d : null;
+	// Fallback attempt
+	const d = new Date(s);
+	return Number.isFinite(d.getTime()) ? d : null;
 }
 
 const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
-  const d = toDateUTC(ts);
-  if (!d) return '—';
-  return new Intl.DateTimeFormat(undefined, { timeZone: userTZ, ...opts }).format(d);
+	const d = toDateUTC(ts);
+	if (!d) return '—';
+	return new Intl.DateTimeFormat(undefined, { timeZone: userTZ, ...opts }).format(d);
 }
 
 async function makeNever(it: LinkItem) {

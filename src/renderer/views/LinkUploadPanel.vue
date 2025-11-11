@@ -14,8 +14,9 @@
 				<!-- DESTINATION PICKER -->
 				<div class="-mt-2">
 					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
-						title="Choose destination on server" :auto-detect-roots="true"
-						subtitle="Pick the folder on the server where these files will be uploaded." />
+						subtitle="Pick the folder on the server where these files will be uploaded."
+						:auto-detect-roots="true" :allow-entire-tree="true" v-model:project="projectBase"
+						v-model:dest="destFolderRel" />
 				</div>
 
 				<!-- OPTIONS -->
@@ -72,13 +73,9 @@
 						</div>
 						<div class="flex items-center gap-3 mt-2">
 							<label class="whitespace-nowrap font-semibold">Link title:</label>
-							<input
-								type="text"
-								v-model.trim="linkTitle"
+							<input type="text" v-model.trim="linkTitle"
 								class="input-textlike border rounded px-3 py-2 bg-transparent"
-								placeholder="Optional title for the shared link"
-								style="min-width: 20rem"
-							/>
+								placeholder="Optional title for the shared link" style="min-width: 20rem" />
 						</div>
 					</div>
 				</div>
@@ -98,7 +95,8 @@
 
 						<!-- RESULT -->
 						<div v-if="result" class="flex flex-col">
-							<p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
+							<p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is
+								required
 								when protection is enabled.</p>
 							<div v-if="result.url" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
 								<code>{{ result.url }}</code>
@@ -153,6 +151,7 @@ const prettyExpiry = computed(() => {
 	const u = expiresUnit.value
 	return `${v} ${v === 1 ? u.slice(0, -1) : u}`
 })
+const projectBase = ref<string>('')
 
 
 // Link generation
@@ -196,13 +195,13 @@ function resetAll() {
 }
 
 async function copyLink() {
-    if (!result.value) return
-    await navigator.clipboard.writeText(result.value.url)
-    pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
+	if (!result.value) return
+	await navigator.clipboard.writeText(result.value.url)
+	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
 }
 
 function openInBrowser() {
-    window.open(result.value?.url, '_blank')
+	window.open(result.value?.url, '_blank')
 }
 function goBack() { router.push({ name: 'dashboard' }) }
 </script>
