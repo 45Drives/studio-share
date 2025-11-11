@@ -705,11 +705,11 @@ function createWindow() {
 
     (async () => {
       try {
-        const r = await fetch(`http://${s.ip}:9095/setup-status`);
-        if (r.ok) {
-          const j = await r.json();
-          s.status = j.status ?? 'unknown';
-        }
+        // const r = await fetch(`http://${s.ip}:9095/setup-status`);
+        // if (r.ok) {
+        //   const j = await r.json();
+        //   s.status = j.status ?? 'unknown';
+        // }
       } catch { }
       // upsert and notify after probe too
       const existing = discoveredServers.find(x => x.ip === s.ip);
