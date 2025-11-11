@@ -150,9 +150,10 @@
 
 							<!-- Created -->
 							<td class="p-2 border border-default">
-								<div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
-								<div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
-							</td>
+  <div>{{ formatEpochMs(it.createdAt, { dateStyle: 'medium' }) }}</div>
+  <div class="text-xs text-muted">{{ formatEpochMs(it.createdAt, { timeStyle: 'short' }) }}</div>
+</td>
+
 
 							<!-- Actions -->
 							<td class="p-2 border border-default">
@@ -194,7 +195,7 @@ import { useApi } from '../composables/useApi'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
-
+import { useTime } from '../composables/useTime'
 	
 const { apiFetch } = useApi()
 async function refresh() {
@@ -217,7 +218,7 @@ async function refresh() {
 // const showDrawer = ref(false)
 const showModal = ref(false)
 const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
-
+const {formatEpochMs } = useTime();
 onMounted(refresh);
 
 /* ----------- fetch/list endpoints ----------- */

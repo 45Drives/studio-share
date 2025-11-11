@@ -167,10 +167,16 @@
               class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
           </div>
         </div>
+        <button class="btn btn-secondary" @click="openReset(editing)" title="Reset PIN for this user">
+          Reset PIN
+        </button>
       </div>
+
       <div class="flex justify-end gap-2 mt-4">
         <button class="btn btn-secondary" @click="editing = null">Cancel</button>
-        <button class="btn btn-primary" @click="saveEdit()">Save</button>
+        <button class="btn btn-primary" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPin)">
+          Save
+        </button>
       </div>
     </div>
   </div>
@@ -187,6 +193,7 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
 export type ExistingUser = { id?: string | number; username: string; name?: string; user_email?: string; display_color?: string }
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue'
+import ResetPinModal from './ResetPinModal.vue';
 
 const props = defineProps<{
   modelValue: boolean
@@ -213,6 +220,11 @@ const deleteOpen = ref(false)
 const deleting = ref(false)
 const deleteError = ref<string | null>(null)
 const userToDelete = ref<ExistingUser | null>(null)
+const resetOpen = ref(false)
+const userToReset = ref<{ id?: number | string; username?: string; name?: string } | null>(null)
+const pendingResetPin = ref<string | null>(null)
+const pendingResetUserId = ref<number | string | null>(null)
+
 
 // Edit state
 const editing = ref<ExistingUser | null>(null)
@@ -237,6 +249,15 @@ const pinFormatInvalid = computed(() => {
   const p = tempPin.value.trim()
   return p.length > 0 && !/^\d{4,8}$/.test(p)
 })
+const hasProfileEdits = computed(() => {
+  if (!editing.value) return false
+  const nameChanged = editForm.value.name.trim() !== (editing.value.name || '')
+  const emailChanged = (editForm.value.user_email.trim() || null) !== (editing.value.user_email ?? null)
+  const colorChanged = (normalizeHex(editForm.value.display_color) || null) !== (editing.value.display_color || null)
+  return nameChanged || emailChanged || colorChanged
+})
+
+
 watch([tempPin, tempPinConfirm], () => {
   if (error.value) error.value = ''
 })
@@ -253,8 +274,8 @@ watch(
       userSearch.value = ''
       error.value = ''
       selectedKeys.value = (props.preselected || [])
-      .map(p => userKey(p))
-       .filter(Boolean)
+        .map(p => userKey(p))
+        .filter(Boolean)
       fetchUsers()
     }
   }
@@ -322,7 +343,7 @@ async function createUser() {
         method: 'POST',
         body: JSON.stringify({ new_pin: pin }),
       })
-    } catch {}
+    } catch { }
 
     const u: ExistingUser = {
       id: created.id,
@@ -332,9 +353,9 @@ async function createUser() {
       display_color: created.display_color ?? payload.display_color,
     }
     const k = userKey(u)           // <- one canonical key
-if (!selectedKeys.value.includes(k)) {
-  selectedKeys.value.push(k)   // <- push the same canonical key
-}
+    if (!selectedKeys.value.includes(k)) {
+      selectedKeys.value.push(k)   // <- push the same canonical key
+    }
     await fetchUsers()
     resetNewUser()
   } catch (e: any) {
@@ -354,26 +375,65 @@ function startEdit(u: ExistingUser) {
 
 async function saveEdit() {
   if (!editing.value) return
-  try {
-   const id = Number(editing.value.id)
-   if (!Number.isFinite(id)) throw new Error('Missing numeric user id')
 
-   const payload: any = {}
-      if (editForm.value.name.trim() !== (editing.value.name || '')) {
-        payload.name = editForm.value.name.trim()
+  // allow either numeric id or username (string)
+  const idOrUsername = (editing.value.id ?? editing.value.username) as string | number
+  if (!idOrUsername) {
+    error.value = 'Missing user identifier'
+    return
+  }
+
+  try {
+    const ops: Promise<any>[] = []
+
+    // Only PATCH if something actually changed
+    if (hasProfileEdits.value) {
+      const payload: any = {}
+
+      const nextName = editForm.value.name.trim()
+      if (nextName !== (editing.value.name || '')) {
+        payload.name = nextName
       }
-      const newEmail = editForm.value.user_email.trim() || null
-      if ((newEmail || null) !== (editing.value.user_email ?? null)) {
-        payload.user_email = newEmail
+
+      const nextEmail = editForm.value.user_email.trim() || null
+      if ((nextEmail || null) !== (editing.value.user_email ?? null)) {
+        payload.user_email = nextEmail
       }
-      const newColor = normalizeHex(editForm.value.display_color)
-      if (newColor && newColor !== (editing.value.display_color || null)) {
-        payload.display_color = newColor
+
+      const nextColor = normalizeHex(editForm.value.display_color) || null
+      if (nextColor !== (editing.value.display_color || null)) {
+        payload.display_color = nextColor
       }
-   await props.apiFetch(`/api/users/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    })
+
+      ops.push(
+        props.apiFetch(`/api/users/${encodeURIComponent(String(idOrUsername))}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+      )
+    }
+
+    // Add reset-pin call if queued
+    if (pendingResetPin.value) {
+      const resetIdOrUsername = pendingResetUserId.value ?? idOrUsername
+      ops.push(
+        props.apiFetch(`/api/users/${encodeURIComponent(String(resetIdOrUsername))}/reset-pin`, {
+          method: 'POST',
+          body: JSON.stringify({ new_pin: pendingResetPin.value }),
+        })
+      )
+    }
+
+    if (!ops.length) {
+      error.value = 'No changes to save.'
+      return
+    }
+
+    await Promise.all(ops)
+
+    // Clear pending reset + refresh
+    pendingResetPin.value = null
+    pendingResetUserId.value = null
 
     await fetchUsers()
     editing.value = null
@@ -493,4 +553,19 @@ function normalizeHex(x?: string) {
   const full = v.length === 3 ? v.split('').map(c => c + c).join('') : v
   return `#${full.toLowerCase()}`
 }
+function openReset(u: any) {
+  userToReset.value = u
+  resetOpen.value = true
+}
+
+// handle confirmation (do your API call here)
+async function onConfirmReset(payload: { userId?: number | string; newPin: string }) {
+  const id = payload.userId ?? userToReset.value?.id
+  if (!id) return
+  pendingResetUserId.value = id
+  pendingResetPin.value = payload.newPin
+  resetOpen.value = false
+}
+
+
 </script>
