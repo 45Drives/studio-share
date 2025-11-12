@@ -59,29 +59,32 @@ export async function connectWithKey(args: { host: string; username: string; pri
 }
 
 /** Append public key to remote authorized_keys (idempotent) */
-export async function setupSshKey(host: string, username: string, password: string): Promise<void> {
-  // make sure we actually have a keypair locally
+export async function setupSshKey(
+  host: string,
+  username: string,
+  password: string,
+  pubPath?: string,
+  comment = '45studio@client'
+): Promise<void> {
   const keyDir = getKeyDir();
-  const priv = path.join(keyDir, "id_ed25519");
-  const pub = `${priv}.pub`;
-  await ensureKeyPair(priv, pub);
+  const pub = pubPath ?? path.join(keyDir, 'id_ed25519.pub');
 
+  const publicKeyLine = (fs.readFileSync(pub, 'utf8').trim().replace(/["`]/g, '') + ` ${comment}`).trim();
   const ssh = await connectWithPassword({ host, username, password });
 
-  const publicKey = fs.readFileSync(pub, "utf8").trim().replace(/["`]/g, "");
+  const cmd = [
+    'mkdir -p ~/.ssh',
+    'chmod 700 ~/.ssh',
+    // remove any prior 45studio line(s) then append exactly one line
+    `grep -v ' ${comment}$' ~/.ssh/authorized_keys 2>/dev/null > ~/.ssh/authorized_keys.tmp || true`,
+    'mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys 2>/dev/null || true',
+    `echo "${publicKeyLine}" >> ~/.ssh/authorized_keys`,
+    'chmod 600 ~/.ssh/authorized_keys',
+  ].join(' && ');
 
-  await ssh.execCommand(
-    [
-      "mkdir -p ~/.ssh",
-      "chmod 700 ~/.ssh",
-      `grep -F "${publicKey}" ~/.ssh/authorized_keys 2>/dev/null || echo "${publicKey}" >> ~/.ssh/authorized_keys`,
-      "chmod 600 ~/.ssh/authorized_keys",
-    ].join(" && ")
-  );
-
+  await ssh.execCommand(cmd);
   ssh.dispose();
 }
-
 /** Ensure houston-broadcaster is installed on remote */
 export async function ensureBroadcasterInstalled(
   ssh: NodeSSH,

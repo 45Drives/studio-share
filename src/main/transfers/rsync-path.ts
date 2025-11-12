@@ -41,6 +41,13 @@ function findScpPath(): string {
 
 const pathExists = (p: string) => { try { fs.accessSync(p); return true; } catch { return false; } };
 
+function wslUsable(): boolean {
+  try {
+    const r = spawnSync('wsl.exe', ['bash', '-lc', 'command -v rsync >/dev/null 2>&1 && echo OK'], { encoding: 'utf8' });
+    return r.status === 0 && (r.stdout || '').includes('OK');
+  } catch { return false; }
+}
+
 function looksGitLikeRsync(cmdPath: string) {
   const p = cmdPath.toLowerCase();
   return p.includes('\\git\\') || p.includes('\\cygwin') || p.includes('\\cwrsync') || p.endsWith('rsync.exe');

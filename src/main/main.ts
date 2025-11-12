@@ -102,8 +102,9 @@ import { registerCredsIPC } from './creds.ipc';
 import { getPin, rememberPin } from './certPins'
 import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
-import { buildRsyncCmdAndArgs } from './rsync/rsync-path';
-import { runRsync } from './rsync/rsync-runner';
+import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
+import { runRsync } from './transfers/rsync-runner';
+
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
 export function jl(level: 'info' | 'warn' | 'error' | 'debug', event: string, extra: Record<string, any> = {}) {
@@ -345,8 +346,12 @@ async function connectForPreflight(host: string, username: string, password: str
 
 function defaultClientKey(): string | undefined {
   try {
-    const k = path.join(getKeyDir(), 'id_ed25519');
-    return fs.existsSync(k) ? k : undefined;
+    const dir = getKeyDir();
+    const ed = path.join(dir, 'id_ed25519');
+    const rs = path.join(dir, 'id_rsa');
+    if (fs.existsSync(ed)) return ed;
+    if (fs.existsSync(rs)) return rs;
+    return undefined;
   } catch { return undefined; }
 }
 
@@ -430,118 +435,101 @@ ipcMain.handle('probe-health', async (_e, { ip, port }) => {
   }
 });
 
-ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }: { host: string; username: string; password?: string }) => {
+ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
   const keyDir = getKeyDir();
-  const priv = path.join(keyDir, 'id_ed25519');
-  const pub  = `${priv}.pub`;
+  const edPriv = path.join(keyDir, 'id_ed25519');
+  const edPub = `${edPriv}.pub`;
+  const rsaPriv = path.join(keyDir, 'id_rsa');
+  const rsaPub = `${rsaPriv}.pub`;
 
   jl('info', 'ensure-ssh-ready.start', {
-    host,
-    username,
-    hasPassword: !!password,
-    agentSock: getAgentSocket() || null,
-    keyDir,
-    privExists: fs.existsSync(priv),
-    pubExists: fs.existsSync(pub),
+    host, username, hasPassword: !!password, keyDir,
   });
 
   try {
-    // Ensure local keypair exists
-    await ensureKeyPair(priv, pub);
-    jl('info', 'ensure-ssh-ready.keypair.ready', { priv, pub });
+    // 0) ensure we have an ed25519 pair on disk
+    await ensureKeyPair(edPriv, edPub);
 
     const agentSock = getAgentSocket();
 
-    // 1) Try agent-only first (no server changes)
+    // 1) Try agent first
     if (agentSock) {
       jl('info', 'ensure-ssh-ready.agent.try', { agentSock });
       const trial = new NodeSSH();
       try {
         await trial.connect({ host, username, agent: agentSock, tryKeyboard: false, readyTimeout: 20_000 });
         jl('info', 'ensure-ssh-ready.agent.ok', { host, username });
-        try { trial.dispose(); } catch {}
-        return { ok: true, keyPath: priv, via: 'agent' };
+
+        // Even if agent works, plant our app key idempotently so future non-agent ops work
+        if (password) {
+          await setupSshKey(host, username, password, edPub);
+          jl('info', 'ensure-ssh-ready.plant.after-agent', { pub: edPub });
+        }
+
+        try { trial.dispose(); } catch { }
+        return { ok: true, keyPath: edPriv, via: 'agent(+planted-ed25519)' };
       } catch (e: any) {
-        jl('warn', 'ensure-ssh-ready.agent.fail', {
-          host, username,
-          error: e?.message || String(e),
-        });
-        try { trial.dispose(); } catch {}
-        // fall through to key planting
+        jl('warn', 'ensure-ssh-ready.agent.fail', { error: e?.message || String(e) });
+        try { trial.dispose(); } catch { }
       }
-    } else {
-      jl('debug', 'ensure-ssh-ready.agent.none');
     }
 
-    // 2) Plant our pubkey using the helper (idempotent; handles perms/SELinux)
+    // 2) No agent or agent failed → plant ed25519 using password
     if (!password) {
       const msg = 'No SSH agent and no password provided for initial key install.';
       jl('warn', 'ensure-ssh-ready.no-creds', { host, username });
       return { ok: false, error: msg };
     }
 
-    jl('info', 'ensure-ssh-ready.plant.begin', { host, username, pubPresent: fs.existsSync(pub) });
-    await setupSshKey(host, username, password);
-    jl('info', 'ensure-ssh-ready.plant.ok', { host, username });
+    await setupSshKey(host, username, password, edPub);
+    jl('info', 'ensure-ssh-ready.plant.ed25519.ok', { pub: edPub });
 
-    // 3) Verify with our file key (not via agent)
-    jl('info', 'ensure-ssh-ready.verify.begin', { host, username, keyPath: priv });
+    // 3) Verify with ed25519 file key
     const verify = new NodeSSH();
     try {
       await verify.connect({
         host, username,
-        privateKey: fs.readFileSync(priv, 'utf8'),
+        privateKey: fs.readFileSync(edPriv, 'utf8'),
         tryKeyboard: false,
         readyTimeout: 20_000,
       });
-      jl('info', 'ensure-ssh-ready.verify.ok', { host, username, algo: 'ed25519' });
+      jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'ed25519' });
+      try { verify.dispose(); } catch { }
+      return { ok: true, keyPath: edPriv, via: 'password+ed25519' };
     } catch (e: any) {
       const msg = String(e?.message || e);
-      jl('warn', 'ensure-ssh-ready.verify.fail', { host, username, error: msg });
+      jl('warn', 'ensure-ssh-ready.verify.ed25519.fail', { error: msg });
 
-      // Fallback once: regenerate PEM RSA and retry (some stacks reject OpenSSH modern formats)
-      if (/Unsupported key format|Cannot parse privateKey/i.test(msg)) {
-        jl('info', 'ensure-ssh-ready.pem.regen.begin', { priv });
-        await regeneratePemKeyPair(priv);
-        jl('info', 'ensure-ssh-ready.pem.regen.ok', { priv, pubExists: fs.existsSync(`${priv}.pub`) });
+      // 4) Fallback once: generate RSA at the *RSA* filename
+      jl('info', 'ensure-ssh-ready.rsa.fallback.begin', { rsaPriv });
+      await regeneratePemKeyPair(rsaPriv);          // writes rsaPriv and rsaPriv.pub
+      await setupSshKey(host, username, password, rsaPub);
+      jl('info', 'ensure-ssh-ready.rsa.plant.ok', { pub: rsaPub });
 
-        jl('info', 'ensure-ssh-ready.plant.reapply.begin', { host, username });
-        await setupSshKey(host, username, password);
-        jl('info', 'ensure-ssh-ready.plant.reapply.ok', { host, username });
-
-        // Retry verification with the PEM key
-        try {
-          await verify.connect({
-            host, username,
-            privateKey: fs.readFileSync(priv, 'utf8'),
-            tryKeyboard: false,
-            readyTimeout: 20_000,
-          });
-          jl('info', 'ensure-ssh-ready.verify.ok', { host, username, algo: 'rsa-4096-pem' });
-        } catch (e2: any) {
-          const msg2 = String(e2?.message || e2);
-          jl('error', 'ensure-ssh-ready.verify.final-fail', { host, username, error: msg2 });
-          try { verify.dispose(); } catch {}
-          return { ok: false, error: msg2 };
-        }
-      } else {
-        try { verify.dispose(); } catch {}
-        return { ok: false, error: msg };
+      // Retry with RSA
+      try {
+        await verify.connect({
+          host, username,
+          privateKey: fs.readFileSync(rsaPriv, 'utf8'),
+          tryKeyboard: false,
+          readyTimeout: 20_000,
+        });
+        jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'rsa-4096-pem' });
+        try { verify.dispose(); } catch { }
+        return { ok: true, keyPath: rsaPriv, via: 'password+rsa' };
+      } catch (e2: any) {
+        const msg2 = String(e2?.message || e2);
+        jl('error', 'ensure-ssh-ready.verify.rsa.fail', { error: msg2 });
+        try { verify.dispose(); } catch { }
+        return { ok: false, error: msg2 };
       }
-    } finally {
-      try { verify.dispose(); } catch {}
     }
-
-    jl('info', 'ensure-ssh-ready.ok', { host, username, via: 'password+planted-key' });
-    return { ok: true, keyPath: priv, via: 'password+planted-key' };
-
   } catch (err: any) {
     const error = err?.message || String(err);
     jl('warn', 'ensure-ssh-ready.failed', { host, username, error });
     return { ok: false, error };
   }
 });
-
 
 const idFile = path.join(app.getPath('userData'), 'client-id.txt');
 let installId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf-8').trim() : '';
@@ -1447,27 +1435,6 @@ type RsyncStartOpts = {
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams>()
-
-
-function parseProgress(line: string) {
-  // progress2 (single running line) AND classic (--progress) look like:
-  // "  42,123,456  12%   12.34MB/s    0:10:01 (xfr#1, to-chk=0/5)"
-  // "123,456,789  55%    9.8MiB/s    0:03:21"
-  // classic also emits "fileX => fileY" etc; we ignore non-matching lines.
-
-  const percentMatch = line.match(/(\d+(?:\.\d+)?)%/);
-  const rateMatch    = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i); // KiB/s, MiB/s, MB/s...
-  const etaMatch     = line.match(/\b(\d+:\d{2}:\d{2})\b/);
-  const bytesMatch   = line.trim().match(/^(\d[\d,]*)\s+/);
-
-  const percent = percentMatch ? Number(percentMatch[1]) : undefined;
-  const rate = rateMatch ? `${rateMatch[1]} ${rateMatch[2]}B/s` : undefined;
-  const eta = etaMatch ? etaMatch[1] : undefined;
-  const bytesTransferred = bytesMatch ? Number(bytesMatch[1].replace(/,/g, '')) : undefined;
-
-  return { percent, rate, eta, bytesTransferred, raw: line };
-}
-
 
 ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts;
