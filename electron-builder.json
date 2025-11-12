@@ -4,7 +4,8 @@
   "directories": { "output": "dist" },
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "publish": { "provider": "github", "owner": "45Drives", "repo": "studio-share" },
-
+  "afterSign": "scripts/afterSign-verify.js",
+  "afterPack": "scripts/afterPack-fix-native.js",
   "nsis": {
     "oneClick": false,
     "perMachine": false,
@@ -22,9 +23,20 @@
   },
 
   "mac": {
-    "sign": false
+    "hardenedRuntime": true,
+    "entitlements": "entitlements.mac.plist",
+    "entitlementsInherit": "entitlements.mac.plist",
+    "signIgnore": [
+      ".*\\.(png|jpe?g|svg|gif|webp|ico|icns)$",
+      ".*\\.(mp3|wav|aac|mp4|mov|webm|ogg)$",
+      ".*\\.(json|txt|md|html|css|map)$",
+      ".*\\.(blend|glb|gltf|obj|fbx|mtl)$",
+      ".*\\.pak$",
+      ".*/[A-Za-z_]+\\.lproj/.*$",
+      ".*/Electron Framework\\.framework/Versions/A/Resources/.*$",
+      ".*/assets/.*"
+    ]
   },
-
   "win": {
     "target": "nsis",
     "compression": "maximum",
@@ -33,11 +45,6 @@
   },
 
   "files": [
-    {
-      "from": "node_modules/@45drives",
-      "to": "node_modules/@45drives",
-      "filter": ["**/*"]
-    },
     {
       "from": "build/main",
       "to": "main",
@@ -77,11 +84,15 @@
     "!**/node_modules/webpack/**",
     "!**/node_modules/esbuild/**",
     "!**/node_modules/@esbuild/**",
+    "!**/@esbuild/**",
+    "!**/esbuild-*/**",
     "!**/node_modules/vite/**",
     "!**/node_modules/@vue/**",
     "!**/node_modules/typescript/**",
     "!**/node_modules/vue/**",
-    "!**/node_modules/@types/**"
+    "!**/node_modules/@types/**",
+    "!**/node_modules/@45drives/houston-common-ui/lib/components/ServerView/assets/**",
+    "!**/node_modules/@45drives/houston-common-ui/lib/components/img/**"
   ],
   "extraResources": [
     {
