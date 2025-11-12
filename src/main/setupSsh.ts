@@ -62,7 +62,7 @@ export async function connectWithKey(args: { host: string; username: string; pri
 export async function setupSshKey(host: string, username: string, password: string): Promise<void> {
   // make sure we actually have a keypair locally
   const keyDir = getKeyDir();
-  const priv = path.join(keyDir, "id_rsa");
+  const priv = path.join(keyDir, "id_ed25519");
   const pub = `${priv}.pub`;
   await ensureKeyPair(priv, pub);
 

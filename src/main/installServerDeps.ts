@@ -34,7 +34,7 @@ export async function installServerDepsRemotely(opts: {
         // Connect with key/agent
         send('connect', 'Connecting via SSH…');
         const keyDir = getKeyDir();
-        const priv = path.join(keyDir, 'id_rsa');
+        const priv = path.join(keyDir, 'id_ed25519');
         await ensureKeyPair(priv, `${priv}.pub`);
         console.log('keyDir:', keyDir)
         async function tryConnectWithCurrentKey() {

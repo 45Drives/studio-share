@@ -1,8 +1,13 @@
 import log from 'electron-log';
 function initLogging(resolvedLogDir: string) {
-  log.transports.console.level = false;
-  log.transports.file.resolvePathFn = () => path.join(resolvedLogDir, 'main.log');
-
+  // // log.transports.console.level = false;
+  // // log.transports.file.resolvePathFn = () => path.join(resolvedLogDir, 'studio-share-client-main.log');
+  // jl('info', 'logging.init.start', {
+  //   platform: process.platform,
+  //   node: process.version,
+  //   electron: process.versions.electron,
+  //   appVersion: app?.getVersion?.() || 'unknown',
+  // });
   jsonLogger = createLogger({
     level: 'info',
     format: format.combine(
@@ -16,19 +21,31 @@ function initLogging(resolvedLogDir: string) {
     ),
     transports: [new DailyRotateFile({
       dirname: resolvedLogDir,
-      filename: '45studio-share-%DATE%.json',
+      filename: '45studio-share-client-%DATE%.json',
       datePattern: 'YYYY-MM-DD',
       maxFiles: '14d',
       zippedArchive: true,
     })],
   });
 
-  const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
-    (...args: any[]) => {
-      const msg = args.map(String).join(' ');
-      (log as any)[lvl](...args);
-      (jsonLogger as any)[lvl]({ message: msg });
-    };
+ const originalConsole = {
+  log: console.log,
+  info: console.info,
+  warn: console.warn,
+  error: console.error,
+  debug: console.debug,
+};
+
+const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
+  (...args: any[]) => {
+    const msg = args.map(String).join(' ');
+    // write to JSON log only
+    (jsonLogger as any)[lvl]({ message: msg });
+    // optionally still mirror to terminal during dev
+    if (process.env.NODE_ENV === 'development') {
+      (originalConsole as any)[lvl](...args);
+    }
+  };
 
   console.log = dual('info');
   console.info = dual('info');
@@ -37,12 +54,15 @@ function initLogging(resolvedLogDir: string) {
   console.debug = dual('debug');
 
   process.on('uncaughtException', (err) => {
-    log.error('Uncaught Exception:', err);
+    // log.error('Uncaught Exception:', err);
     jsonLogger.error({ event: 'uncaughtException', error: err.stack || err.message });
   });
   process.on('unhandledRejection', (reason, promise) => {
-    log.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // log.error('Unhandled Rejection at:', promise, 'reason:', reason);
     jsonLogger.error({ event: 'unhandledRejection', reason: String(reason) });
+  });
+  jl('info', 'logging.init.wired', {
+    filePath: (log.transports.file as any).getFile().path
   });
 }
 
@@ -67,11 +87,15 @@ import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { registerCredsIPC } from './creds.ipc';
 import { getPin, rememberPin } from './certPins'
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
+import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
-
+import { buildRsyncCmdAndArgs } from './rsync/rsync-path';
+import { runRsync } from './rsync/rsync-runner';
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
+export function jl(level: 'info' | 'warn' | 'error' | 'debug', event: string, extra: Record<string, any> = {}) {
+  try { (jsonLogger as any)[level]({ event, ...extra }); } catch {}
+}
 
 // ===== EventSource + SSE (Electron main) =====================================
 // Requires: yarn add eventsource@^2
@@ -87,84 +111,182 @@ type ESLike = {
   onmessage?: (ev: ESMessageEvent) => void;
 };
 
-// Ensure the constructor exists (defensive)
-const hasEventSource = typeof (EventSource as any) === 'function';
-
 // Track live SSE connections per IP
 const setupStreams = new Map<string, ESLike>();
+
+type SseState = {
+  inFlight: boolean;      // we're currently attempting an attach
+  nextAt: number;         // do not attempt before this timestamp
+  backoffMs: number;      // current backoff window
+  mutedUntil404: number;  // if a 404 was seen, mute + skip until this time
+  lastErr?: string;       // last error label for diagnostics
+};
+const sseState = new Map<string, SseState>();
 
 // Base backoff for reconnects
 let sseBackoffMs = 2000;
 
-// Call this to start listening for bootstrap status updates from a host
-export function attachSetupSSE(ip: string) {
-  if (!hasEventSource) {
-    console.warn(`[SSE] EventSource unavailable; cannot attach for ${ip}`);
+function st(ip: string): SseState {
+  const now = Date.now();
+  const s = sseState.get(ip) || {
+    inFlight: false,
+    nextAt: 0,
+    backoffMs: sseBackoffMs,
+    mutedUntil404: 0,
+    lastErr: undefined,
+  };
+  // ensure structure and store
+  sseState.set(ip, s);
+  return s;
+}
+
+
+export function attachSetupSSE(ip: string, seedDelayMs = 0) {
+  // Schedule an attempt (optionally delayed); actual attach happens in tryAttach()
+  const s = st(ip);
+  const now = Date.now();
+  s.nextAt = Math.max(s.nextAt, now + seedDelayMs);
+  tryAttach(ip);
+}
+
+async function tryAttach(ip: string) {
+  const s = st(ip);
+  const now = Date.now();
+
+  // Already connected?
+  if (setupStreams.has(ip)) return;
+
+  // Currently trying?
+  if (s.inFlight) return;
+
+  // Respect cooldown
+  if (now < s.nextAt) return;
+
+  // Respect 404 mute period
+  if (now < s.mutedUntil404) {
+    // muted; don't log every time
     return;
   }
-  if (setupStreams.has(ip)) {
-    return; // already connected
+
+  s.inFlight = true;
+  jl('info', 'sse.attach.attempt', { ip });
+
+  // Preflight to avoid EventSource 404 floods
+  const pf = await preflightSetupStatus(ip);
+  if (pf.code === 404) {
+    // Mute repeated 404s for a while, and push next attempt out
+    const muteMs = 10 * 60 * 1000; // 10 minutes
+    s.mutedUntil404 = now + muteMs;
+    s.backoffMs = Math.min(Math.max(s.backoffMs * 2, 5000), 30000);
+    s.nextAt = now + s.backoffMs;
+
+    // Log once per mute window
+    jl('warn', 'sse.preflight.404', { ip, muteMs, nextIn: s.backoffMs });
+    s.inFlight = false;
+    return;
   }
 
-  // Use HTTP during bootstrap (no TLS agent needed)
-  const url = `http://${ip}:9095/setup-status/stream`;
+  if (pf.ok === false && pf.code !== 200) {
+    // Network or non-200/404—use backoff but no mute
+    s.backoffMs = Math.min(s.backoffMs * 2, 30000);
+    s.nextAt = now + s.backoffMs;
+    jl('warn', 'sse.preflight.fail', { ip, code: pf.code, nextIn: s.backoffMs });
+    s.inFlight = false;
+    return;
+  }
 
-  let es: ESLike;
+  // Passed preflight → open EventSource
+  const url = `http://${ip}:9095/setup-status/stream`;
+  jl('debug', 'sse.attach.url', { ip, url });
+
+  let es: ESLike | undefined;
   try {
     es = new (EventSource as any)(url) as ESLike;
   } catch (e: any) {
-    console.warn(`[SSE] Failed to construct EventSource for ${ip}:`, e?.message || e);
+    s.lastErr = e?.message || String(e);
+    jl('warn', 'sse.construct.error', { ip, error: s.lastErr });
+
+    s.backoffMs = Math.min(s.backoffMs * 2, 30000);
+    s.nextAt = Date.now() + s.backoffMs;
+    s.inFlight = false;
+    // schedule a later retry
+    setTimeout(() => tryAttach(ip), s.backoffMs);
     return;
   }
 
   es.onopen = () => {
-    console.debug(`[SSE] open ${ip} ${url}`);
+    s.backoffMs = 2000;      // reset backoff on healthy traffic
+    s.inFlight = false;
+    setupStreams.set(ip, es!);
+    jl('info', 'sse.open', { ip, url });
   };
 
-  // Server sends:  event: status\n data: {"status":"..."}\n\n
   es.addEventListener('status', (ev: ESMessageEvent) => {
     try {
-      sseBackoffMs = 2000; // reset backoff on healthy traffic
+      s.backoffMs = 2000; // healthy traffic resets backoff
       const payload = JSON.parse(String(ev.data) || '{}');
       const status = payload?.status ?? 'unknown';
       BrowserWindow.getAllWindows()[0]?.webContents.send('discovered-servers-status', {
-        ip,
-        status,
-        ts: Date.now(),
+        ip, status, ts: Date.now(),
       });
+      jl('debug', 'sse.status', { ip, status });
     } catch (e: any) {
-      console.warn(`[SSE] parse error (${ip}):`, e?.message || e);
+      jl('warn', 'sse.status.parse-error', { ip, error: e?.message || String(e) });
     }
   });
 
   es.onerror = (err: any) => {
-    console.warn(`[SSE] error ${ip} ${url}:`, err && (err.message || err));
-    try { es.close(); } catch { }
+    // Tear down stream and schedule a backoff’ed retry
+    try { es?.close(); } catch {}
     setupStreams.delete(ip);
 
-    // simple capped exponential backoff
-    const delay = Math.min(sseBackoffMs, 30000);
-    setTimeout(() => attachSetupSSE(ip), delay);
-    sseBackoffMs = delay * 2;
+    // We cannot reliably get HTTP status from EventSource errors.
+    // We rely on preflight to catch 404s before we open.
+    s.lastErr = err && (err.message || String(err));
+    jl('warn', 'sse.error', { ip, error: s.lastErr });
+
+    s.backoffMs = Math.min(s.backoffMs * 2, 30000);
+    s.nextAt = Date.now() + s.backoffMs;
+    s.inFlight = false;
+
+    // schedule a retry
+    setTimeout(() => tryAttach(ip), s.backoffMs);
+    jl('info', 'sse.reconnect.schedule', { ip, delay: s.backoffMs });
   };
-
-  setupStreams.set(ip, es);
 }
 
-// Stop and remove a single stream
+
 export function detachSetupSSE(ip: string) {
+  jl('info', 'sse.detach', { ip });
   const es = setupStreams.get(ip);
-  if (!es) return;
-  try { es.close(); } catch { }
-  setupStreams.delete(ip);
+  if (es) {
+    try { es.close(); } catch {}
+    setupStreams.delete(ip);
+  }
+  // Optional: also clear inFlight to allow immediate reattach if caller wants
+  const s = sseState.get(ip);
+  if (s) s.inFlight = false;
 }
+
 
 // Stop and clear all streams (e.g., during app shutdown or rescan)
 export function detachAllSetupSSE() {
+  jl('info', 'sse.detach.all');
+
   for (const es of setupStreams.values()) {
     try { es.close(); } catch { }
   }
   setupStreams.clear();
+}
+
+async function preflightSetupStatus(ip: string): Promise<{ ok: boolean; code?: number }> {
+  const url = `http://${ip}:9095/setup-status`;
+  try {
+    const r = await fetch(url, { method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(2500) });
+    return { ok: r.ok, code: r.status };
+  } catch (e: any) {
+    return { ok: false };
+  }
 }
 
 
@@ -185,7 +307,7 @@ async function connectForPreflight(host: string, username: string, password: str
   try { planted.dispose(); } catch { }
 
   const keyDir = getKeyDir();
-  const priv = path.join(keyDir, 'id_rsa');
+  const priv = path.join(keyDir, 'id_ed25519');
   await ensureKeyPair(priv, `${priv}.pub`);
   try {
     return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined });
@@ -199,7 +321,17 @@ async function connectForPreflight(host: string, username: string, password: str
   }
 }
 
+function defaultClientKey(): string | undefined {
+  try {
+    const k = path.join(getKeyDir(), 'id_ed25519');
+    return fs.existsSync(k) ? k : undefined;
+  } catch { return undefined; }
+}
+
+
 ipcMain.handle('remote-check-broadcaster', async (_event, { host, username, password }) => {
+ jl('info', 'ipc.remote-check-broadcaster.start', { host, username: !!username ? 'provided' : 'empty' });
+
   let ssh: NodeSSH | null = null;
   try {
     ssh = await connectForPreflight(host, username, password);
@@ -248,9 +380,13 @@ printf '{"hasPackage":%s,"servicePresent":%s,"serviceActive":%s,"legacyPresent":
     // JSON parse in main so renderer doesn’t need to trust shell text
     let parsed: any = {};
     try { parsed = JSON.parse(res.stdout.trim()); } catch { }
+    jl('info', 'ipc.remote-check-broadcaster.ok', { host, result: parsed });
+
     return parsed;
   } catch (e: any) {
     jsonLogger.warn({ event: 'remote-check-broadcaster.error', host, error: e?.message || String(e) });
+    jl('error', 'ipc.remote-check-broadcaster.error', { host, error: e?.message || String(e) });
+
     throw e;
   } finally {
     try { ssh?.dispose(); } catch { }
@@ -258,10 +394,16 @@ printf '{"hasPackage":%s,"servicePresent":%s,"serviceActive":%s,"legacyPresent":
 });
 
 ipcMain.handle('probe-health', async (_e, { ip, port }) => {
+  jl('info', 'ipc.probe-health.start', { ip, port });
+
   try {
     const r = await fetch(`http://${ip}:${port}/healthz`, { signal: AbortSignal.timeout(3000) });
+    jl('info', 'ipc.probe-health.ok', { ip, port, status: r.status, ok: r.ok });
+
     return { ok: r.ok, status: r.status };
   } catch (err: any) {
+    jl('warn', 'ipc.probe-health.error', { ip, port, error: err?.message || String(err) });
+
     return { ok: false, error: err?.message || String(err) };
   }
 });
@@ -274,6 +416,8 @@ const clientIdent = { installId };
 
 ipcMain.on('renderer-ready', (e) => {
   e.sender.send('client-ident', clientIdent);
+    jl('info', 'renderer.ready');
+
 });
 
 ipcMain.handle('get-client-ident', async () => ({ installId }))
@@ -290,8 +434,11 @@ function checkLogDir(): string {
       fs.mkdirSync(baseLogDir, { recursive: true });
     }
     console.debug(` Log directory ensured: ${baseLogDir}`);
+    jl('info', 'logs.dir.ensure.ok', { dir: baseLogDir });
+
   } catch (e: any) {
     console.error(` Failed to create log directory (${baseLogDir}):`, e.message);
+    jl('error', 'logs.dir.ensure.error', { dir: baseLogDir, error: e?.message || String(e) });
   }
   return baseLogDir;
 }
@@ -372,8 +519,11 @@ function createWindow() {
   });
 
   async function doFallbackScan(): Promise<Server[]> {
+    
     const ip = getLocalIP();
     const subnet = getSubnetBase(ip);
+    jl('info', 'fallback.scan.start', { subnet, localIP: ip });
+
     const ips = Array
       .from({ length: 256 }, (_, i) => `${subnet}.${i}`)
       .filter(candidate => candidate !== ip);
@@ -386,7 +536,8 @@ function createWindow() {
         const portOpen = await isPortOpen(candidateIp, 9090);
         if (!portOpen) return null;
         console.debug("port open at 9090 ", candidateIp);
-        
+        jl('info', 'fallback.scan.start', { subnet, localIP: ip });
+
         try {
           const res = await fetch(`https://${candidateIp}:9090/`, {
             method: 'GET',
@@ -397,7 +548,9 @@ function createWindow() {
           if (!res.ok) return null;
 
           console.debug("https at 9090 ", candidateIp);
-          
+          jl('debug', 'fallback.scan.https-ok', { ip: candidateIp });
+          jl('info', 'fallback.scan.done', { found: fallbackServers.length });
+
           return {
             ip: candidateIp,
             name: candidateIp,
@@ -450,18 +603,20 @@ function createWindow() {
 
   ipcMain.on('log:info', (_e, payload) => {
     jsonLogger.info(payload);
-    log.info(payload.event, payload.data);
+    // log.info(payload.event, payload.data);
   });
   ipcMain.on('log:warn', (_e, payload) => {
     jsonLogger.warn(payload);
-    log.warn(payload.event, payload.data);
+    // log.warn(payload.event, payload.data);
   });
   ipcMain.on('log:error', (_e, payload) => {
     jsonLogger.error(payload);
-    log.error(payload.event, payload.data);
+    // log.error(payload.event, payload.data);
   });
 
   ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id }) => {
+    jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id });
+
     const send = (label: string, step?: string) =>
       event.sender.send('bootstrap-progress', { id, ts: Date.now(), step, label });
 
@@ -472,17 +627,29 @@ function createWindow() {
         onProgress: ({ step, label }: any) => send(label, step),
       });
       send(res.success ? 'Bootstrap complete.' : 'Bootstrap failed.', res.success ? 'done' : 'error');
+      jl('info', 'ipc.run-remote-bootstrap.done', { host, id, success: !!res?.success });
+
       return res;
     } catch (err: any) {
       send('Bootstrap failed.', 'error');
+      jl('error', 'ipc.run-remote-bootstrap.error', { host, id, error: err?.message || String(err) });
+
       return { success: false, error: err?.message || String(err) };
     }
   });
   
-  ipcMain.handle('get-os', () => getOS());
+  ipcMain.handle('get-os', () => {
+    getOS();
+    jl('debug', 'ipc.get-os');
+
+  });
   
   ipcMain.handle('scan-network-fallback', async () => {
-    return await doFallbackScan();
+    jl('info', 'ipc.scan-network-fallback.start');
+
+    const res = await doFallbackScan();
+    jl('info', 'ipc.scan-network-fallback.done', { count: (res || []).length });
+    return res;
   });
 
 
@@ -495,28 +662,39 @@ function createWindow() {
       IPCRouter.getInstance().send(
         'renderer', 'action',
         JSON.stringify({ type: 'notification', message })
+        
       );
     } catch { }
+    jl('info', 'notify.push', { message, buffered: !rendererIsReady });
 
     if (!rendererIsReady) bufferedNotifications.push(message);
   }
 
 
   IPCRouter.getInstance().addEventListener('action', async (data) => {
+  jl('debug', 'ipcrouter.action.received', { data: String(data).slice(0, 200) });
 
     if (data === "requestHostname") {
+          jl('debug', 'ipcrouter.action.requestHostname');
+
       IPCRouter.getInstance().send('renderer', 'action', JSON.stringify({
         type: "sendHostname",
         hostname: await unwrap(server.getHostname())
       }));
     } else if (data === "show_dashboard") {
+          jl('debug', 'ipcrouter.action.show_dashboard');
+
       IPCRouter.getInstance().send('renderer', 'action', 'show_dashboard');
     }
     else {
       try {
         const message = JSON.parse(data);
+              jl('debug', 'ipcrouter.action.parsed', { type: message?.type });
+
         if (message.type === 'addManualIP') {
+                  
           const { ip, manuallyAdded } = message as { ip: string; manuallyAdded?: boolean };
+          jl('info', 'ipcrouter.addManualIP.start', { ip });
 
           // 1) Try Cockpit’s HTTPS on 9090, but DON’T let a throw skip the SSH probe
           let httpsReachable = false;
@@ -588,8 +766,11 @@ function createWindow() {
           attachSetupSSE(ip);
 
           mainWindow.webContents.send('discovered-servers', discoveredServers);
+        jl('info', 'ipcrouter.addManualIP.result', { ip, reachable, httpsReachable });
 
         } else if (message.type === 'rescanServers') {
+          jl('info', 'ipcrouter.rescanServers.start', { countBefore: discoveredServers.length });
+
           // close any live SSE streams first
           for (const s of discoveredServers) detachSetupSSE(s.ip);
           // clear & notify
@@ -608,9 +789,13 @@ function createWindow() {
               }
             }
           }, TIMEOUT_DURATION);
+            jl('info', 'ipcrouter.rescanServers.done', { countAfter: discoveredServers.length });
+
         } 
       } catch (error) {
         console.error("Failed to handle IPC action:", data, error);
+        jl('error', 'ipcrouter.action.parse-error', { data: String(data).slice(0, 200), error: String(error) });
+
       }
     }
   });
@@ -636,8 +821,11 @@ function createWindow() {
 
   // Set up mDNS for service discovery
   const mDNSClient = mdns();
+  jl('info', 'mdns.client.created');
+
   mDNSClient.query({ questions: [{ name: serviceType, type: 'PTR' }] });
-  
+  jl('debug', 'mdns.query.ptr', { serviceType });
+
   const SERVICE_TYPE = '_houstonserver._tcp.local'; 
 
   const norm = (s?: string) =>
@@ -726,6 +914,8 @@ function createWindow() {
     mainWindow?.webContents.send('discovered-servers', discoveredServers);
     mainWindow?.webContents.send('client-ip', getLocalIP());
     attachSetupSSE(s.ip);   // initial status comes via SSE immediately
+    jl('info', 'mdns.upsert', { instance: instanceRaw, ip, displayName, txt: Object.keys(txt) });
+
   }
 
   mDNSClient.on('response', (response) => {
@@ -750,7 +940,10 @@ function createWindow() {
         if (isGoodV4(ip)) aByHost.set(host, ip);
       }
     }
-
+    jl('debug', 'mdns.response', {
+      answers: (response.answers || []).length,
+      additionals: (response.additionals || []).length
+    });
     // 2) Try to build/refresh any instances we know about
     for (const instance of srvByInstance.keys()) {
       upsertServerFrom(instance);
@@ -762,6 +955,8 @@ function createWindow() {
     mDNSClient.query({
       questions: [{ name: '_houstonserver._tcp.local', type: 'PTR' }],
     })
+    jl('debug', 'mdns.interval.query');
+
   }, 5000);
 
 
@@ -780,6 +975,11 @@ function createWindow() {
 
     // push the updated list back to the renderer
     mainWindow.webContents.send('discovered-servers', discoveredServers)
+    jl('debug', 'servers.cleanup.tick', {
+      current: discoveredServers.length,
+      stale: stale.length
+    });
+
   }, 5000)
 
 
@@ -810,49 +1010,29 @@ app.on('web-contents-created', (_event, contents) => {
 
 app.whenReady().then(() => {
   const resolvedLogDir = checkLogDir();
+  jl('info', 'app.ready', {
+    userData: app.getPath('userData'),
+    logsDir: resolvedLogDir,
+    env: process.env.NODE_ENV || 'production'
+  });
+
   initLogging(resolvedLogDir);
 
   console.debug('userData is here:', app.getPath('userData'))
   console.debug('log dir:', resolvedLogDir);
 
-  log.info("🟢 Logging initialized.");
-  log.info("Log file path:", log.transports.file.getFile().path);
-
-  jsonLogger = createLogger({
-    level: 'info',
-    format: format.combine(
-      format.timestamp(),
-      // <-- this filter will DROP any record whose message includes the TLS warning
-      format((info) => {
-        if (
-          typeof info.message === 'string' &&
-          info.message.includes(
-            'Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED'
-          )
-        ) {
-          return false;
-        }
-        return info;
-      })(),
-      format.json()
-    ),
-    transports: [
-      new DailyRotateFile({
-        dirname: resolvedLogDir,
-        filename: 'studio-share-%DATE%.json',
-        datePattern: 'YYYY-MM-DD',
-        maxFiles: '14d',
-        zippedArchive: true,
-      })
-    ]
-  });
-
+  // log.info("🟢 Logging initialized.");
+  // log.info("Log file path:", // log.transports.file.getFile().path);
 
   session.defaultSession.setCertificateVerifyProc((req, cb) => {
+    jl('info', 'cert.verify.start', { hostname: req.hostname, pid: process.pid });
+
     // Quick dev escape for localhost
     if (process.env.NODE_ENV === 'development' &&
-      (req.hostname === 'localhost' || req.hostname.startsWith('127.')))
-      return cb(0);
+      (req.hostname === 'localhost' || req.hostname.startsWith('127.'))) {
+        jl('debug', 'cert.verify.dev-bypass', { hostname: req.hostname });
+        return cb(0);
+    }
 
     const presented = req.certificate.fingerprint;
     const pinned = getPin(req.hostname);
@@ -896,11 +1076,11 @@ app.whenReady().then(() => {
   // (autoUpdater.logger as typeof log).transports.file.level = 'info';
 
   // autoUpdater.on('checking-for-update', () => {
-  //   log.info('🔄 Checking for update...');
+  //   // log.info('🔄 Checking for update...');
   // });
 
   // autoUpdater.on('update-available', (info) => {
-  //   log.info('⬇️ Update available:', info);
+  //   // log.info('⬇️ Update available:', info);
 
   //   if (process.platform === 'linux') {
   //     // Notify renderer that a manual download is needed
@@ -911,23 +1091,23 @@ app.whenReady().then(() => {
   // });
 
   // autoUpdater.on('update-not-available', (info) => {
-  //   log.info(' No update available:', info);
+  //   // log.info(' No update available:', info);
   // });
 
   // autoUpdater.on('error', (err) => {
-  //   log.error(' Update error:', err);
+  //   // log.error(' Update error:', err);
   // });
 
   // autoUpdater.on('download-progress', (progressObj) => {
   //   const logMsg = `📦 Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
   //     1
   //   )}% (${progressObj.transferred}/${progressObj.total})`;
-  //   log.info(logMsg);
+  //   // log.info(logMsg);
   // });
 
   // if (process.platform !== 'linux') {
   //   autoUpdater.on('update-downloaded', (info) => {
-  //     log.info(' Update downloaded. Will install on quit:', info);
+  //     // log.info(' Update downloaded. Will install on quit:', info);
   //     // autoUpdater.quitAndInstall(); // Optional
   //   });
 
@@ -958,7 +1138,10 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
+    jl('info', 'app.activate', { openWindows: BrowserWindow.getAllWindows().length });
   });
+  jl('info', 'window.created');
+
 
 });
 
@@ -967,10 +1150,14 @@ app.whenReady().then(() => {
 // });
 
 ipcMain.handle('dialog:pickFiles', async () => {
+    jl('debug', 'dialog.pickFiles.open');
+
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile', 'multiSelections']
   });
   if (canceled) return [];
+    jl('info', 'dialog.pickFiles.done', { count: filePaths?.length || 0 });
+
   return filePaths.map(p => ({ path: p, name: path.basename(p), size: fs.statSync(p).size }));
 });
 
@@ -981,6 +1168,8 @@ ipcMain.handle('dialog:pickFolder', async () => {
   if (canceled || !filePaths.length) return [];
   const dir = filePaths[0];
   const files = fs.readdirSync(dir);
+    jl('info', 'dialog.pickFolder.done', { dir, count: files.length });
+
   return files.map(f => {
     const fp = path.join(dir, f);
     const s = fs.statSync(fp);
@@ -1014,6 +1203,8 @@ ipcMain.on(
       target: UploadTarget
     }
   ) => {
+    jl('info', 'upload.start', { id, filePath, destDir, target });
+
     try {
       if (!target || !target.host) {
         event.sender.send(`upload-done-${id}`, { error: 'missing upload target host' })
@@ -1038,10 +1229,14 @@ ipcMain.on(
       inflightUploads.set(id, stream)
 
       stream.on('data', (chunk) => {
+          if (sent === 0) jl('debug', 'upload.first-bytes', { id });
+
         sent += chunk.length
         event.sender.send(`upload-progress-${id}`, Math.floor((sent / total) * 100))
       })
       stream.on('error', (err) => {
+          jl('error', 'upload.stream.error', { id, error: err?.message || String(err) });
+
         event.sender.send(`upload-done-${id}`, { error: err?.message || 'stream error' })
         inflightUploads.delete(id)
       })
@@ -1055,12 +1250,17 @@ ipcMain.on(
           'Content-Length': String(total),
         },
       })
+jl('info', 'upload.http.response', { id, status: res.status, ok: res.ok });
 
       // Try to parse JSON; if not JSON, return a minimal shape
       let json: any = {}
-      try { json = await res.json() } catch { json = { ok: res.ok, status: res.status } }
+      try { json = await res.json() } catch { 
+        jl('warn', 'upload.http.nonjson', { id, status: res.status });
+        json = { ok: res.ok, status: res.status } }
 
       event.sender.send(`upload-done-${id}`, json)
+      jl('info', 'upload.done', { id, ok: !!json?.ok, status: json?.status });
+
     } catch (err: any) {
       event.sender.send(`upload-done-${id}`, { error: err?.message || String(err) })
     } finally {
@@ -1076,6 +1276,8 @@ ipcMain.on('upload:file:cancel', (event, { id }) => {
     inflightUploads.delete(id)
   }
   event.sender.send(`upload-done-${id}`, { error: 'canceled' })
+  jl('info', 'upload.cancel', { id });
+
 })
 
 
@@ -1086,106 +1288,71 @@ type RsyncStartOpts = {
   user: string
   destDir: string       // remote directory (no filename)
   port?: number
-  keyPath?: string      // ~/.ssh/id_rsa etc (optional if using agent)
+  keyPath?: string      // ~/.ssh/id_ed25519 etc (optional if using agent)
   bwlimitKb?: number    // optional bandwidth limit (KB/s)
   extraArgs?: string[]  // any other rsync flags
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams>()
 
-function buildRsyncArgs(o: RsyncStartOpts) {
-  const sshParts = ['ssh']
-  if (o.port) sshParts.push('-p', String(o.port))
-  if (o.keyPath) sshParts.push('-i', o.keyPath)
-
-  const args = [
-    '-az',
-    '--info=progress2',     // total-progress line
-    '--human-readable',     // 10.5MB/s, etc
-    '--partial',
-    '--inplace',
-    '-e', sshParts.join(' '),
-  ]
-
-  if (o.bwlimitKb && o.bwlimitKb > 0) args.push(`--bwlimit=${o.bwlimitKb}`)
-  if (o.extraArgs?.length) args.push(...o.extraArgs)
-
-  const srcIsDir = (() => { try { return fs.statSync(o.src).isDirectory() } catch { return false } })()
-  const srcFinal = srcIsDir ? (o.src.endsWith('/') ? o.src : o.src + '/') : o.src
-
-  const dest = `${o.user}@${o.host}:${o.destDir.endsWith('/') ? o.destDir : o.destDir + '/'}`
-  args.push(srcFinal, dest)
-  return args
-}
-
 
 function parseProgress(line: string) {
-  // Examples (progress2):
+  // progress2 (single running line) AND classic (--progress) look like:
   // "  42,123,456  12%   12.34MB/s    0:10:01 (xfr#1, to-chk=0/5)"
   // "123,456,789  55%    9.8MiB/s    0:03:21"
-  const percentMatch = line.match(/(\d+)%/)
-  const rateMatch    = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i)     // KiB/s, MiB/s, MB/s, etc
-  const etaMatch     = line.match(/(\d+:\d{2}:\d{2})/)              // 0:10:01
-  const bytesMatch   = line.trim().match(/^(\d[\d,]*)\s+/)          // leading bytes count
+  // classic also emits "fileX => fileY" etc; we ignore non-matching lines.
 
-  const percent = percentMatch ? Number(percentMatch[1]) : undefined
-  const rate = rateMatch ? `${rateMatch[1]} ${rateMatch[2]}B/s` : undefined
-  const eta = etaMatch ? etaMatch[1] : undefined
-  const bytesTransferred = bytesMatch ? Number(bytesMatch[1].replace(/,/g, '')) : undefined
+  const percentMatch = line.match(/(\d+(?:\.\d+)?)%/);
+  const rateMatch    = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i); // KiB/s, MiB/s, MB/s...
+  const etaMatch     = line.match(/\b(\d+:\d{2}:\d{2})\b/);
+  const bytesMatch   = line.trim().match(/^(\d[\d,]*)\s+/);
 
-  return { percent, rate, eta, bytesTransferred, raw: line }
+  const percent = percentMatch ? Number(percentMatch[1]) : undefined;
+  const rate = rateMatch ? `${rateMatch[1]} ${rateMatch[2]}B/s` : undefined;
+  const eta = etaMatch ? etaMatch[1] : undefined;
+  const bytesTransferred = bytesMatch ? Number(bytesMatch[1].replace(/,/g, '')) : undefined;
+
+  return { percent, rate, eta, bytesTransferred, raw: line };
 }
 
-// Start
-ipcMain.on('rsync:start', (event, opts: RsyncStartOpts) => {
-  const { id } = opts
+
+ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
+  const { id } = opts;
+  const knownHostsPath = path.join(app.getPath('userData'), 'known_hosts');
+  const keyPath = opts.keyPath || defaultClientKey();
+  try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, ''); } catch {}
+
   if (inflightRsync.has(id)) {
-    event.sender.send(`rsync:done:${id}`, { error: 'duplicate id' })
-    return
+    event.sender.send(`rsync:done:${id}`, { error: 'duplicate id' });
+    return;
   }
 
-  const args = buildRsyncArgs(opts)
+  jl('info', 'rsync.start', { id, host: opts.host, user: opts.user, src: opts.src, destDir: opts.destDir });
 
-  const child = spawn('rsync', args, {
-    env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
-    })
-  inflightRsync.set(id, child)
-  let buf = ''
+  try {
+    const picked = buildRsyncCmdAndArgs({...opts, keyPath, knownHostsPath});
+    inflightRsync.set(id, null as any); // placeholder just to gate duplicates
 
-  // rsync prints progress on stderr with --info=progress2
-  child.stderr.on('data', (chunk) => {
-    buf += chunk.toString()
-    // normalize CR to NL so we can split uniformly
-    buf = buf.replace(/\r/g, '\n')
-    const lines = buf.split('\n')
-    buf = lines.pop() || '' // keep last partial
-    for (const line of lines) {
-      const t = line.trim()
-      if (!t) continue
-      const parsed = parseProgress(t)
-      event.sender.send(`rsync:progress:${id}`, parsed)
-    }
-  })
+    const code = await runRsync({
+      id,
+      cmd: picked.cmd,
+      args: picked.args,
+      win: BrowserWindow.getAllWindows()[0],
+      logger: { info: (m: any) => jsonLogger.info(m), warn: (m: any) => jsonLogger.warn(m), error: (m: any) => jsonLogger.error(m) },
+    });
 
-  child.stdout.on('data', (chunk) => {
-    // Not typically used with --info=progress2, but forward in case useful
-    const line = chunk.toString().trim()
-    if (line) {
-      event.sender.send(`rsync:progress:${id}`, { raw: line })
-    }
-  })
+    inflightRsync.delete(id);
+    if (code === 0) event.sender.send(`rsync:done:${id}`, { ok: true });
+    else event.sender.send(`rsync:done:${id}`, { error: `rsync exited ${code}` });
+    jl('info', 'rsync.close', { id, code });
 
-  child.on('error', (err) => {
-    inflightRsync.delete(id)
-    event.sender.send(`rsync:done:${id}`, { error: err?.message || 'spawn error' })
-  })
+  } catch (err: any) {
+    inflightRsync.delete(id);
+    event.sender.send(`rsync:done:${id}`, { error: err?.message || 'spawn error' });
+    jl('error', 'rsync.error', { id, error: err?.message || String(err) });
+  }
+});
 
-  child.on('close', (code) => {
-    inflightRsync.delete(id)
-    if (code === 0) event.sender.send(`rsync:done:${id}`, { ok: true })
-    else event.sender.send(`rsync:done:${id}`, { error: `rsync exited ${code}` })
-  })
-})
 
 // Cancel
 ipcMain.on('rsync:cancel', (_event, { id }) => {
@@ -1204,5 +1371,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+  jl('info', 'app.window-all-closed', { platform: process.platform });
+
 });
 

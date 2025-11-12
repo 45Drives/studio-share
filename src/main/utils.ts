@@ -18,7 +18,7 @@ export function getOS(): 'mac' | 'rocky' | 'debian' | 'win' {
 export function getRsync() {
   let basePath = getAppPath();
 
-  const sshKeyPath = path.join(basePath, ".ssh", "id_rsa");
+  const sshKeyPath = path.join(basePath, ".ssh", "id_ed25519");
   const rsyncPath = getOS() === "win" ? path.join(basePath, "cwrsync", "bin", "rsync.exe") : "rsync";
   const sshWithKey = `ssh -i '${sshKeyPath}'`;
   const rsync = `${rsyncPath} -az -e "${sshWithKey}"`
@@ -114,7 +114,7 @@ export function getSsh() {
 export function getSSHKey() {
   let basePath = getAppPath();
 
-  const sshKeyPath = path.join(basePath, ".ssh", "id_rsa");
+  const sshKeyPath = path.join(basePath, ".ssh", "id_ed25519");
   return sshKeyPath;
 }
 
