@@ -8,6 +8,14 @@ function initLogging(resolvedLogDir: string) {
   //   electron: process.versions.electron,
   //   appVersion: app?.getVersion?.() || 'unknown',
   // });
+  const dropNoisyMdns = format((info) => {
+  if (process.env.NODE_ENV !== 'development') {
+    if (info.event === 'mdns.upsert' && info.changed !== true) return false;
+    if (info.event === 'mdns.response') return false;
+  }
+  return info;
+});
+
   jsonLogger = createLogger({
     level: 'info',
     format: format.combine(
@@ -19,13 +27,18 @@ function initLogging(resolvedLogDir: string) {
       })(),
       format.json()
     ),
-    transports: [new DailyRotateFile({
-      dirname: resolvedLogDir,
-      filename: '45studio-share-client-%DATE%.json',
-      datePattern: 'YYYY-MM-DD',
-      maxFiles: '14d',
-      zippedArchive: true,
-    })],
+    
+    transports: [
+      new DailyRotateFile({
+        dirname: resolvedLogDir,
+        filename: '45studio-share-client-%DATE%.json',
+        datePattern: 'YYYY-MM-DD',
+        maxFiles: '14d',
+        zippedArchive: true,
+        level: 'info',
+        format: format.combine(dropNoisyMdns(), format.json())
+      })
+    ]
   });
 
  const originalConsole = {
@@ -81,7 +94,7 @@ import { IPCRouter } from '../../houston-common/houston-common-lib/lib/electronI
 import { getOS } from './utils';
 import { v4 as uuidv4 } from 'uuid';
 import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from './crossPlatformSsh';
-import { connectWithKey, connectWithPassword } from './setupSsh'; 
+import { connectWithKey, connectWithPassword, setupSshKey } from './setupSsh'; 
 import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
@@ -289,6 +302,15 @@ async function preflightSetupStatus(ip: string): Promise<{ ok: boolean; code?: n
   }
 }
 
+const mdnsLastSigByIp = new Map<string, string>();
+const mdnsLastLogAt = new Map<string, number>();
+const MDNS_MIN_INTERVAL_MS = 60_000; // at most once/min per IP when nothing changes
+function mdnsSignature(txt: Record<string,string>, ip: string, displayName: string) {
+  // stable signature of what we care about
+  const keys = Object.keys(txt).sort();
+  const body = keys.map(k => `${k}=${txt[k]}`).join('&');
+  return `${ip}|${displayName}|${body}`;
+}
 
 // Helper to connect via agent or password-planted key
 async function connectForPreflight(host: string, username: string, password: string) {
@@ -407,6 +429,119 @@ ipcMain.handle('probe-health', async (_e, { ip, port }) => {
     return { ok: false, error: err?.message || String(err) };
   }
 });
+
+ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }: { host: string; username: string; password?: string }) => {
+  const keyDir = getKeyDir();
+  const priv = path.join(keyDir, 'id_ed25519');
+  const pub  = `${priv}.pub`;
+
+  jl('info', 'ensure-ssh-ready.start', {
+    host,
+    username,
+    hasPassword: !!password,
+    agentSock: getAgentSocket() || null,
+    keyDir,
+    privExists: fs.existsSync(priv),
+    pubExists: fs.existsSync(pub),
+  });
+
+  try {
+    // Ensure local keypair exists
+    await ensureKeyPair(priv, pub);
+    jl('info', 'ensure-ssh-ready.keypair.ready', { priv, pub });
+
+    const agentSock = getAgentSocket();
+
+    // 1) Try agent-only first (no server changes)
+    if (agentSock) {
+      jl('info', 'ensure-ssh-ready.agent.try', { agentSock });
+      const trial = new NodeSSH();
+      try {
+        await trial.connect({ host, username, agent: agentSock, tryKeyboard: false, readyTimeout: 20_000 });
+        jl('info', 'ensure-ssh-ready.agent.ok', { host, username });
+        try { trial.dispose(); } catch {}
+        return { ok: true, keyPath: priv, via: 'agent' };
+      } catch (e: any) {
+        jl('warn', 'ensure-ssh-ready.agent.fail', {
+          host, username,
+          error: e?.message || String(e),
+        });
+        try { trial.dispose(); } catch {}
+        // fall through to key planting
+      }
+    } else {
+      jl('debug', 'ensure-ssh-ready.agent.none');
+    }
+
+    // 2) Plant our pubkey using the helper (idempotent; handles perms/SELinux)
+    if (!password) {
+      const msg = 'No SSH agent and no password provided for initial key install.';
+      jl('warn', 'ensure-ssh-ready.no-creds', { host, username });
+      return { ok: false, error: msg };
+    }
+
+    jl('info', 'ensure-ssh-ready.plant.begin', { host, username, pubPresent: fs.existsSync(pub) });
+    await setupSshKey(host, username, password);
+    jl('info', 'ensure-ssh-ready.plant.ok', { host, username });
+
+    // 3) Verify with our file key (not via agent)
+    jl('info', 'ensure-ssh-ready.verify.begin', { host, username, keyPath: priv });
+    const verify = new NodeSSH();
+    try {
+      await verify.connect({
+        host, username,
+        privateKey: fs.readFileSync(priv, 'utf8'),
+        tryKeyboard: false,
+        readyTimeout: 20_000,
+      });
+      jl('info', 'ensure-ssh-ready.verify.ok', { host, username, algo: 'ed25519' });
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      jl('warn', 'ensure-ssh-ready.verify.fail', { host, username, error: msg });
+
+      // Fallback once: regenerate PEM RSA and retry (some stacks reject OpenSSH modern formats)
+      if (/Unsupported key format|Cannot parse privateKey/i.test(msg)) {
+        jl('info', 'ensure-ssh-ready.pem.regen.begin', { priv });
+        await regeneratePemKeyPair(priv);
+        jl('info', 'ensure-ssh-ready.pem.regen.ok', { priv, pubExists: fs.existsSync(`${priv}.pub`) });
+
+        jl('info', 'ensure-ssh-ready.plant.reapply.begin', { host, username });
+        await setupSshKey(host, username, password);
+        jl('info', 'ensure-ssh-ready.plant.reapply.ok', { host, username });
+
+        // Retry verification with the PEM key
+        try {
+          await verify.connect({
+            host, username,
+            privateKey: fs.readFileSync(priv, 'utf8'),
+            tryKeyboard: false,
+            readyTimeout: 20_000,
+          });
+          jl('info', 'ensure-ssh-ready.verify.ok', { host, username, algo: 'rsa-4096-pem' });
+        } catch (e2: any) {
+          const msg2 = String(e2?.message || e2);
+          jl('error', 'ensure-ssh-ready.verify.final-fail', { host, username, error: msg2 });
+          try { verify.dispose(); } catch {}
+          return { ok: false, error: msg2 };
+        }
+      } else {
+        try { verify.dispose(); } catch {}
+        return { ok: false, error: msg };
+      }
+    } finally {
+      try { verify.dispose(); } catch {}
+    }
+
+    jl('info', 'ensure-ssh-ready.ok', { host, username, via: 'password+planted-key' });
+    return { ok: true, keyPath: priv, via: 'password+planted-key' };
+
+  } catch (err: any) {
+    const error = err?.message || String(err);
+    jl('warn', 'ensure-ssh-ready.failed', { host, username, error });
+    return { ok: false, error };
+  }
+});
+
 
 const idFile = path.join(app.getPath('userData'), 'client-id.txt');
 let installId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf-8').trim() : '';
@@ -914,8 +1049,26 @@ function createWindow() {
     mainWindow?.webContents.send('discovered-servers', discoveredServers);
     mainWindow?.webContents.send('client-ip', getLocalIP());
     attachSetupSSE(s.ip);   // initial status comes via SSE immediately
-    jl('info', 'mdns.upsert', { instance: instanceRaw, ip, displayName, txt: Object.keys(txt) });
+    const sig = mdnsSignature(txt, ip, displayName);
+    const prev = mdnsLastSigByIp.get(ip);
+    const now  = Date.now();
+    const last = mdnsLastLogAt.get(ip) || 0;
 
+    const changed = sig !== prev;
+    const frequent = now - last < MDNS_MIN_INTERVAL_MS;
+
+    if (changed || !frequent) {
+      jl(changed ? 'info' : 'debug', 'mdns.upsert', {
+        instance: instanceRaw,
+        ip,
+        displayName,
+        // log just what changed is fine; avoid huge TXT payloads
+        keys: Object.keys(txt),
+        changed
+      });
+      mdnsLastSigByIp.set(ip, sig);
+      mdnsLastLogAt.set(ip, now);
+    }
   }
 
   mDNSClient.on('response', (response) => {
