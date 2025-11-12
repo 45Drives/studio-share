@@ -18,6 +18,27 @@ type RsyncStartOpts = {
   knownHostsPath?: string; // <- pass from main (e.g., app.getPath('userData')/known_hosts)
 };
 
+function ensureTrailingSlash(p: string) {
+  return p.endsWith('/') || p.endsWith('\\') ? p : p + '/';
+}
+
+function findScpPath(): string {
+  // Prefer built-in OpenSSH (Win10+), then Git, then PATH
+  const candidates = [
+    'C:\\Windows\\System32\\OpenSSH\\scp.exe',
+    'C:\\Program Files\\Git\\usr\\bin\\scp.exe',
+    'C:\\Program Files\\Git\\mingw64\\bin\\scp.exe',
+  ];
+  for (const c of candidates) if (pathExists(c)) return c;
+
+  const r = spawnSync('where', ['scp'], { encoding: 'utf8' });
+  if (r.status === 0) {
+    const fromPath = r.stdout.split(/\r?\n/).find(s => s.trim())?.trim();
+    if (fromPath) return fromPath;
+  }
+  return 'scp'; // hope it's on PATH
+}
+
 const pathExists = (p: string) => { try { fs.accessSync(p); return true; } catch { return false; } };
 
 function looksGitLikeRsync(cmdPath: string) {
@@ -193,31 +214,52 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
     return { cmd: pick.cmd, args, useWSL: false };
   }
 
-  // ── Windows (native msys/cygwin/cwRsync): normalize to MSYS paths when needed ─
+  // ── Windows: use SCP over SSH ────────────────────────────────────────────────
   if (process.platform === 'win32') {
-    const msysMode = looksGitLikeRsync(pick.cmd); // true for Git/Cygwin/cwRsync installs
+    const scp = findScpPath();
 
-    // Convert ONLY when using msys-like rsync
-    const srcFinal = msysMode ? toMSYS(srcFinalRaw) : srcFinalRaw;
-    const keyPath = maybeToMSYS(o.keyPath, msysMode);
-    const khPath  = maybeToMSYS(knownHosts, msysMode);
+    const srcIsDir = (() => { try { return fs.statSync(o.src).isDirectory(); } catch { return false; } })();
+    const srcFinal = o.src; // raw Windows path; passing as separate arg avoids quoting issues
 
-    // Avoid -i; prefer IdentityFile="..." to survive spaces on Windows
-    const sshParts = ['ssh'];
-    if (o.port) sshParts.push('-p', String(o.port));
-    if (keyPath) sshParts.push('-o', `IdentityFile="${keyPath}"`, '-o', 'IdentitiesOnly=yes');
-    sshParts.push(
+    const fallbackKH = path.join(process.env.HOME || process.env.USERPROFILE || '', '.ssh', 'known_hosts');
+    const knownHosts = o.knownHostsPath || fallbackKH;
+
+    // Remote destination uses POSIX form (as with rsync): user@host:/dir/
+    const destRemote = `${o.user}@${o.host}:${ensureTrailingSlash(o.destDir).replace(/\\/g, '/')}`;
+
+    const args: string[] = [];
+
+    // Recurse if directory
+    if (srcIsDir) args.push('-r');
+
+    // Progress is shown by default in a console; add -v if you want noisy logs:
+    // args.push('-v');
+
+    // Bandwidth limit: scp expects Kbit/s; our value is KB/s
+    if (o.bwlimitKb && o.bwlimitKb > 0) {
+      const kbit = Math.max(1, o.bwlimitKb * 8);
+      args.push('-l', String(kbit));
+    }
+
+    // Port/key/ssh options (mirror your rsync ssh settings)
+    if (o.port) args.push('-P', String(o.port)); // NOTE: scp uses uppercase -P
+    if (o.keyPath) args.push('-i', o.keyPath);
+
+    args.push(
       '-o', 'BatchMode=yes',
+      '-o', 'IdentitiesOnly=yes',
       '-o', 'PreferredAuthentications=publickey',
       '-o', 'StrictHostKeyChecking=accept-new',
-      '-o', `UserKnownHostsFile="${khPath}"`,
+      '-o', `UserKnownHostsFile=${knownHosts}`,
       '-o', 'ConnectTimeout=10',
       '-o', 'ServerAliveInterval=15',
       '-o', 'ServerAliveCountMax=2'
     );
 
-    const args = [...baseArgs, '-e', sshParts.join(' '), srcFinal, dest];
-    return { cmd: pick.cmd, args, useWSL: false };
+    // src then dest
+    args.push(srcFinal, destRemote);
+
+    return { cmd: scp, args, useWSL: false };
   }
 
   // ── Linux native ────────────────────────────────────────────────────────────
