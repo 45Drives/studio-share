@@ -85,7 +85,7 @@ fetch_artifacts() {
   echo "→ Fetching artifacts"
   mkdir -p "$OUTPUT_DIR"
   # Grab everything; your artifactName yields names like:
-  # "45Studio Filesharing-<ver>-linux-<arch>.{deb,rpm,pacman,AppImage?}"
+  # "45Studio-Filesharing-<ver>-linux-<arch>.{deb,rpm,pacman,AppImage?}"
   rsync -avz -e "ssh $SSH_OPTS" \
     "$REMOTE_HOST:$REMOTE_DIR/dist/" "$OUTPUT_DIR/"
 }

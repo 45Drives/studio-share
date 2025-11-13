@@ -35,14 +35,14 @@ ssh "${WIN_HOST}" "cd ${REMOTE_BUILD_DIR} && yarn install && yarn build:win"
 
 # 4) Pull artifacts back
 # Your artifactName is: "${productName}-${version}-${os}-${arch}.${ext}"
-# Example: "45Studio Filesharing-1.2.3-win-x64.exe" (note the space!)
+# Example: "45Studio-Filesharing-1.2.3-win-x64.exe" (note the space!)
 rsync -avz \
-  "${WIN_HOST}:${REMOTE_BUILD_DIR}/dist/45Studio Filesharing-*-win-*.exe" \
+  "${WIN_HOST}:${REMOTE_BUILD_DIR}/dist/45Studio-Filesharing-*-win-*.exe" \
   "${LOCAL_OUTPUT_DIR}/" || true
 
 # (Optional) pull auto-update files if you use electron-updater
 rsync -avz \
-  "${WIN_HOST}:${REMOTE_BUILD_DIR}/dist/45Studio Filesharing-*-win-*.yml" \
+  "${WIN_HOST}:${REMOTE_BUILD_DIR}/dist/45Studio-Filesharing-*-win-*.yml" \
   "${LOCAL_OUTPUT_DIR}/" || true
 
 echo "✅ Windows build complete."

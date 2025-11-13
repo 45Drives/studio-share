@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# 45Studio Filesharing — macOS packaging script
+# 45Studio-Filesharing — macOS packaging script
 #
 # What this does (mirrors the steps we used to get a clean build):
 #   1) Build with electron-builder (already signs the .app if cert is present)
@@ -30,7 +30,7 @@
 
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# 45Studio Filesharing — macOS packaging (env-driven)
+# 45Studio-Filesharing — macOS packaging (env-driven)
 # Reads credentials and identity from environment variables (see .env.macos-build)
 # -----------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: missing $1" >&2; exit
 for bin in node yarn xcrun codesign hdiutil xattr ditto; do need "$bin"; done
 
 # ---- App metadata ------------------------------------------------------------
-PRODUCT_NAME="45Studio Filesharing"
+PRODUCT_NAME="45Studio-Filesharing"
 APP_BUNDLE="${PRODUCT_NAME}.app"
 APP_VERSION="$(node -p "require('./package.json').version")"
 DMG_BASENAME="${PRODUCT_NAME}-${APP_VERSION}-mac-x64"
