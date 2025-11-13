@@ -49,15 +49,7 @@
 
 							<span class="text-sm opacity-75">({{ prettyExpiry }})</span>
 						</div>
-						<!-- <div class="flex items-center gap-3">
-							<label class="whitespace-nowrap font-semibold">Link Network Availability:</label>
-							<label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-								<input type="checkbox" v-model="usePublicBase" />
-								<span>{{ usePublicBase ? 'External Internet Access' : 'LAN Access' }}</span>
-							</label>
-						</div> -->
 
-						<!-- Password (optional) -->
 						<div class="flex flex-row justify-between">
 							<div class="flex items-center gap-3">
                                     <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link Access:</label>
@@ -83,8 +75,7 @@
                                     </span>
                                 </div>
 
-
-
+								<!-- Password (optional) -->
 								<div class="flex items-center gap-3">
                                     <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
                                     <div class="flex items-center gap-2">
