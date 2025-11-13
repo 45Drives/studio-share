@@ -98,7 +98,6 @@ import { connectWithKey, connectWithPassword, setupSshKey } from './setupSsh';
 import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
-import { registerCredsIPC } from './creds.ipc';
 import { getPin, rememberPin } from './certPins'
 import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
@@ -1291,7 +1290,6 @@ app.whenReady().then(() => {
     return result.canceled ? null : result.filePaths[0]; // Return full folder path
   });
 
-  registerCredsIPC(ipcMain, app);
   createWindow();
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
