@@ -219,7 +219,7 @@ async function generateLink() {
 			path: '/' + destFolderRel.value.replace(/^\/+/, ''),
 			kind: 'folder',
 			allowUpload: true,
-			expiresSec: Number(expiresSec.value) || 0,
+			expiresIn: Number(expiresSec.value) || 0,
 			title: linkTitle.value || undefined,
 			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 			// baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
