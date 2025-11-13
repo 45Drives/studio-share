@@ -15,6 +15,11 @@ export type WinScpOpts = {
     onProgress?: (pct?: number, sentBytes?: number, totalBytes?: number) => void; // best-effort (single-file)
 };
 
+function shellQuotePosix(p: string): string {
+    // Wrap in single quotes and escape any existing single quotes
+    return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
 export async function runWinScp(o: WinScpOpts): Promise<number> {
     const st = fs.statSync(o.src);
     const scp = findScp();
@@ -107,7 +112,13 @@ function buildScpArgs(o: { isDir: boolean; port?: number; keyPath?: string; know
     return args;
 }
 
-function remoteSize(host: string, user: string, remotePath: string, keyPath?: string, port?: number): Promise<number> {
+function remoteSize(
+    host: string,
+    user: string,
+    remotePath: string,
+    keyPath?: string,
+    port?: number
+): Promise<number> {
     return new Promise<number>((resolve) => {
         const ssh = findSsh();
         const args: string[] = [];
@@ -115,12 +126,20 @@ function remoteSize(host: string, user: string, remotePath: string, keyPath?: st
         if (keyPath) args.push('-i', keyPath, '-o', 'IdentitiesOnly=yes');
         args.push('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new');
 
-        const cmd = `bash -lc "stat -c %s ${remotePath.replace(/"/g, '\\"')}"`;
-        const child = spawn(ssh, [...args, `${user}@${host}`, cmd], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+        const cmd = `bash -lc "stat -c %s ${shellQuotePosix(remotePath)}"`;
+
+        const child = spawn(
+            ssh,
+            [...args, `${user}@${host}`, cmd],
+            { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+        );
 
         let out = '';
-        child.stdout.on('data', d => out += String(d));
-        child.on('close', () => resolve(Number(out.trim()) || 0));
+        child.stdout.on('data', d => { out += String(d); });
+        child.on('close', () => {
+            const n = Number(out.trim());
+            resolve(Number.isFinite(n) && n >= 0 ? n : 0);
+        });
         child.on('error', () => resolve(0));
     });
 }
