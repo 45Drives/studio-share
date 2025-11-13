@@ -4,7 +4,7 @@
 			Currently Active Links
 		</div>
 
-		<div class="p-4 bg-well rounded-md">
+		<div class="p-4 bg-well rounded-md min-w-0">
 			<div class="flex flex-wrap gap-2 mb-3">
 				<input v-model="q" type="search" placeholder="Search title / dir / file..."
 					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-64" />
@@ -30,17 +30,17 @@
 			<div v-if="loading" class="p-3 text-sm opacity-80">Loading…</div>
 
 			<!-- table -->
-			<div class="overflow-x-auto">
-				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
+			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x">
+  				<table class="text-sm border border-default border-collapse table-fixed w-[101%] min-w-[101%]">
 					<colgroup>
-						<col class="w-[30%]" /> <!-- Title -->
-						<col class="w-[10%]" /> <!-- Type -->
-						<col class="w-[22%]" /> <!-- Short Link -->
+						<col class="w-[28%]" /> <!-- Title -->
+						<col class="w-[8%]" /> <!-- Type -->
+						<col class="w-[18%]" /> <!-- Short Link -->
 						<col class="w-[12%]" /> <!-- Expires -->
-						<col class="w-[10%]" /> <!-- Status -->
+						<col class="w-[6%]" /> <!-- Status -->
 						<col class="w-[6%]" /> <!-- Password -->
 						<col class="w-[10%]" /> <!-- Created -->
-						<col class="w-[10%]" /> <!-- Actions -->
+						<col class="w-[12%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
@@ -66,16 +66,16 @@
 						<tr v-for="it in filteredRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
 							<!-- Title -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div v-if="editingId !== it.id" class="min-w-0 flex items-center justify-between gap-2">
 									<span
-										class="font-medium cursor-pointer hover:underline block truncate max-w-[28ch] md:max-w-[40ch]"
-										@click="openDetails(it)">
-										{{ it.title || fallbackTitle(it) }}
+									class="font-medium cursor-pointer hover:underline block truncate max-w-[28ch] md:max-w-[40ch]"
+									@click="openDetails(it)">
+									{{ it.title || fallbackTitle(it) }}
 									</span>
 									<button class="text-xs text-blue-500 hover:underline shrink-0"
-										@click="startEdit(it)">
-										Edit Title
+									@click="startEdit(it)">
+									Edit Title
 									</button>
 								</div>
 
@@ -96,11 +96,11 @@
 							</td>
 
 							<!-- Short link -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div class="min-w-0 flex items-center gap-2 justify-between">
 									<a :href="it.shortUrl" target="_blank" rel="noopener"
-										class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
-										{{ it.shortUrl }}
+									class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
+									{{ it.shortUrl }}
 									</a>
 									<button class="text-blue-500 hover:underline text-xs shrink-0"
 										@click="copy(it.shortUrl)">Copy</button>
@@ -109,12 +109,12 @@
 
 
 							<!-- Expires -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
-								<div v-if="!expEditor[it.id]?.open" class="flex items-center gap-2 min-w-0">
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
+								<div v-if="!expEditor[it.id]?.open" class="min-w-0 flex items-center gap-2">
 									<div class="truncate" :class="expiresClass(it)">
-										{{ expiresLabel(it) }}
+											{{ expiresLabel(it) }}
 									</div>
-									<div class="ml-auto flex items-center gap-2 flex-nowrap">
+									<div class="ml-auto flex items-center gap-1 flex-nowrap">
 										<button class="btn btn-secondary text-xs h-7 px-2"
 											@click="makeNever(it)">Never</button>
 										<button class="btn btn-primary text-xs h-7 px-2"
@@ -172,20 +172,20 @@
 
 
 							<!-- Actions -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
-								<div class="flex items-center justify-around gap-2 flex-nowrap">
-									<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">View
-										Details</button>
-									<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
-										@click="viewLink(it)">
-										Open
-									</button>
-									<button class="btn btn-danger h-8 px-2 rounded-md"
-										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
-										@click="toggleDisable(it)">
-										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
-									</button>
-								</div>
+								<td class="p-2 border border-default align-middle overflow-hidden">
+									<div class="flex flex-nowrap items-center justify-around gap-1">
+										<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">
+											Details</button>
+										<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
+											@click="viewLink(it)">
+											Open
+										</button>
+										<button class="btn btn-danger h-8 px-2 rounded-md"
+											:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
+											@click="toggleDisable(it)">
+											{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
+										</button>
+									</div>
 								</td>
 						</tr>
 					</tbody>
