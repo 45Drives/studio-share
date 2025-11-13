@@ -30,8 +30,8 @@
 			<div v-if="loading" class="p-3 text-sm opacity-80">Loading…</div>
 
 			<!-- table -->
-			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x">
-  				<table class="text-sm border border-default border-collapse table-fixed w-[101%] min-w-[101%]">
+			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]">
+  				<table class="text-sm border border-default border-collapse table-fixed">
 					<colgroup>
 						<col class="w-[28%]" /> <!-- Title -->
 						<col class="w-[8%]" /> <!-- Type -->
@@ -172,7 +172,7 @@
 
 
 							<!-- Actions -->
-								<td class="p-2 border border-default align-middle overflow-hidden">
+								<td class="p-2 border border-default align-middle whitespace-nowrap">
 									<div class="flex flex-nowrap items-center justify-around gap-1">
 										<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">
 											Details</button>
