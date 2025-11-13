@@ -1,10 +1,10 @@
 <template>
 	<div>
 		<div class="rounded-t-lg bg-secondary text-default p-2 text-center font-semibold">
-			Currently Active Links
+			{{ headingTitle }}
 		</div>
 
-		<div class="p-4 bg-well rounded-md min-w-0">
+		<div class="p-2 bg-well rounded-md min-w-0">
 			<div class="flex flex-wrap gap-2 mb-3">
 				<input v-model="q" type="search" placeholder="Search title / dir / file..."
 					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-64" />
@@ -20,14 +20,26 @@
 					<option value="expired">Expired</option>
 					<option value="disabled">Disabled</option>
 				</select>
-
+				<button class="btn btn-secondary px-4 py-2 ml-auto" @click="refresh" :disabled="loading">
+					{{ loading ? 'Refreshing…' : 'Refresh' }}
+				</button>
 			</div>
 
 			<!-- errors -->
 			<div v-if="error" class="p-3 rounded bg-red-900/30 text-red-200 border border-red-800 mb-3">
 				{{ error }}
 			</div>
-			<div v-if="loading" class="p-3 text-sm opacity-80">Loading…</div>
+			<tr v-if="loading">
+				<td colspan="8" class="px-2 py-6 text-center text-default border border-default align-middle">
+					<div class="flex items-center justify-center gap-2">
+						<span
+							class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
+						<span class="text-sm opacity-80">
+							Loading...
+						</span>
+					</div>
+				</td>
+			</tr>
 
 			<!-- table -->
 			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]"
@@ -240,6 +252,25 @@ async function refresh() {
 const showModal = ref(false)
 const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
 const { formatEpochMs } = useTime();
+
+const headingTitle = computed(() => {
+	let label: string
+
+	if (!statusFilter.value) {
+		label = 'All Links'
+	} else if (statusFilter.value === 'active') {
+		label = 'Active Links'
+	} else if (statusFilter.value === 'expired') {
+		label = 'Expired Links'
+	} else if (statusFilter.value === 'disabled') {
+		label = 'Disabled Links'
+	} else {
+		label = 'All Links'
+	}
+
+	return `Currently ${label}`
+})
+
 onMounted(refresh);
 
 /* ----------- fetch/list endpoints ----------- */
