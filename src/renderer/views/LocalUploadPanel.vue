@@ -504,7 +504,6 @@ async function startUploads() {
 
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
-					row.alreadyUploaded = true;
 				}
 			} else if (row.status !== 'canceled') {
 				row.status = 'error';

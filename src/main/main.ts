@@ -104,7 +104,6 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
 import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
 import { runRsync } from './transfers/rsync-runner';
-import { runWinSshCopyFile } from './transfers/win-file-ssh';
 import { runWinScp } from './transfers/win-file-scp';
 
 let discoveredServers: Server[] = [];
@@ -1475,7 +1474,7 @@ ipcMain.on(
           'Content-Length': String(total),
         },
       })
-jl('info', 'upload.http.response', { id, status: res.status, ok: res.ok });
+      jl('info', 'upload.http.response', { id, status: res.status, ok: res.ok });
 
       // Try to parse JSON; if not JSON, return a minimal shape
       let json: any = {}
@@ -1524,7 +1523,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const knownHostsPath = path.join(app.getPath('userData'), 'known_hosts')
   const keyPath = opts.keyPath || defaultClientKey()
   const src = opts.src;
-  
+
   if (!isOwnedByCurrentUser(src)) {
     const msg = 'Source is not owned by this user or is not readable.';
     jl('warn', 'rsync.src.denied', { id, src });
@@ -1547,37 +1546,6 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
   try {
     if (process.platform === 'win32') {
-      const useSshStream = true; // change to false to force SCP
-
-      if (useSshStream && !isDir) {
-        // ── Windows SSH-stream path (file only) ────────────────
-        event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
-
-        await runWinSshCopyFile({
-          id,
-          src: opts.src,
-          host: opts.host,
-          user: opts.user,
-          destDir: opts.destDir,
-          port: opts.port,
-          keyPath,
-          knownHostsPath,
-          bwlimitKb: opts.bwlimitKb,
-          onProgress: (pct, sent, total) => {
-            event.sender.send(`upload:progress:${id}`, {
-              percent: pct,
-              bytesTransferred: sent,
-              raw: '',
-            })
-          },
-        })
-
-        event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
-        event.sender.send(`upload:done:${id}`, { ok: true })
-        jl('info', 'sshstream.close', { id, code: 0 })
-        return
-      }
-
       // ── Windows SCP path (or directories / fallback) ────────
       event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
