@@ -30,8 +30,9 @@
 			<div v-if="loading" class="p-3 text-sm opacity-80">Loading…</div>
 
 			<!-- table -->
-			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]">
-  				<table class="text-sm border border-default border-collapse table-fixed">
+			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]"
+				:class="{ 'pr-3': !isMac }">
+				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
 					<colgroup>
 						<col class="w-[28%]" /> <!-- Title -->
 						<col class="w-[8%]" /> <!-- Type -->
@@ -40,7 +41,7 @@
 						<col class="w-[6%]" /> <!-- Status -->
 						<col class="w-[6%]" /> <!-- Password -->
 						<col class="w-[10%]" /> <!-- Created -->
-						<col class="w-[12%]" /> <!-- Actions -->
+						<col class=" " /> <!-- Actions -->
 					</colgroup>
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
@@ -69,13 +70,13 @@
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div v-if="editingId !== it.id" class="min-w-0 flex items-center justify-between gap-2">
 									<span
-									class="font-medium cursor-pointer hover:underline block truncate max-w-[28ch] md:max-w-[40ch]"
-									@click="openDetails(it)">
-									{{ it.title || fallbackTitle(it) }}
+										class="font-medium cursor-pointer hover:underline block truncate max-w-[28ch] md:max-w-[40ch]"
+										@click="openDetails(it)">
+										{{ it.title || fallbackTitle(it) }}
 									</span>
 									<button class="text-xs text-blue-500 hover:underline shrink-0"
-									@click="startEdit(it)">
-									Edit Title
+										@click="startEdit(it)">
+										Edit Title
 									</button>
 								</div>
 
@@ -99,8 +100,8 @@
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div class="min-w-0 flex items-center gap-2 justify-between">
 									<a :href="it.shortUrl" target="_blank" rel="noopener"
-									class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
-									{{ it.shortUrl }}
+										class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
+										{{ it.shortUrl }}
 									</a>
 									<button class="text-blue-500 hover:underline text-xs shrink-0"
 										@click="copy(it.shortUrl)">Copy</button>
@@ -112,7 +113,7 @@
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div v-if="!expEditor[it.id]?.open" class="min-w-0 flex items-center gap-2">
 									<div class="truncate" :class="expiresClass(it)">
-											{{ expiresLabel(it) }}
+										{{ expiresLabel(it) }}
 									</div>
 									<div class="ml-auto flex items-center gap-1 flex-nowrap">
 										<button class="btn btn-secondary text-xs h-7 px-2"
@@ -172,21 +173,21 @@
 
 
 							<!-- Actions -->
-								<td class="p-2 border border-default align-middle whitespace-nowrap">
-									<div class="flex flex-nowrap items-center justify-around gap-1">
-										<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">
-											Details</button>
-										<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
-											@click="viewLink(it)">
-											Open
-										</button>
-										<button class="btn btn-danger h-8 px-2 rounded-md"
-											:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
-											@click="toggleDisable(it)">
-											{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
-										</button>
-									</div>
-								</td>
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="flex flex-nowrap items-center justify-around gap-1">
+									<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">
+										Details</button>
+									<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
+										@click="viewLink(it)">
+										Open
+									</button>
+									<button class="btn btn-danger h-8 px-2 rounded-md"
+										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
+										@click="toggleDisable(it)">
+										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
+									</button>
+								</div>
+							</td>
 						</tr>
 					</tbody>
 				</table>
@@ -206,6 +207,16 @@ import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
 
+const os = ref<string>('')
+const isMac = computed(() => os.value === 'mac')
+
+onMounted(async () => {
+	try {
+		os.value = await window.electron?.ipcRenderer.invoke('get-os');
+	} catch (err) {
+		console.error('Failed to get OS', err);
+	}
+})
 
 const { apiFetch } = useApi()
 async function refresh() {

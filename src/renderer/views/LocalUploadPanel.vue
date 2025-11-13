@@ -141,7 +141,13 @@
 													<span v-if="u.eta" class="opacity-70">• ETA {{ u.eta }}</span>
 												</template>
 
-												<template v-else>{{ u.status }}</template>
+												<template v-else>
+													<span v-if="u.alreadyUploaded && u.status === 'done'">
+														done (already uploaded to this folder)
+													</span>
+													<span v-else>{{ u.status }}</span>
+												</template>
+
 											</span>
 
 										</td>
@@ -215,6 +221,7 @@ import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
+import { onBeforeRouteLeave } from 'vue-router';
 const { to } = useResilientNav()
 useHeader('Upload Files')
 
@@ -226,6 +233,7 @@ const ssh = connectionMeta.value.ssh
 const isUploading = ref(false)
 
 const { apiFetch } = useApi()
+
 /** ── Step control ───────────────────────────────────────── */
 const step = ref<1 | 2 | 3>(1)
 
@@ -299,6 +307,25 @@ const destFolderRel = ref<string>('')       // FolderPicker v-model
 const canNext = computed(() => !!destFolderRel.value)
 const projectBase = ref<string>('')
 
+// Normalize the destination we actually use with rsync
+const normalizedDest = computed(() =>
+	`/${destFolderRel.value.replace(/^\/+/, '')}`
+)
+
+// Registry of successful uploads: key = `${path}::${dest}`
+const uploadedRegistry = ref(new Set<string>())
+
+function makeUploadKey(path: string, dest: string) {
+	return `${path}::${dest}`
+}
+
+function markUploaded(path: string, dest: string) {
+	uploadedRegistry.value.add(makeUploadKey(path, dest))
+}
+
+function hasAlreadyUploaded(path: string, dest: string) {
+	return uploadedRegistry.value.has(makeUploadKey(path, dest))
+}
 
 /** ── Step 3: upload & progress ─────────────────────────── */
 function finish() {
@@ -308,16 +335,47 @@ function finish() {
 	cwd.value = '/'
 	isUploading.value = false
 
+	uploadedRegistry.value.clear()
 	// goStep(1)
 	goBack();
 }
 
-// When user enters step 3, seed the rows once:
-watch(step, (s) => {
+onBeforeRouteLeave((_to, _from, next) => {
+	resetUploadState();
+	selected.value = [];
+	uploadedRegistry.value.clear();
+	destFolderRel.value = '';
+	cwd.value = '/';
+	projectBase.value = '';
+	next();
+});
+
+const allTerminal = computed(() =>
+	uploads.value.length > 0 &&
+	uploads.value.every(u =>
+		u.status === 'done' ||
+		u.status === 'canceled' ||
+		u.status === 'error'
+	)
+)
+
+watch(step, (s, old) => {
 	if (s === 3 && uploads.value.length === 0) {
 		uploads.value = prepareRows()
 	}
+
+	if (old === 3 && s !== 3 && allTerminal.value) {
+		resetUploadState()
+
+		// full reset when leaving step 3 after all terminal
+	/*  selected.value = [];
+		uploadedRegistry.value.clear();
+		destFolderRel.value = '';
+		cwd.value = '/';
+		projectBase.value = '';  */
+	}
 })
+
 
 // ----- TYPES -----
 type UploadRow = {
@@ -325,33 +383,53 @@ type UploadRow = {
 	path: string
 	name: string
 	size: number
-	rsyncId?: string | null,
+	dest: string 
+	rsyncId?: string | null
 	status: 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
 	error: string | null
 	progress: number
 	speed: string | null
 	eta: string | null
+	alreadyUploaded?: boolean
+}
+const uploads = ref<UploadRow[]>([])
+
+const hasRunOnce = computed(() =>
+	uploads.value.some(u => u.status !== 'queued')
+)
+
+function resetUploadState() {
+	uploads.value = []
+	isUploading.value = false
+	rafState.clear()
 }
 
-const uploads = ref<UploadRow[]>([])
 // from step 1
 const serverPort = 22
 const privateKeyPath = undefined // or "~/.ssh/id_ed25519"
 
 // Make rows once when entering Step 3
 function prepareRows(): UploadRow[] {
-	return selected.value.map(f => ({
-		localKey: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
-		path: f.path,
-		name: f.name,
-		size: f.size,
-		rsyncId: null,
-		progress: 0,
-		status: 'queued',
-		error: null,
-		speed: null,
-		eta: null,
-	}))
+	const dest = normalizedDest.value
+
+	return selected.value.map(f => {
+		const already = hasAlreadyUploaded(f.path, dest)
+
+		return {
+			localKey: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+			path: f.path,
+			name: f.name,
+			size: f.size,
+			dest,
+			rsyncId: null,
+			progress: already ? 100 : 0,
+			status: already ? 'done' : 'queued',
+			error: null,
+			speed: null,
+			eta: null,
+			alreadyUploaded: already,
+		}
+	})
 }
 
 function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: string) {
@@ -387,7 +465,9 @@ async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
 
 	for (const row of uploads.value) {
-		if (row.status !== 'queued') continue;
+		// Ignore rows that are not queued or already uploaded
+		if (row.status !== 'queued' || row.alreadyUploaded) continue;
+
 		row.status = 'uploading';
 		isUploading.value = true
 
@@ -396,21 +476,16 @@ async function startUploads() {
 				host: ssh?.server,
 				user: ssh?.username,
 				src: row.path,
-				destDir: `/${destFolderRel.value.replace(/^\/+/, '')}`,
+				destDir: row.dest,  // use the row's dest (captured at time of prepareRows)
 				port: serverPort,
 				keyPath: privateKeyPath,
 			},
 			p => {
-				console.log('rsync progress', row.name, p);
-				console.log("typeof", typeof p.percent, p.bytesTransferred, row.size);
+				// ... existing progress handling ...
 				let pct: number | undefined = typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
-
-				// Fallback: compute from bytesTransferred if present
 				if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
 					pct = (p.bytesTransferred / row.size) * 100;
 				}
-
-				// parse from raw line if library sometimes only gives raw text
 				if (pct === undefined && typeof p.raw === 'string') {
 					const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
 					if (m) pct = parseFloat(m[1]);
@@ -422,15 +497,20 @@ async function startUploads() {
 
 		row.rsyncId = id;
 
-		done.then(res => {
-			if ((res as any).ok) {
+		done.then((res: any) => {
+			if (res.ok) {
 				row.status = row.status === 'canceled' ? 'canceled' : 'done';
 				row.progress = 100;
+
+				if (row.status === 'done') {
+					markUploaded(row.path, row.dest);
+					row.alreadyUploaded = true;
+				}
 			} else if (row.status !== 'canceled') {
 				row.status = 'error';
-				row.error = (res as any).error || 'rsync failed';
+				row.error = res.error || 'rsync failed';
 			}
-		}).catch(err => {
+		}).catch((err: any) => {
 			isUploading.value = false
 			if (row.status !== 'canceled') {
 				row.status = 'error';
@@ -439,6 +519,7 @@ async function startUploads() {
 		});
 	}
 }
+
 
 function cancelOne(row: UploadRow) {
 	if (!row.rsyncId) return

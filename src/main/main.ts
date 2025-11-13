@@ -345,6 +345,27 @@ async function connectForPreflight(host: string, username: string, password: str
   }
 }
 
+function isOwnedByCurrentUser(filePath: string): boolean {
+  try {
+    const st = fs.statSync(filePath);
+
+    // On Unix / macOS, enforce ownership
+    if (typeof process.getuid === 'function') {
+      const uid = process.getuid();
+      if (st.uid !== uid) {
+        return false;
+      }
+    }
+
+    // Also ensure we can read it (defensive)
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return true;
+  } catch {
+    // stat/access failed, treat as not allowed
+    return false;
+  }
+}
+
 function defaultClientKey(): string | undefined {
   try {
     const dir = getKeyDir();
@@ -763,9 +784,9 @@ function createWindow() {
   });
   
   ipcMain.handle('get-os', () => {
-    getOS();
-    jl('debug', 'ipc.get-os');
-
+    const os = getOS();
+    jl('debug', `ipc.get-os: ${os}`);
+    return os;
   });
   
   ipcMain.handle('scan-network-fallback', async () => {
@@ -1291,31 +1312,94 @@ app.whenReady().then(() => {
 // });
 
 ipcMain.handle('dialog:pickFiles', async () => {
-    jl('debug', 'dialog.pickFiles.open');
+  jl('debug', 'dialog.pickFiles.open');
 
   const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections']
+    properties: ['openFile', 'multiSelections'],
   });
   if (canceled) return [];
-    jl('info', 'dialog.pickFiles.done', { count: filePaths?.length || 0 });
 
-  return filePaths.map(p => ({ path: p, name: path.basename(p), size: fs.statSync(p).size }));
+  const allowed: { path: string; name: string; size: number }[] = [];
+  let skipped = 0;
+
+  for (const p of filePaths) {
+    if (!isOwnedByCurrentUser(p)) {
+      skipped++;
+      continue;
+    }
+
+    const st = fs.statSync(p);
+    allowed.push({
+      path: p,
+      name: path.basename(p),
+      size: st.size,
+    });
+  }
+
+  jl('info', 'dialog.pickFiles.done', {
+    requested: filePaths.length,
+    allowed: allowed.length,
+    skipped,
+  });
+
+  // Optional: surface a one-shot notification if items were skipped
+  if (skipped > 0) {
+    const msg = `Skipped ${skipped} item(s) you don't own or can't read.`;
+    const win = BrowserWindow.getAllWindows()[0];
+    win?.webContents.send('notification', msg);
+    jl('warn', 'dialog.pickFiles.skipped', { skipped });
+  }
+
+  return allowed;
 });
 
 ipcMain.handle('dialog:pickFolder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ['openDirectory']
+    properties: ['openDirectory'],
   });
   if (canceled || !filePaths.length) return [];
-  const dir = filePaths[0];
-  const files = fs.readdirSync(dir);
-    jl('info', 'dialog.pickFolder.done', { dir, count: files.length });
 
-  return files.map(f => {
-    const fp = path.join(dir, f);
-    const s = fs.statSync(fp);
-    return { path: fp, name: f, size: s.size };
+  const dir = filePaths[0];
+  const entries = fs.readdirSync(dir);
+
+  const allowed: { path: string; name: string; size: number }[] = [];
+  let skipped = 0;
+
+  for (const name of entries) {
+    const fp = path.join(dir, name);
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(fp);
+    } catch {
+      skipped++;
+      continue;
+    }
+
+    if (!st.isFile()) continue; // your original behaviour
+
+    if (!isOwnedByCurrentUser(fp)) {
+      skipped++;
+      continue;
+    }
+
+    allowed.push({ path: fp, name, size: st.size });
+  }
+
+  jl('info', 'dialog.pickFolder.done', {
+    dir,
+    requested: entries.length,
+    allowed: allowed.length,
+    skipped,
   });
+
+  if (skipped > 0) {
+    const msg = `Skipped ${skipped} item(s) in ${dir} you don't own or can't read.`;
+    const win = BrowserWindow.getAllWindows()[0];
+    win?.webContents.send('notification', msg);
+    jl('warn', 'dialog.pickFolder.skipped', { dir, skipped });
+  }
+
+  return allowed;
 });
 
 // upload file (streamed)
@@ -1439,6 +1523,14 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
   const knownHostsPath = path.join(app.getPath('userData'), 'known_hosts')
   const keyPath = opts.keyPath || defaultClientKey()
+  const src = opts.src;
+  
+  if (!isOwnedByCurrentUser(src)) {
+    const msg = 'Source is not owned by this user or is not readable.';
+    jl('warn', 'rsync.src.denied', { id, src });
+    event.sender.send(`upload:done:${id}`, { error: msg });
+    return;
+  }
 
   try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
 
