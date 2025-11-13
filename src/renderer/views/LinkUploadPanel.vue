@@ -21,7 +21,9 @@
 
 				<!-- OPTIONS -->
 				<div class="flex flex-col gap-3 text-left mt-2">
+				
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base">
+					
 						<!-- Expiration -->
 						<div class="flex items-center gap-3">
 							<label class="whitespace-nowrap font-semibold">Expires in:</label>
@@ -56,20 +58,74 @@
 						</div> -->
 
 						<!-- Password (optional) -->
-						<div class="flex items-center gap-3">
-							<label class="whitespace-nowrap font-semibold">Password:</label>
-							<div class="flex items-center gap-2">
-								<input id="pw-enabled" type="checkbox" v-model="protectWithPassword" />
-								<label for="pw-enabled" class="text-sm">Protect with password</label>
-							</div>
-							<input :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
-								v-model.trim="password"
-								class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-								placeholder="Enter password" style="min-width: 16rem" />
-							<button type="button" class="btn btn-secondary" @click="showPassword = !showPassword"
-								:disabled="!protectWithPassword">
-								{{ showPassword ? 'Hide' : 'Show' }}
-							</button>
+						<div class="flex flex-row justify-between">
+							<div class="flex items-center gap-3">
+                                    <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link Access:</label>
+                                    <Switch
+                                        id="link-access-switch"
+                                        v-model="usePublicBase"
+                                        :class="[
+                                        usePublicBase ? 'bg-secondary' : 'bg-well',
+                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                        ]"
+                                    >
+                                        <span class="sr-only">Toggle link access</span>
+                                        <span
+                                        aria-hidden="true"
+                                        :class="[
+                                            usePublicBase ? 'translate-x-5' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                        ]"
+                                        />
+                                    </Switch>
+                                    <span class="text-sm select-none">
+                                        {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
+                                    </span>
+                                </div>
+
+
+
+								<div class="flex items-center gap-3">
+                                    <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+                                    <div class="flex items-center gap-2">
+                                        <Switch
+                                            id="use-password-switch"
+                                            v-model="protectWithPassword"
+                                            :class="[
+                                            protectWithPassword ? 'bg-secondary' : 'bg-well',
+                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]"
+                                        >
+                                            <span class="sr-only">Toggle use password</span>
+                                            <span
+                                            aria-hidden="true"
+                                            :class="[
+                                                protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                            ]"
+                                            />
+                                        </Switch>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-default font-semibold ">Password</label>
+                                        <div class="flex flex-col gap-1">
+                                            <div class="relative flex items-center h-[3rem] space-x-2">
+                                                <input 
+                                                 :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
+                                                v-model.trim="password"
+                                                placeholder="Enter your password"
+                                                class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed" />
+                                                <button type="button" @click="showPassword = !showPassword"
+                                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                       
+                                        </div>
+                                    </div>
+                                </div>
+
 						</div>
 						<div class="flex items-center gap-3 mt-2">
 							<label class="whitespace-nowrap font-semibold">Link title:</label>
@@ -128,6 +184,8 @@ import { useHeader } from '../composables/useHeader';
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { useResilientNav } from '../composables/useResilientNav'
 const { to } = useResilientNav()
+import { Switch } from '@headlessui/vue'
+
 useHeader('Upload Files via Link')
 
 // --- Injections / API ---
@@ -136,6 +194,7 @@ const { apiFetch } = useApi()
 // FolderPicker wiring
 const cwd = ref<string>('')                 // purely for the breadcrumb text
 const destFolderRel = ref<string>('')       // FolderPicker v-model
+const usePublicBase = ref(true);
 
 // Share options
 const expiresValue = ref(1)
@@ -171,6 +230,7 @@ async function generateLink() {
 			allowUpload: true,
 			expiresSec: Number(expiresSec.value) || 0,
 			title: linkTitle.value || undefined,
+			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 			// baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 		}
 		if (password.value) body.password = password.value
