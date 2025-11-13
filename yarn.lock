@@ -45,6 +45,7 @@ __metadata:
     postcss: "npm:^8.4.38"
     postcss-modules: "npm:^6.0.0"
     ssh2: "npm:^1.16.0"
+    ssh2-sftp-client: "npm:^12.0.1"
     sudo-prompt: "npm:^9.2.1"
     tailwindcss: "npm:^3.4.3"
     ts-node: "npm:^10.9.2"
@@ -3884,6 +3885,18 @@ __metadata:
   version: 0.0.1
   resolution: "concat-map@npm:0.0.1"
   checksum: 10c0/c996b1cfdf95b6c90fee4dae37e332c8b6eb7d106430c17d538034c0ad9a1630cb194d2ab37293b1bdd4d779494beee7786d586a50bd9376fd6f7bcc2bd4c98f
+  languageName: node
+  linkType: hard
+
+"concat-stream@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "concat-stream@npm:2.0.0"
+  dependencies:
+    buffer-from: "npm:^1.0.0"
+    inherits: "npm:^2.0.3"
+    readable-stream: "npm:^3.0.2"
+    typedarray: "npm:^0.0.6"
+  checksum: 10c0/29565dd9198fe1d8cf57f6cc71527dbc6ad67e12e4ac9401feb389c53042b2dceedf47034cbe702dfc4fd8df3ae7e6bfeeebe732cc4fa2674e484c13f04c219a
   languageName: node
   linkType: hard
 
@@ -8375,7 +8388,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"readable-stream@npm:^3.1.1, readable-stream@npm:^3.4.0, readable-stream@npm:^3.6.2":
+"readable-stream@npm:^3.0.2, readable-stream@npm:^3.1.1, readable-stream@npm:^3.4.0, readable-stream@npm:^3.6.2":
   version: 3.6.2
   resolution: "readable-stream@npm:3.6.2"
   dependencies:
@@ -9082,6 +9095,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ssh2-sftp-client@npm:^12.0.1":
+  version: 12.0.1
+  resolution: "ssh2-sftp-client@npm:12.0.1"
+  dependencies:
+    concat-stream: "npm:^2.0.0"
+    ssh2: "npm:^1.16.0"
+  checksum: 10c0/38017b7ff5a935873be99e17ce401b426cf4c78dad6b4cd29ae18ba12ec418bda72b336b451e7ba4d5a1e1c4ccb029ded49fd6ff7398f3804e52084fbf0d3df1
+  languageName: node
+  linkType: hard
+
 "ssh2@npm:^1.14.0, ssh2@npm:^1.16.0":
   version: 1.17.0
   resolution: "ssh2@npm:1.17.0"
@@ -9769,6 +9792,13 @@ __metadata:
   version: 0.20.2
   resolution: "type-fest@npm:0.20.2"
   checksum: 10c0/dea9df45ea1f0aaa4e2d3bed3f9a0bfe9e5b2592bddb92eb1bf06e50bcf98dbb78189668cd8bc31a0511d3fc25539b4cd5c704497e53e93e2d40ca764b10bfc3
+  languageName: node
+  linkType: hard
+
+"typedarray@npm:^0.0.6":
+  version: 0.0.6
+  resolution: "typedarray@npm:0.0.6"
+  checksum: 10c0/6005cb31df50eef8b1f3c780eb71a17925f3038a100d82f9406ac2ad1de5eb59f8e6decbdc145b3a1f8e5836e17b0c0002fb698b9fe2516b8f9f9ff602d36412
   languageName: node
   linkType: hard
 
