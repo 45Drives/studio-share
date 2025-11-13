@@ -85,15 +85,15 @@ const api: ElectronApi = {
   /** ========== rsync over SSH ========== */
   rsyncStart: (opts, onProgress) => {
     const id = genId()
-    const pch = `rsync:progress:${id}`
-    const dch = `rsync:done:${id}`
+    const pch = `upload:progress:${id}`
+    const dch = `upload:done:${id}`
 
     const ph = (_: IpcRendererEvent, payload: RsyncProgress) => {
       try { onProgress?.(payload) } catch {}
     }
     ipcRenderer.on(pch, ph)
 
-    ipcRenderer.send('rsync:start', { id, ...opts })
+    ipcRenderer.send('upload:start', { id, ...opts })
 
     const done: Promise<RsyncResult> = new Promise((resolve) => {
       ipcRenderer.once(dch, (_ev, res: RsyncResult) => {
@@ -105,7 +105,7 @@ const api: ElectronApi = {
     return Promise.resolve({ id, done })
   },
 
-  rsyncCancel: (id) => ipcRenderer.send('rsync:cancel', { id }),
+  rsyncCancel: (id) => ipcRenderer.send('upload:cancel', { id }),
 }
 
 contextBridge.exposeInMainWorld('electron', api)

@@ -42,7 +42,7 @@ export function runRsync(opts: RunOpts): Promise<number> {
 
   const emit = (parsed: any) => {
     onProgress?.(parsed);
-    win?.webContents?.send(`rsync:progress:${id}`, parsed);
+    win?.webContents?.send(`upload:progress:${id}`, parsed);
   };
 
   child.stderr.on('data', (chunk) => {

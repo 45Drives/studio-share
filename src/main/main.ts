@@ -1435,7 +1435,7 @@ type RsyncStartOpts = {
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
 
-ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
+ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
   const knownHostsPath = path.join(app.getPath('userData'), 'known_hosts')
   const keyPath = opts.keyPath || defaultClientKey()
@@ -1443,23 +1443,23 @@ ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
   try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
 
   if (inflightRsync.has(id)) {
-    event.sender.send(`rsync:done:${id}`, { error: 'duplicate id' })
+    event.sender.send(`upload:done:${id}`, { error: 'duplicate id' })
     return
   }
 
   jl('info', 'rsync.start', { id, host: opts.host, user: opts.user, src: opts.src, destDir: opts.destDir })
 
-  // mark inflight for both Windows + non-Windows paths
   inflightRsync.set(id, null)
 
   const isDir = (() => { try { return fs.statSync(opts.src).isDirectory() } catch { return false } })()
-  const winStrategy: 'sshstream' | 'scp' = 'sshstream'
 
   try {
     if (process.platform === 'win32') {
-      // Strategy A: SSH streaming for files (best progress), SCP for directories
-      if (winStrategy === 'sshstream' && !isDir) {
-        event.sender.send(`rsync:progress:${id}`, { percent: 0, raw: 'starting' })
+      const useSshStream = true; // change to false to force SCP
+
+      if (useSshStream && !isDir) {
+        // ── Windows SSH-stream path (file only) ────────────────
+        event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
         await runWinSshCopyFile({
           id,
@@ -1472,22 +1472,22 @@ ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
           knownHostsPath,
           bwlimitKb: opts.bwlimitKb,
           onProgress: (pct, sent, total) => {
-            event.sender.send(`rsync:progress:${id}`, {
+            event.sender.send(`upload:progress:${id}`, {
               percent: pct,
               bytesTransferred: sent,
-              raw: ''
+              raw: '',
             })
-          }
+          },
         })
 
-        event.sender.send(`rsync:progress:${id}`, { percent: 100, raw: 'done' })
-        event.sender.send(`rsync:done:${id}`, { ok: true })
+        event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
+        event.sender.send(`upload:done:${id}`, { ok: true })
         jl('info', 'sshstream.close', { id, code: 0 })
         return
       }
 
-      // Strategy B (or directories): SCP
-      event.sender.send(`rsync:progress:${id}`, { percent: 0, raw: 'starting' })
+      // ── Windows SCP path (or directories / fallback) ────────
+      event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
       await runWinScp({
         id,
@@ -1502,17 +1502,17 @@ ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
           const payload: any = { raw: '' }
           if (typeof pct === 'number') payload.percent = pct
           if (typeof sent === 'number') payload.bytesTransferred = sent
-          event.sender.send(`rsync:progress:${id}`, payload)
-        }
+          event.sender.send(`upload:progress:${id}`, payload)
+        },
       })
 
-      event.sender.send(`rsync:progress:${id}`, { percent: 100, raw: 'done' })
-      event.sender.send(`rsync:done:${id}`, { ok: true })
+      event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
+      event.sender.send(`upload:done:${id}`, { ok: true })
       jl('info', 'scp.close', { id, code: 0 })
       return
     }
 
-    // Non-Windows → rsync as before
+    // ── Non-Windows → rsync ───────────────────────────────────
     const picked = buildRsyncCmdAndArgs({ ...opts, keyPath, knownHostsPath })
 
     const code = await runRsync({
@@ -1528,13 +1528,13 @@ ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
     })
 
     if (code === 0) {
-      event.sender.send(`rsync:done:${id}`, { ok: true })
+      event.sender.send(`upload:done:${id}`, { ok: true })
     } else {
-      event.sender.send(`rsync:done:${id}`, { error: `rsync exited ${code}` })
+      event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
     }
     jl('info', 'rsync.close', { id, code })
   } catch (err: any) {
-    event.sender.send(`rsync:done:${id}`, { error: err?.message || 'spawn error' })
+    event.sender.send(`upload:done:${id}`, { error: err?.message || 'spawn error' })
     jl('error', 'rsync.error', { id, error: err?.message || String(err) })
   } finally {
     inflightRsync.delete(id)
@@ -1542,7 +1542,7 @@ ipcMain.on('rsync:start', async (event, opts: RsyncStartOpts) => {
 })
 
 // Cancel (only effective for rsync child processes for now)
-ipcMain.on('rsync:cancel', (_event, { id }) => {
+ipcMain.on('upload:cancel', (_event, { id }) => {
   const p = inflightRsync.get(id)
   if (p) {
     try { p.kill('SIGINT') } catch { }
