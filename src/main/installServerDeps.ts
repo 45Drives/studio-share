@@ -1,7 +1,7 @@
 // installServerDeps.ts
 import path from "path";
 import { NodeSSH } from "node-ssh";
-import { checkSSH, setupSshKey, ensureBroadcasterInstalled, connectWithKey } from "./setupSsh";
+import { checkSSH, setupSshKey, ensureBroadcasterInstalled, connectWithKey, ensure45DrivesCommunityRepoViaScript } from "./setupSsh";
 import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from "./crossPlatformSsh";
 
 type ProgressFn = (p: { step: string; label: string }) => void;
@@ -59,6 +59,9 @@ export async function installServerDepsRemotely(opts: {
         }
 
         try {
+            send('repo', 'Setting up 45Drives community repo…');
+            await ensure45DrivesCommunityRepoViaScript(ssh, { password });
+            
             send('install', 'Installing Broadcaster…');
             await ensureBroadcasterInstalled(ssh, { password });
 
