@@ -26,17 +26,17 @@ export async function installServerDepsRemotely(opts: {
             try { await trial.connect({ host, username, agent: agentSock, tryKeyboard: false }); hasAuth = true; } catch { }
             trial.dispose();
         }
-        if (!hasAuth) {
-            send('key', 'Creating/planting SSH key…');
-            await setupSshKey(host, username, password);
-        }
-
         // Connect with key/agent
         send('connect', 'Connecting via SSH…');
         const keyDir = getKeyDir();
         const priv = path.join(keyDir, 'id_ed25519');
         await ensureKeyPair(priv, `${priv}.pub`);
         console.log('keyDir:', keyDir)
+
+        if (!hasAuth) {
+            send('key', 'Creating/planting SSH key…');
+            await setupSshKey(host, username, password);
+        }
         async function tryConnectWithCurrentKey() {
             return hasAuth
                 ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock! })

@@ -565,8 +565,6 @@ ipcMain.on('renderer-ready', (e) => {
 
 ipcMain.handle('get-client-ident', async () => ({ installId }))
 
-app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
-
 function checkLogDir(): string {
   // LINUX: /home/<username>/.config/studio-share/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
   // MAC:   /Users/<username>/Library/Application Support/studio-share/logs
@@ -1184,15 +1182,22 @@ app.whenReady().then(() => {
   // log.info("🟢 Logging initialized.");
   // log.info("Log file path:", // log.transports.file.getFile().path);
 
-  session.defaultSession.setCertificateVerifyProc((req, cb) => {
-    jl('info', 'cert.verify.start', { hostname: req.hostname, pid: process.pid });
+  const isInternalHost = (hostname: string) => {
+    // plain IPv4 or .local – adjust for your environment
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return true;
+    if (hostname.endsWith('.local')) return true;
+    // if you have a corporate domain, add it here:
+    // if (hostname.endsWith('.45drives.internal')) return true;
+    return false;
+  };
 
-    // Quick dev escape for localhost
-    if (process.env.NODE_ENV === 'development' &&
-      (req.hostname === 'localhost' || req.hostname.startsWith('127.'))) {
-        jl('debug', 'cert.verify.dev-bypass', { hostname: req.hostname });
-        return cb(0);
+  session.defaultSession.setCertificateVerifyProc((req, cb) => {
+    // Let Chromium handle all non-internal hosts (gvt1.com, GitHub, etc.)
+    if (!isInternalHost(req.hostname)) {
+      return cb(-3); // “use default verification”
     }
+
+    jl('info', 'cert.verify.start', { hostname: req.hostname, pid: process.pid });
 
     const presented = req.certificate.fingerprint;
     const pinned = getPin(req.hostname);
@@ -1215,7 +1220,7 @@ app.whenReady().then(() => {
       return;
     }
 
-    // first seen → TOFU prompt
+    // first seen internal host → TOFU prompt
     dialog.showMessageBox({
       type: 'question',
       message: `Trust this server?`,
@@ -1227,7 +1232,6 @@ app.whenReady().then(() => {
       else cb(-2);
     });
   });
-
   // ─────────────────────────────────────────────────────────────────────────────
   // AUTO-UPDATE DISABLED (commented out to avoid noisy logs / not implemented yet)
   // ─────────────────────────────────────────────────────────────────────────────

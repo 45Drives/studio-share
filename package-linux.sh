@@ -73,7 +73,7 @@ build_arch() {
     yarn build:common
     node scripts/build.js
 
-    # Ensure native deps (e.g., keytar) rebuilt for Electron ABI
+    # Ensure native deps rebuilt for Electron ABI
     npx electron-builder install-app-deps --arch=$arch
 
     # Package (publishing controlled via \$PUBLISH + GH_TOKEN)
