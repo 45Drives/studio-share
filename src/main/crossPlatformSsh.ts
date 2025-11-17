@@ -4,6 +4,7 @@ import fs from "fs";
 import { execFile, spawnSync } from "child_process";
 import { promisify } from "util";
 import { getOS, getAsset } from "./utils";
+import { jl } from './main';
 
 const execFileAsync = promisify(execFile);
 
@@ -60,7 +61,10 @@ export async function ensureKeyPair(pk: string, pub: string) {
     const hasPrivate = await fileExists(pk);
     const hasPublic = await fileExists(pub);
 
-    if (hasPrivate && hasPublic) return;
+    if (hasPrivate && hasPublic) {
+        jl('info', 'ssh.ensureKeyPair.exists', { pk, pub });
+        return;
+    }
 
     const sshKeygen = await resolveSshKeygen();
 
@@ -69,17 +73,24 @@ export async function ensureKeyPair(pk: string, pub: string) {
         const { stdout } = await execFileAsync(sshKeygen, ["-y", "-f", pk], { windowsHide: true });
         // stdout is the public key line (e.g., "ssh-ed25519 AAAA... comment")
         await fs.promises.writeFile(pub, stdout.endsWith("\n") ? stdout : stdout + "\n", { mode: 0o600 });
+        jl('info', 'ssh.ensureKeyPair.derived-pub', { pk, pub });
         return;
+    } else {
+         // Generate a fresh ed25519 keypair (no passphrase)
+        // -a 100 increases KDF rounds for the private key format; cheap at creation, transparent at use via agent
+        await execFileAsync(
+            sshKeygen,
+            ["-t", "ed25519", "-a", "100", "-f", pk, "-N", "", "-q"],
+            { windowsHide: true }
+        );
+        // ssh-keygen writes .pub automatically
+        jl('info', 'ssh.ensureKeyPair.derived-pub', { pk, pub });
     }
 
-    // Generate a fresh ed25519 keypair (no passphrase)
-    // -a 100 increases KDF rounds for the private key format; cheap at creation, transparent at use via agent
-    await execFileAsync(
-        sshKeygen,
-        ["-t", "ed25519", "-a", "100", "-f", pk, "-N", "", "-q"],
-        { windowsHide: true }
-    );
-    // ssh-keygen writes .pub automatically
+    const ok = await fileExists(pub);
+    if (!ok) {
+        throw new Error(`ensureKeyPair: pubkey still missing at ${pub}`);
+    }
 }
 
 /* ---------- per-OS paths that the callers need ---------- */
