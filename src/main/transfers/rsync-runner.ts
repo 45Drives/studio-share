@@ -1,6 +1,7 @@
 // src/main/rsync/rsync-runner.ts
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { BrowserWindow } from 'electron';
+import { jl } from '../main';
 
 export type RunOpts = {
   id: string;
@@ -8,19 +9,21 @@ export type RunOpts = {
   args: string[];
   env?: NodeJS.ProcessEnv;
   win?: BrowserWindow; // to send IPC events
-  onLine?: (line: string) => void; // optional
-  onProgress?: (parsed: any) => void; // optional parsed progress
-  logger?: { info: Function; warn: Function; error: Function };
+  onLine?: (line: string) => void;
+  onProgress?: (parsed: any) => void;
 };
 
-// same parser you already have
+// Parse rsync progress lines like:
+// "73.01M   6%   69.59MB/s    0:00:14"
 export function parseProgress(line: string) {
   const percentMatch = line.match(/(\d+(?:\.\d+)?)%/);
-  const rateMatch    = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i);
-  const etaMatch     = line.match(/\b(\d+:\d{2}:\d{2})\b/);
-  const bytesMatch   = line.trim().match(/^(\d[\d,]*)\s+/);
+  const rateMatch = line.match(/([0-9.]+)\s*([KMG]i?)B\/s/i);
+  const etaMatch = line.match(/\b(\d+:\d{2}:\d{2})\b/);
+  const bytesMatch = line.trim().match(/^(\d[\d,]*)\s+/);
+
   return {
     percent: percentMatch ? Number(percentMatch[1]) : undefined,
+    // Format as "69.59 MB/s", "70.0 kB/s", etc
     rate: rateMatch ? `${rateMatch[1]} ${rateMatch[2]}B/s` : undefined,
     eta: etaMatch ? etaMatch[1] : undefined,
     bytesTransferred: bytesMatch ? Number(bytesMatch[1].replace(/,/g, '')) : undefined,
@@ -29,16 +32,16 @@ export function parseProgress(line: string) {
 }
 
 export function runRsync(opts: RunOpts): Promise<number> {
-  const { id, cmd, args, env, win, onLine, onProgress, logger } = opts;
+  const { id, cmd, args, env, win, onLine, onProgress } = opts;
 
-  logger?.info({ event: 'rsync.exec', id, cmd, args });
+  jl('info', 'rsync.exec', { id, cmd, args });
 
   const child: ChildProcessWithoutNullStreams = spawn(cmd, args, {
     env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200', ...env },
     windowsHide: true,
   });
 
-  let buf = '';
+  let bufErr = '';
 
   const emit = (parsed: any) => {
     onProgress?.(parsed);
@@ -46,33 +49,37 @@ export function runRsync(opts: RunOpts): Promise<number> {
   };
 
   child.stderr.on('data', (chunk) => {
-    buf += chunk.toString().replace(/\r/g, '\n');
-    const lines = buf.split('\n');
-    buf = lines.pop() || '';
+    bufErr += chunk.toString().replace(/\r/g, '\n');
+    const lines = bufErr.split('\n');
+    bufErr = lines.pop() || '';
     for (const line of lines) {
       const t = line.trim();
       if (!t) continue;
       onLine?.(t);
-      logger?.info({ event: 'rsync.out', id, line: t });
+      jl('info', 'rsync.out', { id, line: t });
       emit(parseProgress(t));
     }
   });
 
   child.stdout.on('data', (chunk) => {
-    const line = String(chunk).trim();
-    if (!line) return;
-    onLine?.(line);
-    logger?.info({ event: 'rsync.out.stdout', id, line });
-    emit({ raw: line });
+    const text = chunk.toString().replace(/\r/g, '\n');
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      onLine?.(t);
+      jl('info', 'rsync.out.stdout', { id, line: t });
+      emit(parseProgress(t));
+    }
   });
 
   return new Promise((resolve, reject) => {
     child.on('error', (err) => {
-      logger?.error({ event: 'rsync.spawn.error', id, error: err?.message || String(err) });
+      jl('error', 'rsync.spawn.error', { id, error: err?.message || String(err) });
       reject(err);
     });
     child.on('close', (code) => {
-      logger?.info({ event: 'rsync.exit', id, code });
+      jl('info', 'rsync.exit', { id, code });
       resolve(code ?? -1);
     });
   });

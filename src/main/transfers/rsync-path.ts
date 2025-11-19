@@ -18,53 +18,7 @@ type RsyncStartOpts = {
   knownHostsPath?: string; // <- pass from main (e.g., app.getPath('userData')/known_hosts)
 };
 
-function ensureTrailingSlash(p: string) {
-  return p.endsWith('/') || p.endsWith('\\') ? p : p + '/';
-}
-
-function findScpPath(): string {
-  // Prefer built-in OpenSSH (Win10+), then Git, then PATH
-  const candidates = [
-    'C:\\Windows\\System32\\OpenSSH\\scp.exe',
-    'C:\\Program Files\\Git\\usr\\bin\\scp.exe',
-    'C:\\Program Files\\Git\\mingw64\\bin\\scp.exe',
-  ];
-  for (const c of candidates) if (pathExists(c)) return c;
-
-  const r = spawnSync('where', ['scp'], { encoding: 'utf8' });
-  if (r.status === 0) {
-    const fromPath = r.stdout.split(/\r?\n/).find(s => s.trim())?.trim();
-    if (fromPath) return fromPath;
-  }
-  return 'scp'; // hope it's on PATH
-}
-
 const pathExists = (p: string) => { try { fs.accessSync(p); return true; } catch { return false; } };
-
-function wslUsable(): boolean {
-  try {
-    const r = spawnSync('wsl.exe', ['bash', '-lc', 'command -v rsync >/dev/null 2>&1 && echo OK'], { encoding: 'utf8' });
-    return r.status === 0 && (r.stdout || '').includes('OK');
-  } catch { return false; }
-}
-
-function looksGitLikeRsync(cmdPath: string) {
-  const p = cmdPath.toLowerCase();
-  return p.includes('\\git\\') || p.includes('\\cygwin') || p.includes('\\cwrsync') || p.endsWith('rsync.exe');
-}
-
-// Convert Windows "C:\Users\Name\..." → "/c/Users/Name/..."
-function toMSYS(p: string) {
-  return p
-    .replace(/\\/g, '/')
-    .replace(/^([A-Za-z]):\//, (_m, d) => `/${String(d).toLowerCase()}/`);
-}
-
-// Convert only when needed
-function maybeToMSYS(p: string | undefined, enable: boolean) {
-  if (!p) return p;
-  return enable ? toMSYS(p) : p;
-}
 
 export function findRsyncPath(): { cmd: string; useWSL: boolean } {
   const macCandidates = [
@@ -87,15 +41,6 @@ export function findRsyncPath(): { cmd: string; useWSL: boolean } {
   if (process.platform === 'darwin') {
     for (const p of macCandidates) if (pathExists(p)) return { cmd: p, useWSL: false };
     const fromPath = which('rsync');
-    if (fromPath) return { cmd: fromPath, useWSL: false };
-    return { cmd: 'rsync', useWSL: false };
-  }
-
-  if (process.platform === 'win32') {
-    for (const p of winCandidates) if (pathExists(p)) return { cmd: p, useWSL: false };
-    const wsl = which('wsl.exe');
-    if (wsl) return { cmd: wsl, useWSL: true };
-    const fromPath = which('rsync.exe') || which('rsync');
     if (fromPath) return { cmd: fromPath, useWSL: false };
     return { cmd: 'rsync', useWSL: false };
   }
@@ -219,54 +164,6 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
     });
     const args = [...baseArgs, '-e', wrapperPath, srcFinalRaw, dest];
     return { cmd: pick.cmd, args, useWSL: false };
-  }
-
-  // ── Windows: use SCP over SSH ────────────────────────────────────────────────
-  if (process.platform === 'win32') {
-    const scp = findScpPath();
-
-    const srcIsDir = (() => { try { return fs.statSync(o.src).isDirectory(); } catch { return false; } })();
-    const srcFinal = o.src; // raw Windows path; passing as separate arg avoids quoting issues
-
-    const fallbackKH = path.join(process.env.HOME || process.env.USERPROFILE || '', '.ssh', 'known_hosts');
-    const knownHosts = o.knownHostsPath || fallbackKH;
-
-    // Remote destination uses POSIX form (as with rsync): user@host:/dir/
-    const destRemote = `${o.user}@${o.host}:${ensureTrailingSlash(o.destDir).replace(/\\/g, '/')}`;
-
-    const args: string[] = [];
-
-    // Recurse if directory
-    if (srcIsDir) args.push('-r');
-
-    // Progress is shown by default in a console; add -v if you want noisy logs:
-    // args.push('-v');
-
-    // Bandwidth limit: scp expects Kbit/s; our value is KB/s
-    if (o.bwlimitKb && o.bwlimitKb > 0) {
-      const kbit = Math.max(1, o.bwlimitKb * 8);
-      args.push('-l', String(kbit));
-    }
-
-    // Port/key/ssh options (mirror your rsync ssh settings)
-    if (o.port) args.push('-P', String(o.port)); // NOTE: scp uses uppercase -P
-    if (o.keyPath) args.push('-i', o.keyPath);
-
-    args.push(
-      '-o', 'BatchMode=yes',
-      '-o', 'IdentitiesOnly=yes',
-      '-o', 'PreferredAuthentications=publickey',
-      '-o', 'StrictHostKeyChecking=accept-new',
-      '-o', `UserKnownHostsFile=${knownHosts}`,
-      '-o', 'ConnectTimeout=10',
-      '-o', 'ServerAliveInterval=15',
-      '-o', 'ServerAliveCountMax=2'
-    );
-
-    // src then dest
-    args.push(srcFinal, destRemote);
-
-    return { cmd: scp, args, useWSL: false };
   }
 
   // ── Linux native ────────────────────────────────────────────────────────────

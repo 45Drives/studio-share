@@ -1,20 +1,12 @@
 import log from 'electron-log';
 function initLogging(resolvedLogDir: string) {
-  // // log.transports.console.level = false;
-  // // log.transports.file.resolvePathFn = () => path.join(resolvedLogDir, 'studio-share-client-main.log');
-  // jl('info', 'logging.init.start', {
-  //   platform: process.platform,
-  //   node: process.version,
-  //   electron: process.versions.electron,
-  //   appVersion: app?.getVersion?.() || 'unknown',
-  // });
   const dropNoisyMdns = format((info) => {
-  if (process.env.NODE_ENV !== 'development') {
-    if (info.event === 'mdns.upsert' && info.changed !== true) return false;
-    if (info.event === 'mdns.response') return false;
-  }
-  return info;
-});
+    if (process.env.NODE_ENV !== 'development') {
+      if (info.event === 'mdns.upsert' && info.changed !== true) return false;
+      if (info.event === 'mdns.response') return false;
+    }
+    return info;
+  });
 
   jsonLogger = createLogger({
     level: 'info',
@@ -1010,7 +1002,7 @@ function createWindow() {
     if (!ip) return;
     // Nice display name from the SRV instance
     const [bare] = instance.split('._');
-    const displayName = `${bare}.local`;
+    const displayName = bare.endsWith('.local') ? bare : `${bare}.local`;
 
     const s: Server = {
       ip,
@@ -1553,31 +1545,26 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         // ── Windows SSH-stream path (file only) ────────────────
         event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
-      
-    await runWinSftp({
-      id,
-      src: opts.src,
-      host: opts.host,
-      user: opts.user,
-      destDir: opts.destDir,
-      port: opts.port,
-      keyPath,
-      knownHostsPath,
-      onProgress: (pct, sent, _total) => {
-        const payload: any = { raw: '' };
-        if (typeof pct === 'number') payload.percent = pct;
-        if (typeof sent === 'number') payload.bytesTransferred = sent;
-        event.sender.send(`upload:progress:${id}`, payload);
-      },
-    });
+        await runWinSftp({
+          id,
+          src: opts.src,
+          host: opts.host,
+          user: opts.user,
+          destDir: opts.destDir,
+          port: opts.port,
+          keyPath,
+          onProgress: (pct, sent, _total) => {
+            const payload: any = { raw: '' };
+            if (typeof pct === 'number') payload.percent = pct;
+            if (typeof sent === 'number') payload.bytesTransferred = sent;
+            event.sender.send(`upload:progress:${id}`, payload);
+          },
+        });
         
         event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
         event.sender.send(`upload:done:${id}`, { ok: true })
         jl('info', 'sshstream.close', { id, code: 0 })
         return
-      
-
-     
     }
 
     // ── Non-Windows → rsync ───────────────────────────────────
@@ -1587,12 +1574,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
       id,
       cmd: picked.cmd,
       args: picked.args,
-      win: BrowserWindow.getAllWindows()[0],
-      logger: {
-        info: (m: any) => jsonLogger.info(m),
-        warn: (m: any) => jsonLogger.warn(m),
-        error: (m: any) => jsonLogger.error(m),
-      },
+      win: BrowserWindow.getAllWindows()[0]
     })
 
     if (code === 0) {
