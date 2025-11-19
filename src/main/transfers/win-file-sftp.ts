@@ -4,11 +4,11 @@ import path from 'path';
 import SftpClient from 'ssh2-sftp-client';
 import { jl } from '../main';
 
-// Match the rsync progress object shape
+// Match the rsync progress object shape your UI expects
 export type TransferProgress = {
   percent?: number;
-  rate?: string;
-  eta?: string;
+  rate?: string;              // "69.59MB/s"
+  eta?: string;               // "0:00:14"
   bytesTransferred?: number;
   raw?: string;
 };
@@ -21,7 +21,7 @@ export type WinSftpOpts = {
   destDir: string;
   port?: number;
   keyPath?: string;
-  // Same as RunOpts.onProgress in rsync-runner
+  // Same logical shape as rsync's RunOpts.onProgress
   onProgress?: (p: TransferProgress) => void;
 };
 
@@ -42,9 +42,6 @@ export async function runWinSftp(o: WinSftpOpts): Promise<number> {
 
   const sftp = new SftpClient();
 
-  // This emitter converts raw byte counts into the rsync-like progress object
-  const emitProgress = makeSftpProgressEmitter(o.id, o.onProgress);
-
   try {
     await sftp.connect({
       host: o.host,
@@ -57,10 +54,10 @@ export async function runWinSftp(o: WinSftpOpts): Promise<number> {
 
     if (isDir) {
       jl('info', 'sftp.dir.upload.start', { id: o.id, src: o.src });
-      await uploadDirSftp(sftp, o.src, destDir, emitProgress, o.id);
+      await uploadDirSftp(sftp, o.src, destDir, o.onProgress, o.id);
     } else {
       jl('info', 'sftp.file.upload.start', { id: o.id, src: o.src });
-      await uploadSingleFileSftp(sftp, o.src, destDir, emitProgress, o.id);
+      await uploadSingleFileSftp(sftp, o.src, destDir, o.onProgress, o.id);
     }
 
     jl('info', 'sftp.complete', { id: o.id });
@@ -78,22 +75,24 @@ export async function runWinSftp(o: WinSftpOpts): Promise<number> {
   }
 }
 
+// Build a rsync-style progress object from bytes + time
 function makeSftpProgressEmitter(
   id: string,
+  totalBytes: number,
   onProgress?: (p: TransferProgress) => void
 ) {
   const startTime = Date.now();
   let lastPercent = -1;
 
-  return (sentBytes: number, totalBytes: number) => {
+  return (bytesTransferred: number) => {
     const now = Date.now();
-    const elapsed = (now - startTime) / 1000; // seconds
+    const elapsed = (now - startTime) / 1000 || 0.001; // seconds
 
     let rate: string | undefined;
     let eta: string | undefined;
 
-    if (elapsed > 0 && sentBytes >= 0) {
-      const bps = sentBytes / elapsed;
+    if (elapsed > 0 && bytesTransferred >= 0) {
+      const bps = bytesTransferred / elapsed;
       const kbps = bps / 1024;
       const mbps = kbps / 1024;
 
@@ -105,28 +104,31 @@ function makeSftpProgressEmitter(
         rate = `${bps.toFixed(0)}B/s`;
       }
 
-      if (totalBytes > 0 && sentBytes > 0 && sentBytes <= totalBytes && bps > 0) {
-        const remaining = totalBytes - sentBytes;
+      if (totalBytes > 0 && bytesTransferred > 0 && bytesTransferred <= totalBytes && bps > 0) {
+        const remaining = totalBytes - bytesTransferred;
         const sec = remaining / bps;
         const h = Math.floor(sec / 3600);
         const m = Math.floor((sec % 3600) / 60);
         const s = Math.floor(sec % 60);
-        eta = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        eta = `${h}:${m.toString().padStart(2, '0')}:${s
+          .toString()
+          .padStart(2, '0')}`;
       }
     }
 
     const percent =
-      totalBytes > 0 ? clampPct((sentBytes / totalBytes) * 100) : undefined;
+      totalBytes > 0
+        ? clampPct((bytesTransferred / totalBytes) * 100)
+        : undefined;
 
     const progress: TransferProgress = {
       percent,
       rate,
       eta,
-      bytesTransferred: sentBytes,
-      raw: `sftp ${sentBytes}/${totalBytes}`,
+      bytesTransferred,
+      raw: `sftp ${bytesTransferred}/${totalBytes}`,
     };
 
-    // Avoid logging every tiny tick; only when percent changes
     if (percent != null && percent !== lastPercent) {
       lastPercent = percent;
       jl('debug', 'sftp.progress', { id, ...progress });
@@ -140,7 +142,7 @@ async function uploadSingleFileSftp(
   sftp: SftpClient,
   localPath: string,
   destDir: string,
-  emitProgress: (sentBytes: number, totalBytes: number) => void,
+  onProgress: ((p: TransferProgress) => void) | undefined,
   id: string
 ) {
   const st = fs.statSync(localPath);
@@ -157,15 +159,18 @@ async function uploadSingleFileSftp(
 
   jl('info', 'sftp.single.put.start', { id, localPath, remotePath, totalBytes });
 
+  const emit = makeSftpProgressEmitter(id, totalBytes, onProgress);
+
   await sftp.fastPut(localPath, remotePath, {
     step(transferred: number, _chunk: number, total: number) {
-      emitProgress(transferred, total);
+      // 'total' from ssh2-sftp-client should be equal to totalBytes, but we trust our own
+      emit(transferred);
     },
   });
 
   jl('info', 'sftp.single.put.done', { id, localPath });
 
-  emitProgress(totalBytes, totalBytes);
+  emit(totalBytes);
 }
 
 // ── Directory upload with global progress ─────────────────────────────
@@ -186,7 +191,7 @@ function walkLocalDir(root: string, remoteRoot: string): FileInfo[] {
         const rel = path
           .relative(root, localPath)
           .split(path.sep)
-          .join('/'); // POSIX separators
+          .join('/');
         const remotePath = `${remoteRoot}/${rel}`;
         out.push({ local: localPath, remote: remotePath, size: st.size });
       }
@@ -201,7 +206,7 @@ async function uploadDirSftp(
   sftp: SftpClient,
   localRoot: string,
   remoteRoot: string,
-  emitProgress: (sentBytes: number, totalBytes: number) => void,
+  onProgress: ((p: TransferProgress) => void) | undefined,
   id: string
 ) {
   const files = walkLocalDir(localRoot, remoteRoot);
@@ -212,6 +217,8 @@ async function uploadDirSftp(
   await ensureRemoteDir(sftp, remoteRoot, id);
 
   jl('info', 'sftp.dir.upload.count', { id, files: files.length, totalBytes });
+
+  const emit = makeSftpProgressEmitter(id, totalBytes, onProgress);
 
   for (const file of files) {
     const remoteDir = path.posix.dirname(file.remote);
@@ -233,7 +240,7 @@ async function uploadDirSftp(
         lastFileTransferred = transferred;
 
         globalTransferred += delta;
-        emitProgress(globalTransferred, totalBytes);
+        emit(globalTransferred);
       },
     });
 
@@ -241,7 +248,7 @@ async function uploadDirSftp(
   }
 
   jl('info', 'sftp.dir.complete', { id });
-  emitProgress(totalBytes, totalBytes);
+  emit(totalBytes);
 }
 
 function clampPct(p: number) {
@@ -253,6 +260,7 @@ async function ensureRemoteDir(sftp: SftpClient, dir: string, id: string) {
 
   const parts = dir.split('/').filter(Boolean);
   let current = '';
+
   for (const part of parts) {
     current += '/' + part;
     try {

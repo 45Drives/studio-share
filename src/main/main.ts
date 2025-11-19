@@ -1536,30 +1536,25 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
   inflightRsync.set(id, null)
 
-  const isDir = (() => { try { return fs.statSync(opts.src).isDirectory() } catch { return false } })()
-
   try {
     if (process.platform === 'win32') {
-      const useSshStream = false; // change to false to force SCP
 
         // ── Windows SSH-stream path (file only) ────────────────
         event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
-        await runWinSftp({
-          id,
-          src: opts.src,
-          host: opts.host,
-          user: opts.user,
-          destDir: opts.destDir,
-          port: opts.port,
-          keyPath,
-          onProgress: (pct, sent, _total) => {
-            const payload: any = { raw: '' };
-            if (typeof pct === 'number') payload.percent = pct;
-            if (typeof sent === 'number') payload.bytesTransferred = sent;
-            event.sender.send(`upload:progress:${id}`, payload);
-          },
-        });
+      await runWinSftp({
+        id,
+        src: opts.src,
+        host: opts.host,
+        user: opts.user,
+        destDir: opts.destDir,
+        port: opts.port,
+        keyPath,
+        onProgress: (p) => {
+          // p is TransferProgress: { percent, rate, eta, bytesTransferred, raw }
+          event.sender.send(`upload:progress:${id}`, p);
+        },
+      });
         
         event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
         event.sender.send(`upload:done:${id}`, { ok: true })
