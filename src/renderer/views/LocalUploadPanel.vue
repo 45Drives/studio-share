@@ -87,6 +87,7 @@
 								<tr class="bg-default text-default border-b border-default">
 									<th scope="col" class="px-4 py-2 font-semibold border border-default">Name</th>
 									<th scope="col" class="px-4 py-2 font-semibold border border-default">Size</th>
+									<th scope="col" class="px-4 py-2 font-semibold border border-default">Speed/Time</th>
 									<th scope="col" class="px-4 py-2 font-semibold border border-default">Status</th>
 									<th scope="col" class="px-4 py-2 font-semibold border border-default text-right">
 										Action</th>
@@ -114,13 +115,30 @@
 													<span v-if="u.speed"> • {{ u.speed }}</span>
 													<span v-if="u.eta"> • ETA {{ u.eta }}</span>
 												</template>
-												<template v-else>{{ u.status }}</template>
+												<template v-else></template>
 											</div>
 										</td>
 
 										<!-- Size -->
 										<td class="px-4 py-2 border border-default">
 											<span class="text-sm opacity-80">{{ formatSize(u.size) }}</span>
+										</td>
+
+										<!-- Speed / Time -->
+										<td class="px-4 py-2 border border-default">
+											<template v-if="u.status === 'uploading'">
+												<span v-if="u.speed">{{ u.speed }}</span>
+												<br />
+												<span v-if="u.eta">ETA {{ u.eta }}</span>
+											</template>
+
+											<template v-else-if="u.status === 'done' && u.completedIn">
+												Completed in {{ u.completedIn }}
+											</template>
+
+											<template v-else>
+												<span>-</span>
+											</template>
 										</td>
 
 										<!-- Status -->
@@ -137,8 +155,6 @@
 
 												<template v-if="u.status === 'uploading'">
 													{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
-													<span v-if="u.speed" class="opacity-70">• {{ u.speed }}</span>
-													<span v-if="u.eta" class="opacity-70">• ETA {{ u.eta }}</span>
 												</template>
 
 												<template v-else>
@@ -300,6 +316,31 @@ function formatSize(size: number) {
 	return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`
 }
 
+function formatDuration(ms: number): string {
+	const totalSeconds = Math.max(0, Math.round(ms / 1000));
+
+	if (totalSeconds < 1) return 'under 1 second';
+	if (totalSeconds < 60) return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
+
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+
+	if (minutes < 60) {
+		if (seconds === 0) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+		return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
+	}
+
+	const hours = Math.floor(minutes / 60);
+	const remMinutes = minutes % 60;
+
+	if (remMinutes === 0) {
+		return `${hours} hour${hours === 1 ? '' : 's'}`;
+	}
+
+	return `${hours} hour${hours === 1 ? '' : 's'} ${remMinutes} minute${remMinutes === 1 ? '' : 's'}`;
+}
+
+
 // Step 2: destination
 const cwd = ref<string>('')                 // for the breadcrumb text the picker emits
 const destDir = computed(() => cwd.value) 	// alias used in UI
@@ -391,6 +432,9 @@ type UploadRow = {
 	speed: string | null
 	eta: string | null
 	alreadyUploaded?: boolean
+	startedAt?: number | null
+	completedAt?: number | null
+	completedIn?: string | null
 }
 const uploads = ref<UploadRow[]>([])
 
@@ -428,6 +472,9 @@ function prepareRows(): UploadRow[] {
 			speed: null,
 			eta: null,
 			alreadyUploaded: already,
+			startedAt: null,
+			completedAt: already ? Date.now() : null,
+			completedIn: already ? 'already uploaded' : null,
 		}
 	})
 }
@@ -461,6 +508,7 @@ function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: str
 }
 
 const rafState = new Map<string, { p?: number; speed?: string; eta?: string; scheduled?: number }>();
+
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
 
@@ -469,6 +517,7 @@ async function startUploads() {
 		if (row.status !== 'queued' || row.alreadyUploaded) continue;
 
 		row.status = 'uploading';
+		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
 
 		const { id, done } = await window.electron.rsyncStart(
@@ -504,6 +553,10 @@ async function startUploads() {
 
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
+					const end = Date.now();
+					const start = row.startedAt ?? end;
+					row.completedAt = end;
+					row.completedIn = formatDuration(end - start);
 				}
 			} else if (row.status !== 'canceled') {
 				row.status = 'error';

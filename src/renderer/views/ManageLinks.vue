@@ -43,7 +43,7 @@
 
 			<!-- table -->
 			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]"
-				:class="{ 'pr-3': !isMac }">
+				:class="{ '': !isMac }">
 				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
 					<colgroup>
 						<col class="w-[28%]" /> <!-- Title -->
