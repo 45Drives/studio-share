@@ -558,9 +558,9 @@ ipcMain.on('renderer-ready', (e) => {
 ipcMain.handle('get-client-ident', async () => ({ installId }))
 
 function checkLogDir(): string {
-  // LINUX: /home/<username>/.config/studio-share/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
-  // MAC:   /Users/<username>/Library/Application Support/studio-share/logs
-  // WIN:   C:\Users\<username>\AppData\Roaming\studio-share\logs
+  // LINUX: /home/<username>/.config/45studio-filesharing-app/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
+  // MAC:   /Users/<username>/Library/Application Support/45studio-filesharing-app/logs
+  // WIN:   C:\Users\<username>\AppData\Roaming\45studio-filesharing-app\logs
   const baseLogDir = path.join(app.getPath('userData'), 'logs');
   try {
     if (!fs.existsSync(baseLogDir)) {
