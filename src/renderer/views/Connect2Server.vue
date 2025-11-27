@@ -29,6 +29,11 @@
                     <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
                         class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
                 </div>
+                <div class="flex flex-col text-left mt-2 text-base">
+                    <span>SSH Port (optional, default 22):</span>
+                    <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
+                        class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" placeholder="22" />
+                </div>
             </CardContainer>
 
             <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left shadow-xl">
@@ -136,6 +141,53 @@ const connectionMeta = inject(connectionMetaInjectionKey)!;
 const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
 );
+
+// SSH port (null means “unspecified → default/detect”)
+const sshPort = ref<number | null>(null);
+
+type NormalizedHost = {
+    host: string;
+    sshPort?: number;
+};
+
+function normalizeHost(raw: string): NormalizedHost {
+    const s = raw.trim();
+    if (!s) return { host: '' };
+
+    // Pattern: "10.0.0.10:2222"
+    const colonIdx = s.lastIndexOf(':');
+    if (colonIdx > -1) {
+        const hostPart = s.slice(0, colonIdx).trim();
+        const portPart = s.slice(colonIdx + 1).trim();
+        if (/^\d+$/.test(portPart) && hostPart) {
+            return { host: hostPart, sshPort: Number(portPart) };
+        }
+    }
+
+    // Pattern: "10.0.0.10 -p 2222" or "10.0.0.10 -P 2222"
+    const m = s.match(/^(.*)\s+-p\s+(\d+)$/i);
+    if (m) {
+        const hostPart = m[1].trim();
+        const portPart = Number(m[2]);
+        if (hostPart) {
+            return { host: hostPart, sshPort: portPart };
+        }
+    }
+
+    // Fallback: just a host/IP
+    return { host: s };
+}
+
+/** Simple IPv4-ish validation for UI */
+function looksLikeIpv4(host: string): boolean {
+    const parts = host.split('.');
+    if (parts.length !== 4) return false;
+    return parts.every(p => {
+        if (!/^\d+$/.test(p)) return false;
+        const n = Number(p);
+        return n >= 0 && n <= 255;
+    });
+}
 
 const findServerByIp = (ip: string) =>
     discoveryState.servers.find(s => s.ip === ip.trim());
@@ -266,23 +318,39 @@ function listenBootstrap(id: string) {
 
 async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
-        pushNotification(new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000))
-        return
+        pushNotification(new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000));
+        return;
     }
     if (!username.value.trim()) {
-        pushNotification(new Notification('Error', `Please enter a username.`, 'error', 8000))
-        return
+        pushNotification(new Notification('Error', `Please enter a username.`, 'error', 8000));
+        return;
     }
     if (!password.value.trim()) {
-        pushNotification(new Notification('Error', `Please enter a password.`, 'error', 8000))
-        return
+        pushNotification(new Notification('Error', `Please enter a password.`, 'error', 8000));
+        return;
+    }
+
+    // Normalize manual IP (strip any :port / -p flags the user typed)
+    if (!selectedServer.value && manualIp.value.trim()) {
+        const norm = normalizeHost(manualIp.value);
+        if (!looksLikeIpv4(norm.host)) {
+            pushNotification(new Notification('Error', `Please enter a valid IPv4 address (e.g. 192.168.1.10).`, 'error', 8000));
+            return;
+        }
+        // If they typed a port inline and no explicit sshPort yet, adopt it.
+        if (norm.sshPort && sshPort.value == null) {
+            sshPort.value = norm.sshPort;
+        }
+        manualIp.value = norm.host;
     }
 
     isBusy.value = true;
     statusLine.value = '';
 
     try {
-        const rawIp = (selectedServer.value?.ip || manualIp.value).trim();
+        const rawIpInput = (selectedServer.value?.ip || manualIp.value).trim();
+        const normalized = normalizeHost(rawIpInput);
+        const rawIp = normalized.host;
 
         // If the manual IP is already discovered, prefer that discovered record.
         const discovered = findServerByIp(rawIp);
@@ -292,12 +360,27 @@ async function connectToServer() {
         const port = DEFAULT_API_PORT;
         const apiBase = `http://${ip}:${port}`;
 
+        // Decide which SSH port to use for this session
+        const sshPortToUse = (sshPort.value && sshPort.value > 0 && sshPort.value < 65536)
+            ? sshPort.value
+            : undefined; // undefined → “let main detect / default 22”
+
         // Set current server (avoid creating a "manual" entry if we already discovered it)
         providedCurrentServer.value = effectiveServer ?? {
             ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true
         };
 
-        connectionMeta.value = { ...connectionMeta.value, port, apiBase, httpsHost: undefined };
+        connectionMeta.value = {
+            ...connectionMeta.value,
+            port,
+            apiBase,
+            httpsHost: undefined,
+            ssh: {
+                server: ip,
+                username: username.value,
+                port: sshPortToUse,
+            },
+        };
 
         window.appLog?.info('login.resolveApiBase', { isDev, ip, port, apiBase, href: location.href });
         window.appLog?.info('login.request', { url: `${apiBase}/api/login`, ip });
@@ -325,8 +408,14 @@ async function connectToServer() {
             try {
                 const preflight = await window.electron?.ipcRenderer.invoke(
                     'remote-check-broadcaster',
-                    { host: ip, username: username.value, password: password.value }
+                    {
+                        host: ip,
+                        username: username.value,
+                        password: password.value,
+                        sshPort: sshPortToUse,
+                    }
                 );
+
                 // If package not installed (likely legacy present), we must bootstrap.
                 if (preflight && preflight.hasPackage === false) {
                     mustBootstrap = true;
@@ -362,7 +451,7 @@ async function connectToServer() {
 
             const result = await window.electron?.ipcRenderer.invoke(
                 "run-remote-bootstrap",
-                { id, host: ip, username: username.value, password: password.value }
+                { id, host: ip, username: username.value, password: password.value, sshPort: sshPortToUse }
             );
 
             if (!result?.success) {
@@ -392,16 +481,26 @@ async function connectToServer() {
         if (!res.ok) throw new Error(await res.text());
         const { token } = await res.json();
 
-        connectionMeta.value = { ...connectionMeta.value, token, ssh: { server: ip, username: username.value } };
+        connectionMeta.value = {
+            ...connectionMeta.value,
+            token,
+            ssh: {
+                server: ip,
+                username: username.value,
+                port: sshPortToUse,
+            },
+        };
+
         // Ensure SSH is ready for rsync (make key locally + add to authorized_keys)
         try {
         statusLine.value = 'Preparing SSH for file transfers…';
-        const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
-            host: ip,
-            username: username.value,
-            // pass password so we can plant the key if no agent is available
-            password: password.value || undefined,
-        });
+            const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
+                host: ip,
+                username: username.value,
+                password: password.value || undefined,
+                sshPort: sshPortToUse,
+            });
+
         if (!r?.ok) {
             // Non-fatal: rsync may still work via agent or existing keys, but tell the user.
             window.appLog?.warn('ensure-ssh-ready.failed', { error: r?.error });

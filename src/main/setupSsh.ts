@@ -7,26 +7,28 @@ import { NodeSSH } from "node-ssh";
 import { getOS } from "./utils";
 import { getKeyDir, ensureKeyPair } from "./crossPlatformSsh";
 
-/** Quick TCP probe for port 22 */
-export function checkSSH(host: string, timeout = 3000): Promise<boolean> {
+/** Quick TCP probe for an SSH port (default 22) */
+export function checkSSH(host: string, timeout = 3000, port = 22): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     sock.setTimeout(timeout);
     sock.once("connect", () => { sock.destroy(); resolve(true); });
     sock.once("error", () => { sock.destroy(); resolve(false); });
     sock.once("timeout", () => { sock.destroy(); resolve(false); });
-    sock.connect(22, host);
+    sock.connect(port, host);
   });
 }
 
+
 /** password auth (one-time) to plant our pubkey */
-export async function connectWithPassword(args: { host: string; username: string; password: string; }) {
-  const { host, username, password } = args;
+export async function connectWithPassword(args: { host: string; username: string; password: string; port?: number }) {
+  const { host, username, password, port } = args;
   const ssh = new NodeSSH();
   await ssh.connect({
     host,
     username,
     password,
+    port: port ?? 22,
     tryKeyboard: true,
     onKeyboardInteractive(_n, _i, _l, prompts, finish) {
       finish(prompts.map(() => password));
@@ -36,21 +38,22 @@ export async function connectWithPassword(args: { host: string; username: string
   return ssh;
 }
 
-/** key/agent auth */
-export async function connectWithKey(args: { host: string; username: string; privateKey: string; agent?: string }) {
-  const { host, username, privateKey, agent } = args;
 
-  // If a path was passed, load the file
+/** key/agent auth */
+export async function connectWithKey(args: { host: string; username: string; privateKey: string; agent?: string; port?: number }) {
+  const { host, username, privateKey, agent, port } = args;
+
   const keyData = privateKey.includes('BEGIN ')
     ? privateKey
-    : fs.readFileSync(privateKey, 'utf8');  // <-- read contents
+    : fs.readFileSync(privateKey, 'utf8');
 
   const ssh = new NodeSSH();
   await ssh.connect({
     host,
     username,
-    privateKey: keyData,              // pass contents
+    privateKey: keyData,
     agent,
+    port: port ?? 22,
     tryKeyboard: false,
     readyTimeout: 20_000,
     debug: (m: string) => console.log('ssh.debug', m),
@@ -58,24 +61,25 @@ export async function connectWithKey(args: { host: string; username: string; pri
   return ssh;
 }
 
+
 /** Append public key to remote authorized_keys (idempotent) */
 export async function setupSshKey(
   host: string,
   username: string,
   password: string,
   pubPath?: string,
-  comment = '45studio@client'
+  comment = '45studio@client',
+  port = 22,
 ): Promise<void> {
   const keyDir = getKeyDir();
   const pub = pubPath ?? path.join(keyDir, 'id_ed25519.pub');
 
   const publicKeyLine = (fs.readFileSync(pub, 'utf8').trim().replace(/["`]/g, '') + ` ${comment}`).trim();
-  const ssh = await connectWithPassword({ host, username, password });
+  const ssh = await connectWithPassword({ host, username, password, port });
 
   const cmd = [
     'mkdir -p ~/.ssh',
     'chmod 700 ~/.ssh',
-    // remove any prior 45studio line(s) then append exactly one line
     `grep -v ' ${comment}$' ~/.ssh/authorized_keys 2>/dev/null > ~/.ssh/authorized_keys.tmp || true`,
     'mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys 2>/dev/null || true',
     `echo "${publicKeyLine}" >> ~/.ssh/authorized_keys`,
@@ -85,6 +89,7 @@ export async function setupSshKey(
   await ssh.execCommand(cmd);
   ssh.dispose();
 }
+
 
 /** Ensure houston-broadcaster is installed on remote */
 export async function ensureBroadcasterInstalled(

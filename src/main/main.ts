@@ -305,31 +305,31 @@ function mdnsSignature(txt: Record<string,string>, ip: string, displayName: stri
 }
 
 // Helper to connect via agent or password-planted key
-async function connectForPreflight(host: string, username: string, password: string) {
+async function connectForPreflight(host: string, username: string, password: string, port = 22) {
   const agentSock = getAgentSocket();
   // Try agent
   if (agentSock) {
     const trial = new NodeSSH();
     try {
-      await trial.connect({ host, username, agent: agentSock, tryKeyboard: false, readyTimeout: 20000 });
+      await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false, readyTimeout: 20000 });
       return trial;
     } catch { trial.dispose(); }
   }
 
   // Try password → plant key → reconnect with key
-  const planted = await connectWithPassword({ host, username, password });
+  const planted = await connectWithPassword({ host, username, password, port });
   try { planted.dispose(); } catch { }
 
   const keyDir = getKeyDir();
   const priv = path.join(keyDir, 'id_ed25519');
   await ensureKeyPair(priv, `${priv}.pub`);
   try {
-    return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined });
+    return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined, port });
   } catch (e: any) {
     const m = String(e?.message || e);
     if (/unsupported key format/i.test(m)) {
       await regeneratePemKeyPair(priv);
-      return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined });
+      return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined, port });
     }
     throw e;
   }
@@ -368,12 +368,13 @@ function defaultClientKey(): string | undefined {
 }
 
 
-ipcMain.handle('remote-check-broadcaster', async (_event, { host, username, password }) => {
- jl('info', 'ipc.remote-check-broadcaster.start', { host, username: !!username ? 'provided' : 'empty' });
+ipcMain.handle('remote-check-broadcaster', async (_event, { host, username, password, sshPort }) => {
+  const port = sshPort ?? 22;
+  jl('info', 'ipc.remote-check-broadcaster.start', { host, username: !!username ? 'provided' : 'empty', port });
 
   let ssh: NodeSSH | null = null;
   try {
-    ssh = await connectForPreflight(host, username, password);
+    ssh = await connectForPreflight(host, username, password, port);
 
     // Single portable script: checks pkg presence, unit presence/active, legacy presence/active, API health
     const script = `
@@ -447,7 +448,8 @@ ipcMain.handle('probe-health', async (_e, { ip, port }) => {
   }
 });
 
-ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
+ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password, sshPort }) => {
+  const port = sshPort ?? 22;
   const keyDir = getKeyDir();
   const edPriv = path.join(keyDir, 'id_ed25519');
   const edPub = `${edPriv}.pub`;
@@ -455,7 +457,7 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
   const rsaPub = `${rsaPriv}.pub`;
 
   jl('info', 'ensure-ssh-ready.start', {
-    host, username, hasPassword: !!password, keyDir,
+    host, username, hasPassword: !!password, keyDir, port,
   });
 
   try {
@@ -466,15 +468,15 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
 
     // 1) Try agent first
     if (agentSock) {
-      jl('info', 'ensure-ssh-ready.agent.try', { agentSock });
+      jl('info', 'ensure-ssh-ready.agent.try', { agentSock, port });
       const trial = new NodeSSH();
       try {
-        await trial.connect({ host, username, agent: agentSock, tryKeyboard: false, readyTimeout: 20_000 });
+        await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false, readyTimeout: 20_000 });
         jl('info', 'ensure-ssh-ready.agent.ok', { host, username });
 
         // Even if agent works, plant our app key idempotently so future non-agent ops work
         if (password) {
-          await setupSshKey(host, username, password, edPub);
+          await setupSshKey(host, username, password, edPub, undefined, port);
           jl('info', 'ensure-ssh-ready.plant.after-agent', { pub: edPub });
         }
 
@@ -493,7 +495,7 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
       return { ok: false, error: msg };
     }
 
-    await setupSshKey(host, username, password, edPub);
+    await setupSshKey(host, username, password, edPub, undefined, port);
     jl('info', 'ensure-ssh-ready.plant.ed25519.ok', { pub: edPub });
 
     // 3) Verify with ed25519 file key
@@ -502,6 +504,7 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
       await verify.connect({
         host, username,
         privateKey: fs.readFileSync(edPriv, 'utf8'),
+        port,
         tryKeyboard: false,
         readyTimeout: 20_000,
       });
@@ -515,7 +518,7 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
       // 4) Fallback once: generate RSA at the *RSA* filename
       jl('info', 'ensure-ssh-ready.rsa.fallback.begin', { rsaPriv });
       await regeneratePemKeyPair(rsaPriv);          // writes rsaPriv and rsaPriv.pub
-      await setupSshKey(host, username, password, rsaPub);
+      await setupSshKey(host, username, password, rsaPub, undefined, port);
       jl('info', 'ensure-ssh-ready.rsa.plant.ok', { pub: rsaPub });
 
       // Retry with RSA
@@ -523,6 +526,7 @@ ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password }) => {
         await verify.connect({
           host, username,
           privateKey: fs.readFileSync(rsaPriv, 'utf8'),
+          port,
           tryKeyboard: false,
           readyTimeout: 20_000,
         });
@@ -747,8 +751,9 @@ function createWindow() {
     // log.error(payload.event, payload.data);
   });
 
-  ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id }) => {
-    jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id });
+  ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id, sshPort }) => {
+    const port = sshPort ?? 22;
+    jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id, port });
 
     const send = (label: string, step?: string) =>
       event.sender.send('bootstrap-progress', { id, ts: Date.now(), step, label });
@@ -757,6 +762,7 @@ function createWindow() {
       send('Probing SSH…', 'probe');
       const res = await installServerDepsRemotely({
         host, username, password,
+        sshPort: port,
         onProgress: ({ step, label }: any) => send(label, step),
       });
       send(res.success ? 'Bootstrap complete.' : 'Bootstrap failed.', res.success ? 'done' : 'error');
@@ -847,7 +853,7 @@ function createWindow() {
           let reachable = httpsReachable;
           if (!reachable) {
             // console.debug('Falling back to SSH probe on port 22…');
-            reachable = await checkSSH(ip, 3000);
+            reachable = await checkSSH(ip, 3000, 22);
             // console.debug(`SSH probe ${reachable ? 'succeeded' : 'failed'}`);
           }
 

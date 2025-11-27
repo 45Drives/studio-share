@@ -7,15 +7,33 @@ import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from "
 type ProgressFn = (p: { step: string; label: string }) => void;
 
 export async function installServerDepsRemotely(opts: {
-    host: string; username: string; password: string; onProgress?: ProgressFn;
+    host: string; username: string; password: string; sshPort?: number; onProgress?: ProgressFn;
 }) {
-    const { host, username, password, onProgress } = opts;
+    const { host, username, password, sshPort, onProgress } = opts;
     const send = (step: string, label: string) => onProgress?.({ step, label });
 
     try {
-        send('probe', `Probing ${host}:22…`);
-        const reachable = await checkSSH(host);
-        if (!reachable) return { success: false, error: `Host ${host}:22 not reachable.` };
+        let port = sshPort ?? 22;
+
+        const send = (step: string, label: string) => onProgress?.({ step, label });
+
+        send('probe', `Probing ${host}:${port}…`);
+        let reachable = await checkSSH(host, 3000, port);
+
+        // If user did not specify a port and 22 is closed, try a few common alternatives
+        if (!reachable && sshPort == null) {
+            const candidates = [2222, 2200, 2022];
+            for (const cand of candidates) {
+                send('probe', `Probing ${host}:${cand}…`);
+                if (await checkSSH(host, 3000, cand)) {
+                    port = cand;
+                    reachable = true;
+                    break;
+                }
+            }
+        }
+
+        if (!reachable) return { success: false, error: `Host ${host}:${port} not reachable.` };
 
         // Try agent first, else plant key via password
         let hasAuth = false;
@@ -23,24 +41,27 @@ export async function installServerDepsRemotely(opts: {
         if (agentSock) {
             send('auth', 'Trying SSH agent…');
             const trial = new NodeSSH();
-            try { await trial.connect({ host, username, agent: agentSock, tryKeyboard: false }); hasAuth = true; } catch { }
+            try {
+                await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false });
+                hasAuth = true;
+            } catch { }
             trial.dispose();
         }
-        // Connect with key/agent
+
         send('connect', 'Connecting via SSH…');
         const keyDir = getKeyDir();
         const priv = path.join(keyDir, 'id_ed25519');
         await ensureKeyPair(priv, `${priv}.pub`);
-        console.log('keyDir:', keyDir)
 
         if (!hasAuth) {
             send('key', 'Creating/planting SSH key…');
-            await setupSshKey(host, username, password);
+            await setupSshKey(host, username, password, undefined, undefined, port);
         }
+
         async function tryConnectWithCurrentKey() {
             return hasAuth
-                ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock! })
-                : await connectWithKey({ host, username, privateKey: priv });
+                ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock!, port })
+                : await connectWithKey({ host, username, privateKey: priv, port });
         }
 
         let ssh;
