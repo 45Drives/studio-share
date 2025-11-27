@@ -142,6 +142,8 @@ const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
 );
 
+let bootstrapTimeout: number | null = null;
+
 // SSH port (null means “unspecified → default/detect”)
 const sshPort = ref<number | null>(null);
 
@@ -439,12 +441,17 @@ async function connectToServer() {
             statusLine.value = 'Bootstrapping…';
             isBootstrapping.value = true;
 
-            setTimeout(() => {
+            // Set timeout and keep handle so we can cancel it
+            if (bootstrapTimeout !== null) {
+                clearTimeout(bootstrapTimeout);
+            }
+            bootstrapTimeout = window.setTimeout(() => {
                 if (isBootstrapping.value) {
                     isBootstrapping.value = false;
                     isBusy.value = false;
                     statusLine.value = '';
-                    unlistenProgress?.(); unlistenProgress = null;
+                    unlistenProgress?.();
+                    unlistenProgress = null;
                     pushNotification(new Notification('Error', 'Bootstrap timed out', 'error', 8000));
                 }
             }, 60_000);
@@ -454,22 +461,33 @@ async function connectToServer() {
                 { id, host: ip, username: username.value, password: password.value, sshPort: sshPortToUse }
             );
 
+            // Bootstrap RPC returned → no matter what, stop the timeout
+            if (bootstrapTimeout !== null) {
+                clearTimeout(bootstrapTimeout);
+                bootstrapTimeout = null;
+            }
+
             if (!result?.success) {
-                pushNotification(new Notification('Error', result?.error || 'Bootstrap failed', 'error', 12000));
                 statusLine.value = '';
                 isBootstrapping.value = false;
                 unlistenProgress?.(); unlistenProgress = null;
+                pushNotification(new Notification('Error', result?.error || 'Bootstrap failed', 'error', 12000));
                 return;
             }
 
-            // Post-bootstrap: give health a moment
+            // Mark bootstrap finished before doing extra health probes
+            isBootstrapping.value = false;
+            statusLine.value = 'Checking server health…';
+
+            // Post-bootstrap health wait (no longer counted as "bootstrapping")
             for (let i = 0; i < 10; i++) {
                 await new Promise(r => setTimeout(r, 1000));
                 if (await probe()) break;
             }
+
             statusLine.value = '';
-            isBootstrapping.value = false;
-            unlistenProgress?.(); unlistenProgress = null;
+            unlistenProgress?.();
+            unlistenProgress = null;
         }
 
         // Healthy now — proceed to login
