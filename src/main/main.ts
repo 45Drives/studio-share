@@ -1,4 +1,4 @@
-import log from 'electron-log';
+
 function initLogging(resolvedLogDir: string) {
   const dropNoisyMdns = format((info) => {
     if (process.env.NODE_ENV !== 'development') {
@@ -65,9 +65,6 @@ const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
   process.on('unhandledRejection', (reason, promise) => {
     // log.error('Unhandled Rejection at:', promise, 'reason:', reason);
     jsonLogger.error({ event: 'unhandledRejection', reason: String(reason) });
-  });
-  jl('info', 'logging.init.wired', {
-    filePath: (log.transports.file as any).getFile().path
   });
 }
 
