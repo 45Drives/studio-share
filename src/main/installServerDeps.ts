@@ -12,7 +12,7 @@ export async function installServerDepsRemotely(opts: {
     const { host, username, password, sshPort, bcastPort, httpsPort, onProgress } = opts;
     const apiPort = bcastPort ?? 9095;
     const send = (step: string, label: string) => onProgress?.({ step, label });
-
+    const shQ = (s: string) => `'${s.replace(/'/g, `'\"'\"'`)}'`;
     try {
         let port = sshPort ?? 22;
 
@@ -94,27 +94,34 @@ export async function installServerDepsRemotely(opts: {
             // 3) Optional port overrides
             if (bcastPort != null || httpsPort != null) {
                 const envLines: string[] = [];
-                if (bcastPort != null) envLines.push(`BCAST_PORT=${bcastPort}`);
-                if (httpsPort != null) envLines.push(`HTTPS_PORT=${httpsPort}`);
-                const payload = envLines.join("\n") + "\n";
+
+                // Always write all three so the file is self-contained and predictable
+                const effectiveBcast = bcastPort ?? 9095;
+                const effectiveHttps = httpsPort ?? 443;
+                const effectiveHttp = 80; // add an httpPort param later?
+
+                envLines.push(`BCAST_PORT=${effectiveBcast}`);
+                envLines.push(`HTTP_PORT=${effectiveHttp}`);
+                envLines.push(`HTTPS_PORT=${effectiveHttps}`);
+
+                const payload = envLines.join("\n");
 
                 const script = `
 set -euo pipefail
 
-payload=${JSON.stringify(payload)}
+payload=${shQ(payload)}
 
 for f in /etc/default/houston-broadcaster /etc/sysconfig/houston-broadcaster; do
   sudo mkdir -p "$(dirname "$f")"
-  printf '%s' "$payload" | sudo tee "$f" >/dev/null
+  # overwrite with a clean, fully-populated file
+  printf '%s\n' "$payload" | sudo tee "$f" >/dev/null
 done
 
 sudo systemctl daemon-reload || true
 `.trim();
 
                 send("config", "Configuring broadcaster ports…");
-                const res = await ssh.execCommand(
-                    `bash -lc '${script.replace(/'/g, `'\"'\"'`)}'`
-                );
+                const res = await ssh.execCommand(`bash -lc ${shQ(script)}`);
                 if ((res.code ?? 0) !== 0) {
                     throw new Error(
                         res.stderr ||
@@ -123,6 +130,7 @@ sudo systemctl daemon-reload || true
                     );
                 }
             }
+
 
             // 4) Enable + start service
             send("enable", "Enabling & starting service…");
