@@ -106,30 +106,63 @@ export async function installServerDepsRemotely(opts: {
 
                 const payload = envLines.join("\n");
 
+                const pw = password ?? "";
                 const script = `
 set -euo pipefail
 
+PW=${shQ(pw)}
+
+have_sudo() { sudo -n true 2>/dev/null; }
+run_root() {
+  if have_sudo; then sudo "$@"; else printf '%s\\n' "$PW" | sudo -S -p '' "$@"; fi
+}
+
+# 1) Write env files with new ports
 payload=${shQ(payload)}
 
 for f in /etc/default/houston-broadcaster /etc/sysconfig/houston-broadcaster; do
-  sudo mkdir -p "$(dirname "$f")"
-  # overwrite with a clean, fully-populated file
-  printf '%s\n' "$payload" | sudo tee "$f" >/dev/null
+  run_root mkdir -p "$(dirname "$f")"
+  printf '%s\\n' "$payload" | run_root tee "$f" >/dev/null
 done
 
-sudo systemctl daemon-reload || true
+run_root systemctl daemon-reload || true
+
+# 2) Open firewall + SELinux for internal API port
+BCAST_PORT=${effectiveBcast}
+
+if command -v firewall-cmd >/dev/null 2>&1; then
+  run_root firewall-cmd --permanent --add-port="$BCAST_PORT"/tcp >/dev/null 2>&1 || true
+  # Optional: close the old default 9095 if you want to be strict
+  # if [ "$BCAST_PORT" != "9095" ]; then
+  #   run_root firewall-cmd --permanent --remove-port=9095/tcp >/dev/null 2>&1 || true
+  # fi
+  run_root firewall-cmd --reload || true
+elif command -v ufw >/dev/null 2>&1; then
+  run_root ufw allow "$BCAST_PORT"/tcp || true
+fi
+
+if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" = "Enforcing" ]; then
+  run_root setsebool -P httpd_can_network_connect 1 || true
+  if command -v semanage >/dev/null 2>&1; then
+    if ! semanage port -l | awk '$1=="http_port_t" {print $0}' | grep -qE "(^| )$BCAST_PORT(/tcp)?( |$)"; then
+      run_root semanage port -a -t http_port_t -p tcp "$BCAST_PORT" 2>/dev/null || \
+      run_root semanage port -m -t http_port_t -p tcp "$BCAST_PORT" || true
+    fi
+  fi
+fi
 `.trim();
 
-                send("config", "Configuring broadcaster ports…");
+                send("config", "Configuring broadcaster ports and firewall…");
                 const res = await ssh.execCommand(`bash -lc ${shQ(script)}`);
                 if ((res.code ?? 0) !== 0) {
                     throw new Error(
                         res.stderr ||
                         res.stdout ||
-                        "Failed to configure broadcaster ports"
+                        "Failed to configure broadcaster ports / firewall"
                     );
                 }
             }
+
 
 
             // 4) Enable + start service
