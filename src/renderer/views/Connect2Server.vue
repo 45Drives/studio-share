@@ -174,6 +174,65 @@ const sshPort = ref<number | null>(null);          // SSH port (null means “un
 const broadcasterPort = ref<number | null>(null);  // internal API, default 9095
 const httpsPort = ref<number | null>(null);        // external HTTPS, default 443
 
+const PORT_PREF_KEY = 'hb_port_prefs_v1';
+
+type PortPrefs = Record<string, {
+    sshPort?: number;
+    apiPort?: number;
+    httpsPort?: number;
+}>;
+
+function loadPortPrefs(): PortPrefs {
+    try {
+        const raw = window.localStorage.getItem(PORT_PREF_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed as PortPrefs : {};
+    } catch {
+        return {};
+    }
+}
+
+function savePortPrefs(prefs: PortPrefs) {
+    try {
+        window.localStorage.setItem(PORT_PREF_KEY, JSON.stringify(prefs));
+    } catch {
+        // ignore storage errors (private mode, etc.)
+    }
+}
+
+function getPrefsForHost(host: string) {
+    const prefs = loadPortPrefs();
+    return prefs[host] || null;
+}
+
+function rememberPortsForHost(host: string, ports: {
+    sshPort?: number;
+    apiPort?: number;
+    httpsPort?: number;
+}) {
+    const prefs = loadPortPrefs();
+    prefs[host] = {
+        ...prefs[host],
+        ...ports,
+    };
+    savePortPrefs(prefs);
+}
+
+watch(selectedServerIp, (ip) => {
+    if (!ip) return;
+
+    // clear manual IP when selecting from dropdown (you already do similar)
+    manualIp.value = '';
+
+    const prefs = getPrefsForHost(ip.trim());
+    if (prefs) {
+        sshPort.value = prefs.sshPort ?? null;
+        broadcasterPort.value = prefs.apiPort ?? null;
+        httpsPort.value = prefs.httpsPort ?? null;
+    }
+}, { immediate: false });
+
 type NormalizedHost = {
     host: string;
     sshPort?: number;
@@ -231,12 +290,20 @@ watch(manualIp, (val) => {
     const ip = val.trim();
     const hit = ip ? findServerByIp(ip) : undefined;
     if (hit) {
-        // If the user typed an IP we already discovered, switch to that entry.
         selectedServerIp.value = hit.ip;
         manualIp.value = '';
+        return;
     } else if (val !== '') {
-        // Ensure dropdown is disabled while user truly enters a different IP.
         selectedServerIp.value = '';
+    }
+
+    if (ip) {
+        const prefs = getPrefsForHost(ip);
+        if (prefs) {
+            sshPort.value = prefs.sshPort ?? null;
+            broadcasterPort.value = prefs.apiPort ?? null;
+            httpsPort.value = prefs.httpsPort ?? null;
+        }
     }
 });
 
@@ -568,6 +635,12 @@ async function connectToServer() {
         } catch (e: any) {
             window.appLog?.warn('settings.seed.failed', { message: e?.message });
         }
+
+        rememberPortsForHost(ip, {
+            sshPort: sshPortToUse,
+            apiPort: apiPortToUse,
+            httpsPort: httpsPort.value ?? 443,
+        });
 
         window.appLog?.info('login.success', { ip });
         to('dashboard');
