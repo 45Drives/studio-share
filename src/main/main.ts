@@ -751,20 +751,24 @@ function createWindow() {
     // log.error(payload.event, payload.data);
   });
 
-  ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id, sshPort }) => {
+  ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id, sshPort, bcastPort, httpsPort }) => {
     const port = sshPort ?? 22;
-    jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id, port });
+    jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id, port, bcastPort, httpsPort });
 
     const send = (label: string, step?: string) =>
       event.sender.send('bootstrap-progress', { id, ts: Date.now(), step, label });
 
     try {
-      send('Probing SSH…', 'probe');
       const res = await installServerDepsRemotely({
-        host, username, password,
+        host,
+        username,
+        password,
         sshPort: port,
+        bcastPort,
+        httpsPort,
         onProgress: ({ step, label }: any) => send(label, step),
       });
+
       send(res.success ? 'Bootstrap complete.' : 'Bootstrap failed.', res.success ? 'done' : 'error');
       jl('info', 'ipc.run-remote-bootstrap.done', { host, id, success: !!res?.success });
 
@@ -776,6 +780,7 @@ function createWindow() {
       return { success: false, error: err?.message || String(err) };
     }
   });
+
   
   ipcMain.handle('get-os', () => {
     const os = getOS();

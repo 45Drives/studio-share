@@ -7,24 +7,23 @@ import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from "
 type ProgressFn = (p: { step: string; label: string }) => void;
 
 export async function installServerDepsRemotely(opts: {
-    host: string; username: string; password: string; sshPort?: number; onProgress?: ProgressFn;
+    host: string; username: string; password: string; sshPort?: number; bcastPort?: number, httpsPort?: number, onProgress?: ProgressFn;
 }) {
-    const { host, username, password, sshPort, onProgress } = opts;
+    const { host, username, password, sshPort, bcastPort, httpsPort, onProgress } = opts;
+    const apiPort = bcastPort ?? 9095;
     const send = (step: string, label: string) => onProgress?.({ step, label });
 
     try {
         let port = sshPort ?? 22;
 
-        const send = (step: string, label: string) => onProgress?.({ step, label });
-
-        send('probe', `Probing ${host}:${port}…`);
+        send("probe", `Probing ${host}:${port}…`);
         let reachable = await checkSSH(host, 3000, port);
 
         // If user did not specify a port and 22 is closed, try a few common alternatives
         if (!reachable && sshPort == null) {
             const candidates = [2222, 2200, 2022];
             for (const cand of candidates) {
-                send('probe', `Probing ${host}:${cand}…`);
+                send("probe", `Probing ${host}:${cand}…`);
                 if (await checkSSH(host, 3000, cand)) {
                     port = cand;
                     reachable = true;
@@ -33,46 +32,50 @@ export async function installServerDepsRemotely(opts: {
             }
         }
 
-        if (!reachable) return { success: false, error: `Host ${host}:${port} not reachable.` };
+        if (!reachable) {
+            return { success: false, error: `Host ${host}:${port} not reachable.` };
+        }
 
         // Try agent first, else plant key via password
         let hasAuth = false;
         const agentSock = getAgentSocket();
         if (agentSock) {
-            send('auth', 'Trying SSH agent…');
+            send("auth", "Trying SSH agent…");
             const trial = new NodeSSH();
             try {
                 await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false });
                 hasAuth = true;
-            } catch { }
+            } catch {
+                // ignore agent failure
+            }
             trial.dispose();
         }
 
-        send('connect', 'Connecting via SSH…');
+        send("connect", "Connecting via SSH…");
         const keyDir = getKeyDir();
-        const priv = path.join(keyDir, 'id_ed25519');
+        const priv = path.join(keyDir, "id_ed25519");
         await ensureKeyPair(priv, `${priv}.pub`);
 
         if (!hasAuth) {
-            send('key', 'Creating/planting SSH key…');
+            send("key", "Creating/planting SSH key…");
             await setupSshKey(host, username, password, undefined, undefined, port);
         }
 
         async function tryConnectWithCurrentKey() {
             return hasAuth
-                ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock!, port })
+                ? await connectWithKey({ host, username, privateKey: priv, agent: agentSock!, port})
                 : await connectWithKey({ host, username, privateKey: priv, port });
         }
 
-        let ssh;
+        let ssh: NodeSSH;
         try {
             ssh = await tryConnectWithCurrentKey();
         } catch (e: any) {
             const m = String(e?.message || e);
             if (/unsupported key format/i.test(m)) {
                 // Fallback: regenerate PEM and retry
-                send('key', 'Regenerating SSH key (PEM)…');
-                await regeneratePemKeyPair(priv); 
+                send("key", "Regenerating SSH key (PEM)…");
+                await regeneratePemKeyPair(priv);
                 ssh = await tryConnectWithCurrentKey();
             } else {
                 throw e; // real failure
@@ -80,33 +83,92 @@ export async function installServerDepsRemotely(opts: {
         }
 
         try {
-            send('repo', 'Setting up 45Drives community repo…');
+            // 1) Repo
+            send("repo", "Setting up 45Drives community repo…");
             await ensure45DrivesCommunityRepoViaScript(ssh, { password });
-            
-            send('install', 'Installing Broadcaster…');
+
+            // 2) Install Broadcaster
+            send("install", "Installing Broadcaster…");
             await ensureBroadcasterInstalled(ssh, { password });
 
-            send('enable', 'Enabling & starting service…');
-            await ssh.execCommand(`bash -lc 'sudo systemctl enable --now houston-broadcaster || true'`);
+            // 3) Optional port overrides
+            if (bcastPort != null || httpsPort != null) {
+                const envLines: string[] = [];
+                if (bcastPort != null) envLines.push(`BCAST_PORT=${bcastPort}`);
+                if (httpsPort != null) envLines.push(`HTTPS_PORT=${httpsPort}`);
+                const payload = envLines.join("\n") + "\n";
 
-            // Wait for bootstrap to finish: health first, then look for the known journal line
-            send('wait', 'Waiting for service health…');
-            const health = await ssh.execCommand(
-                `bash -lc 'for i in {1..30}; do curl -fsS http://127.0.0.1:9095/healthz >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1;'`
-            );
+                const script = `
+set -euo pipefail
 
-            if ((health.code ?? 1) !== 0) {
-                // Optional: check journal for the “Finished first-run bootstrap” marker
-                send('wait', 'Waiting for bootstrap to complete…');
-                const journal = await ssh.execCommand(
-                    `bash -lc 'for i in {1..60}; do journalctl -u houston-broadcaster -o cat --since "5 min ago" | grep -q "Finished Houston Broadcaster first-run bootstrap" && exit 0; sleep 1; done; exit 1;'`
+payload=${JSON.stringify(payload)}
+
+for f in /etc/default/houston-broadcaster /etc/sysconfig/houston-broadcaster; do
+  sudo mkdir -p "$(dirname "$f")"
+  printf '%s' "$payload" | sudo tee "$f" >/dev/null
+done
+
+sudo systemctl daemon-reload || true
+`.trim();
+
+                send("config", "Configuring broadcaster ports…");
+                const res = await ssh.execCommand(
+                    `bash -lc '${script.replace(/'/g, `'\"'\"'`)}'`
                 );
-                if ((journal.code ?? 1) !== 0) {
-                    // Not fatal—renderer will probe again—but tell the UI we’re done waiting
-                    send('warn', 'Service started; bootstrap may still be finishing…');
+                if ((res.code ?? 0) !== 0) {
+                    throw new Error(
+                        res.stderr ||
+                        res.stdout ||
+                        "Failed to configure broadcaster ports"
+                    );
                 }
             }
 
+            // 4) Enable + start service
+            send("enable", "Enabling & starting service…");
+            const enableRes = await ssh.execCommand(
+                `bash -lc 'sudo systemctl enable houston-broadcaster || true; sudo systemctl restart houston-broadcaster || sudo systemctl start houston-broadcaster || true'`
+            );
+            if ((enableRes.code ?? 0) !== 0) {
+                // Non-fatal, but worth surfacing to logs/telemetry via step
+                send(
+                    "warn",
+                    "Service enable/start returned non-zero; continuing…"
+                );
+            }
+
+            // 5) Wait for health / bootstrap completion with bounded time
+            send("wait", "Waiting for service health…");
+            const health = await ssh.execCommand(
+                `bash -lc 'for i in {1..30}; do curl -fsS http://127.0.0.1:${apiPort}/healthz >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1;'`
+            );
+
+            if ((health.code ?? 1) !== 0) {
+                // Health not yet OK — fall back to watching logs for bootstrap completion,
+                // but treat total failure as a real timeout error (not success).
+                send(
+                    "wait",
+                    "Health not yet OK; watching logs for bootstrap completion…"
+                );
+
+                const journal = await ssh.execCommand(
+                    `bash -lc 'for i in {1..60}; do journalctl -u houston-broadcaster -o cat --since "5 min ago" | grep -q "Finished Houston Broadcaster first-run bootstrap" && exit 0; sleep 1; done; exit 1;'`
+                );
+
+                if ((journal.code ?? 1) !== 0) {
+                    send("error", "Timed out waiting for bootstrap to finish.");
+                    return {
+                        success: false,
+                        error: "Timed out waiting for bootstrap to finish",
+                    };
+                }
+
+                // Journal saw the bootstrap-finished marker even though health loop failed.
+                // At this point, the renderer will probe /healthz again anyway.
+                send("wait", "Bootstrap finished; waiting for UI health probe…");
+            }
+
+            // If we got here: either health loop succeeded OR journal loop saw completion.
             return { success: true };
         } finally {
             ssh.dispose();

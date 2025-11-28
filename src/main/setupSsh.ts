@@ -2,10 +2,8 @@
 import fs from "fs";
 import net from "net";
 import path from "path";
-import { app } from "electron";
 import { NodeSSH } from "node-ssh";
-import { getOS } from "./utils";
-import { getKeyDir, ensureKeyPair } from "./crossPlatformSsh";
+import { getKeyDir } from "./crossPlatformSsh";
 
 /** Quick TCP probe for an SSH port (default 22) */
 export function checkSSH(host: string, timeout = 3000, port = 22): Promise<boolean> {
@@ -146,6 +144,35 @@ export async function ensure45DrivesCommunityRepoViaScript(
   const q = (s: string) => `'${s.replace(/'/g, `'\"'\"'`)}'`;
   const PW = opts.password ?? "";
 
+  // 1) Preflight: can we reach repo.45drives.com at all?
+  const pingRepoScript = `
+set -euo pipefail
+
+curl -fsS --max-time 10 https://repo.45drives.com/key/gpg.asc >/dev/null || {
+  echo "ERROR: Unable to reach https://repo.45drives.com over HTTPS. Check firewall/proxy." >&2
+  exit 1
+}
+`.trim();
+
+  const pingRes = await ssh.execCommand(`bash -lc ${q(pingRepoScript)}`);
+  if ((pingRes.code ?? 1) !== 0) {
+    const msg = pingRes.stderr || pingRes.stdout || "unknown error";
+    throw new Error(
+      [
+        "ensure45DrivesCommunityRepoViaScript failed during connectivity check.",
+        "",
+        "The remote host could not reach https://repo.45drives.com over HTTPS.",
+        "Please check firewall / proxy settings and confirm this works on the server:",
+        "",
+        "  curl -v https://repo.45drives.com/key/gpg.asc",
+        "",
+        "Original error:",
+        msg,
+      ].join("\n")
+    );
+  }
+
+  // 2) Actual repo-setup script (your original, unchanged logic)
   const script = `
 set -euo pipefail
 
@@ -357,6 +384,20 @@ run_root rm -f "$tmp_script"
 
   const res = await ssh.execCommand(`bash -lc ${q(script)}`);
   if ((res.code ?? 1) !== 0) {
-    throw new Error(`ensure45DrivesCommunityRepoViaScript failed: ${res.stderr || res.stdout}`);
+    const msg = res.stderr || res.stdout || "unknown error";
+    throw new Error(
+      [
+        "ensure45DrivesCommunityRepoViaScript failed while setting up the repo.",
+        "",
+        "On RHEL/Rocky-type systems, try on the server:",
+        "  sudo dnf clean all && sudo dnf makecache --disablerepo='*' --enablerepo='45drives_community'",
+        "",
+        "On Debian/Ubuntu systems, try:",
+        "  sudo apt update",
+        "",
+        "Original error:",
+        msg,
+      ].join("\n")
+    );
   }
 }

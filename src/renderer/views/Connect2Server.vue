@@ -29,10 +29,39 @@
                     <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
                         class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
                 </div>
-                <div class="flex flex-col text-left mt-2 text-base">
-                    <span>SSH Port (optional, default 22):</span>
-                    <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                        class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" placeholder="22" />
+                <div class="mt-4 text-left">
+                    <span class="block text-sm mb-2">Ports (optional)</span>
+
+                    <div class="grid grid-cols-3 gap-4 text-sm">
+                        <!-- SSH -->
+                        <label class="flex flex-col">
+                            <span class="mb-1 opacity-80">SSH</span>
+                            <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
+                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
+                                placeholder="22" />
+                        </label>
+
+                        <!-- Broadcaster / API -->
+                        <label class="flex flex-col">
+                            <span class="mb-1 opacity-80">API <span class="text-xs">(houston-broadcaster)</span></span>
+                            <input v-model.number="broadcasterPort" type="number" min="1" max="65535"
+                                :disabled="anyBusy"
+                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
+                                placeholder="9095" />
+                        </label>
+
+                        <!-- HTTPS -->
+                        <label class="flex flex-col">
+                            <span class="mb-1 opacity-80">HTTPS</span>
+                            <input v-model.number="httpsPort" type="number" min="1" max="65535" :disabled="anyBusy"
+                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
+                                placeholder="443" />
+                        </label>
+                    </div>
+
+                    <p class="mt-1 text-xs opacity-75">
+                        Leave blank to use defaults: SSH 22, API 9095, HTTPS 443.
+                    </p>
                 </div>
             </CardContainer>
 
@@ -60,9 +89,8 @@
             <div class="col-span-2 grid grid-cols-2 gap-4">
                 <div class="flex flex-row justify-between w-full items-center text-center gap-2 col-span-2">
                     <span class="text-danger text-base semibold justify-center">
-                        <b>ALSO:</b> To allow sharing links outside your network, <b>port
-                            443
-                            (HTTPS)</b> <u>must</u> be open or forwarded from your router.
+                        <b>ALSO:</b> To allow sharing links outside your network, <b>HTTPS port
+                            (443 by default) <u>must</u> </b> be open or forwarded from your router.
                     </span>
                     <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
                         class="btn btn-secondary w-fit text-base justify-end">
@@ -142,10 +170,9 @@ const selectedServer = computed<Server | undefined>(() =>
     discoveryState.servers.find(s => s.ip === selectedServerIp.value)
 );
 
-let bootstrapTimeout: number | null = null;
-
-// SSH port (null means “unspecified → default/detect”)
-const sshPort = ref<number | null>(null);
+const sshPort = ref<number | null>(null);          // SSH port (null means “unspecified → default/detect”)
+const broadcasterPort = ref<number | null>(null);  // internal API, default 9095
+const httpsPort = ref<number | null>(null);        // external HTTPS, default 443
 
 type NormalizedHost = {
     host: string;
@@ -236,7 +263,8 @@ async function tryAutomaticPortMapping() {
     const resolveApiBase = () => {
         const rawIp = (selectedServer.value?.ip || manualIp.value).trim();
         if (!rawIp) return '';
-        return `http://${rawIp}:${DEFAULT_API_PORT}`;
+        const apiPortToUse = connectionMeta.value?.port || DEFAULT_API_PORT;
+        return `http://${rawIp}:${apiPortToUse}`;
     };
 
     let apiBase = connectionMeta.value?.apiBase || resolveApiBase();
@@ -358,9 +386,13 @@ async function connectToServer() {
         const discovered = findServerByIp(rawIp);
         const effectiveServer = discovered ?? selectedServer.value;
         const ip = effectiveServer?.ip || rawIp;
+        
+        const apiPortToUse =
+            broadcasterPort.value && broadcasterPort.value > 0 && broadcasterPort.value < 65536
+                ? broadcasterPort.value
+                : DEFAULT_API_PORT;
 
-        const port = DEFAULT_API_PORT;
-        const apiBase = `http://${ip}:${port}`;
+        const apiBase = `http://${ip}:${apiPortToUse}`;
 
         // Decide which SSH port to use for this session
         const sshPortToUse = (sshPort.value && sshPort.value > 0 && sshPort.value < 65536)
@@ -374,7 +406,7 @@ async function connectToServer() {
 
         connectionMeta.value = {
             ...connectionMeta.value,
-            port,
+            port: apiPortToUse,
             apiBase,
             httpsHost: undefined,
             ssh: {
@@ -384,11 +416,11 @@ async function connectToServer() {
             },
         };
 
-        window.appLog?.info('login.resolveApiBase', { isDev, ip, port, apiBase, href: location.href });
+        window.appLog?.info('login.resolveApiBase', { isDev, ip, port: apiPortToUse, apiBase, href: location.href });
         window.appLog?.info('login.request', { url: `${apiBase}/api/login`, ip });
 
         const probe = async () => {
-            const r = await window.electron?.ipcRenderer.invoke('probe-health', { ip, port: DEFAULT_API_PORT });
+            const r = await window.electron?.ipcRenderer.invoke('probe-health', { ip, port: apiPortToUse });
             return !!r?.ok;
         };
 
@@ -441,31 +473,18 @@ async function connectToServer() {
             statusLine.value = 'Bootstrapping…';
             isBootstrapping.value = true;
 
-            // Set timeout and keep handle so we can cancel it
-            if (bootstrapTimeout !== null) {
-                clearTimeout(bootstrapTimeout);
-            }
-            bootstrapTimeout = window.setTimeout(() => {
-                if (isBootstrapping.value) {
-                    isBootstrapping.value = false;
-                    isBusy.value = false;
-                    statusLine.value = '';
-                    unlistenProgress?.();
-                    unlistenProgress = null;
-                    pushNotification(new Notification('Error', 'Bootstrap timed out', 'error', 8000));
-                }
-            }, 60_000);
-
             const result = await window.electron?.ipcRenderer.invoke(
                 "run-remote-bootstrap",
-                { id, host: ip, username: username.value, password: password.value, sshPort: sshPortToUse }
+                {
+                    id,
+                    host: ip,
+                    username: username.value,
+                    password: password.value,
+                    sshPort: sshPortToUse,
+                    bcastPort: apiPortToUse,
+                    httpsPort: httpsPort.value ?? 443,
+                }
             );
-
-            // Bootstrap RPC returned → no matter what, stop the timeout
-            if (bootstrapTimeout !== null) {
-                clearTimeout(bootstrapTimeout);
-                bootstrapTimeout = null;
-            }
 
             if (!result?.success) {
                 statusLine.value = '';
