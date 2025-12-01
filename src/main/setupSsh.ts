@@ -3,6 +3,7 @@ import fs from "fs";
 import net from "net";
 import path from "path";
 import { NodeSSH } from "node-ssh";
+import { scrubSecrets } from './scrubSecrets';
 import { getKeyDir } from "./crossPlatformSsh";
 
 /** Quick TCP probe for an SSH port (default 22) */
@@ -54,7 +55,7 @@ export async function connectWithKey(args: { host: string; username: string; pri
     port: port ?? 22,
     tryKeyboard: false,
     readyTimeout: 20_000,
-    debug: (m: string) => console.log('ssh.debug', m),
+    debug: (m: string) => console.debug(`ssh.debug ${scrubSecrets(m)}`),
   });
   return ssh;
 }

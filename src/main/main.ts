@@ -1,4 +1,3 @@
-
 function initLogging(resolvedLogDir: string) {
   const dropNoisyMdns = format((info) => {
     if (process.env.NODE_ENV !== 'development') {
@@ -8,18 +7,43 @@ function initLogging(resolvedLogDir: string) {
     return info;
   });
 
+  const scrubFormat = format((info) => {
+    // scrub the main message
+    if (typeof info.message === 'string') {
+      info.message = scrubSecrets(info.message);
+    }
+
+    // scrub some common payload fields
+    for (const key of ['error', 'stack', 'details']) {
+      if (typeof (info as any)[key] === 'string') {
+        (info as any)[key] = scrubSecrets((info as any)[key]);
+      }
+    }
+
+    // scrub any string fields in the object
+    for (const [k, v] of Object.entries(info)) {
+      if (typeof v === 'string') {
+        (info as any)[k] = scrubSecrets(v);
+      }
+    }
+
+    return info;
+  });
+
   jsonLogger = createLogger({
     level: 'info',
     format: format.combine(
       format.timestamp(),
+      scrubFormat(),
       format((info) => {
-        if (typeof info.message === 'string' &&
-          info.message.includes('Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED')) return false;
+        if (
+          typeof info.message === 'string' &&
+          info.message.includes('Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED')
+        ) return false;
         return info;
       })(),
       format.json()
     ),
-    
     transports: [
       new DailyRotateFile({
         dirname: resolvedLogDir,
@@ -28,7 +52,11 @@ function initLogging(resolvedLogDir: string) {
         maxFiles: '14d',
         zippedArchive: true,
         level: 'info',
-        format: format.combine(dropNoisyMdns(), format.json())
+        format: format.combine(
+          scrubFormat(),
+          dropNoisyMdns(),
+          format.json()
+        )
       })
     ]
   });
@@ -43,12 +71,11 @@ function initLogging(resolvedLogDir: string) {
 
 const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
   (...args: any[]) => {
-    const msg = args.map(String).join(' ');
-    // write to JSON log only
+    const msgRaw = args.map(String).join(' ');
+    const msg = scrubSecrets(msgRaw);
     (jsonLogger as any)[lvl]({ message: msg });
-    // optionally still mirror to terminal during dev
     if (process.env.NODE_ENV === 'development') {
-      (originalConsole as any)[lvl](...args);
+      (originalConsole as any)[lvl](msg);
     }
   };
 
@@ -91,6 +118,7 @@ import { getPin, rememberPin } from './certPins'
 import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
 import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
+import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
 import { runRsync } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
 
@@ -366,6 +394,7 @@ function defaultClientKey(): string | undefined {
 
 
 ipcMain.handle('remote-check-broadcaster', async (_event, { host, username, password, sshPort }) => {
+  registerSensitiveToken(password);
   const port = sshPort ?? 22;
   jl('info', 'ipc.remote-check-broadcaster.start', { host, username: !!username ? 'provided' : 'empty', port });
 
@@ -446,6 +475,7 @@ ipcMain.handle('probe-health', async (_e, { ip, port }) => {
 });
 
 ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password, sshPort }) => {
+  registerSensitiveToken(password);
   const port = sshPort ?? 22;
   const keyDir = getKeyDir();
   const edPriv = path.join(keyDir, 'id_ed25519');
@@ -750,6 +780,7 @@ function createWindow() {
 
   ipcMain.handle('run-remote-bootstrap', async (event, { host, username, password, id, sshPort, bcastPort, httpsPort }) => {
     const port = sshPort ?? 22;
+    registerSensitiveToken(password);
     jl('info', 'ipc.run-remote-bootstrap.start', { host, username, id, port, bcastPort, httpsPort });
 
     const send = (label: string, step?: string) =>

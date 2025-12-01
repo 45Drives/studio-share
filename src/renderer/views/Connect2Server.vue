@@ -43,7 +43,9 @@
 
                         <!-- Broadcaster / API -->
                         <label class="flex flex-col">
-                            <span class="mb-1 opacity-80">API <span class="text-xs">(houston-broadcaster)</span></span>
+                            <span class="mb-1 opacity-80">
+                                API <span class="text-xs">(houston-broadcaster)</span>
+                            </span>
                             <input v-model.number="broadcasterPort" type="number" min="1" max="65535"
                                 :disabled="anyBusy"
                                 class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
@@ -60,9 +62,18 @@
                     </div>
 
                     <p class="mt-1 text-xs opacity-75">
-                        Leave blank to use defaults: SSH 22, API 9095, HTTPS 443.
+                        Leave blank to use defaults: SSH 22, API 9095, HTTPS 443. Ports must be different for each
+                        service.
+                    </p>
+
+                    <p v-if="portError" class="mt-1 text-xs text-danger">
+                        {{ portError }}
+                    </p>
+                    <p v-else-if="portWarning" class="mt-1 text-xs text-warning">
+                        {{ portWarning }}
                     </p>
                 </div>
+
             </CardContainer>
 
             <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left shadow-xl">
@@ -174,6 +185,17 @@ const sshPort = ref<number | null>(null);          // SSH port (null means “un
 const broadcasterPort = ref<number | null>(null);  // internal API, default 9095
 const httpsPort = ref<number | null>(null);        // external HTTPS, default 443
 
+const DEFAULT_SSH_PORT = 22;
+const DEFAULT_API_PORT = Number((import.meta as any).env?.VITE_API_PORT || 9095);
+const DEFAULT_HTTPS_PORT = 443;
+
+// Map for nicer names in the message
+const PORT_LABELS: Record<'ssh' | 'api' | 'https', string> = {
+    ssh: 'SSH',
+    api: 'API',
+    https: 'HTTPS',
+};
+
 const PORT_PREF_KEY = 'hb_port_prefs_v1';
 
 type PortPrefs = Record<string, {
@@ -181,6 +203,25 @@ type PortPrefs = Record<string, {
     apiPort?: number;
     httpsPort?: number;
 }>;
+
+function formatPortNames(keys: PortKey[]): string {
+    const labels = keys.map(k => PORT_LABELS[k]);
+    const last = labels.pop()!;
+    if (labels.length === 0) return last;
+    if (labels.length === 1) return `${labels[0]} and ${last}`;
+    return `${labels.join(', ')} and ${last}`;
+}
+
+function normalizePort(val: unknown): number | null {
+    if (val === null || val === undefined || val === '') return null;
+
+    const n = typeof val === 'string' ? Number(val) : (val as number);
+
+    if (!Number.isFinite(n)) return null;
+    if (n < 1 || n > 65535) return null;
+
+    return n;
+}
 
 function loadPortPrefs(): PortPrefs {
     try {
@@ -310,7 +351,156 @@ watch(manualIp, (val) => {
 watch(selectedServerIp, () => { if (selectedServerIp.value !== '') manualIp.value = '' })
 
 const isDev = import.meta.env.DEV === true;
-const DEFAULT_API_PORT = Number((import.meta as any).env?.VITE_API_PORT || 9095);
+
+const portError = ref<string>('');    // hard error: block Connect
+const portWarning = ref<string>('');  // soft warning: explain auto-fallback
+
+type PortKey = 'ssh' | 'api' | 'https';
+
+function ensurePortConstraints(changed: PortKey) {
+    portError.value = '';
+    portWarning.value = '';
+
+    const values: Record<PortKey, number | null> = {
+        ssh: normalizePort(sshPort.value),
+        api: normalizePort(broadcasterPort.value),
+        https: normalizePort(httpsPort.value),
+    };
+
+    const defaults: Record<PortKey, number> = {
+        ssh: DEFAULT_SSH_PORT,
+        api: DEFAULT_API_PORT,
+        https: DEFAULT_HTTPS_PORT,
+    };
+
+    const allKeys: PortKey[] = ['ssh', 'api', 'https'];
+
+    //
+    // 1) Explicit conflicts only (user-entered values, ignoring defaults)
+    //
+    const explicitMap = new Map<number, PortKey[]>();
+    for (const k of allKeys) {
+        const v = values[k];
+        if (v == null) continue; // blank → ignore here
+        const arr = explicitMap.get(v) ?? [];
+        arr.push(k);
+        explicitMap.set(v, arr);
+    }
+
+    for (const [port, keys] of explicitMap.entries()) {
+        if (keys.length > 1) {
+            const names = formatPortNames(keys);
+            portError.value =
+                `Ports must be unique: ${names} are all set to ${port}. ` +
+                `Please choose a different port for one of them.`;
+            return; // do not auto-fix explicit conflicts
+        }
+    }
+
+    // 2) auto-bump block
+    const changedVal = values[changed];
+
+    if (changedVal != null && changedVal !== defaults[changed]) {
+        const warnParts: string[] = [];
+        let didAdjust = false;
+
+        const used = new Set<number>();
+        for (const k of allKeys) {
+            const v = values[k];
+            if (v != null) used.add(v);
+        }
+        used.add(changedVal);
+
+        for (const k of allKeys) {
+            if (k === changed) continue;
+
+            if (values[k] == null && defaults[k] === changedVal) {
+                let candidate = defaults[k] + 1;
+                while (candidate <= 65535 && used.has(candidate)) {
+                    candidate++;
+                }
+
+                if (candidate > 65535) {
+                    portError.value = `No free port found for ${PORT_LABELS[k]}. Please pick a value manually.`;
+                    return;
+                }
+
+                values[k] = candidate;
+                used.add(candidate);
+                didAdjust = true;
+
+                warnParts.push(
+                    `${PORT_LABELS[k]} default port ${defaults[k]} is already used by ${PORT_LABELS[changed]} (${changedVal}).\n` +
+                    `${PORT_LABELS[k]} was set to ${candidate}. Please review and adjust if needed.\n`
+                );
+            }
+        }
+
+        if (didAdjust) {
+            isProgrammaticPortUpdate = true;
+            try {
+                sshPort.value = values.ssh;
+                broadcasterPort.value = values.api;
+                httpsPort.value = values.https;
+            } finally {
+                isProgrammaticPortUpdate = false;
+            }
+        }
+
+        if (warnParts.length > 0) {
+            const msg = warnParts.join(' ');
+            portWarning.value = msg;
+            pushNotification(new Notification('Port Changed', msg, 'warning', 8000));
+        }
+    }
+
+
+    //
+    // 3) Final safety: check conflicts on *effective* ports (value or default if blank)
+    //
+    const effective: Record<PortKey, number> = {
+        ssh: values.ssh ?? DEFAULT_SSH_PORT,
+        api: values.api ?? DEFAULT_API_PORT,
+        https: values.https ?? DEFAULT_HTTPS_PORT,
+    };
+
+    const effectiveMap = new Map<number, PortKey[]>();
+    for (const k of allKeys) {
+        const p = effective[k];
+        const arr = effectiveMap.get(p) ?? [];
+        arr.push(k);
+        effectiveMap.set(p, arr);
+    }
+
+    for (const [port, keys] of effectiveMap.entries()) {
+        if (keys.length > 1) {
+            const names = formatPortNames(keys);
+            portError.value =
+                `Ports must be unique: ${names} are all set to ${port} (including defaults). ` +
+                `Please choose distinct ports.`;
+            return;
+        }
+    }
+
+    // If we get here, no conflicts remain and warnings (if any) were already set.
+}
+
+let isProgrammaticPortUpdate = false;
+
+watch(sshPort, () => {
+    if (isProgrammaticPortUpdate) return;
+    ensurePortConstraints('ssh');
+});
+
+watch(broadcasterPort, () => {
+    if (isProgrammaticPortUpdate) return;
+    ensurePortConstraints('api');
+});
+
+watch(httpsPort, () => {
+    if (isProgrammaticPortUpdate) return;
+    ensurePortConstraints('https');
+});
 
 const statusLine = ref<string>('');  // one line only
 const isBusy = ref(false);           // disables UI + button during whole flow
@@ -424,6 +614,14 @@ async function connectToServer() {
     }
     if (!password.value.trim()) {
         pushNotification(new Notification('Error', `Please enter a password.`, 'error', 8000));
+        return;
+    }
+
+    // Re-run port constraints on submit to be extra safe
+    ensurePortConstraints('ssh');
+
+    if (portError.value) {
+        pushNotification(new Notification('Error', portError.value, 'error', 10000));
         return;
     }
 
