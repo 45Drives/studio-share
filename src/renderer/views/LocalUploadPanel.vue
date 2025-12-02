@@ -238,6 +238,7 @@ import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
 import { onBeforeRouteLeave } from 'vue-router';
+import { pushNotification, Notification } from '@45drives/houston-common-ui';
 const { to } = useResilientNav()
 useHeader('Upload Files')
 
@@ -557,16 +558,19 @@ async function startUploads() {
 					const start = row.startedAt ?? end;
 					row.completedAt = end;
 					row.completedIn = formatDuration(end - start);
+					pushNotification(new Notification('Upload Completed', `File was uploaded successfully: ${row.name}.`, 'success', 8000));
 				}
 			} else if (row.status !== 'canceled') {
 				row.status = 'error';
 				row.error = res.error || 'rsync failed';
+				pushNotification(new Notification('Upload Canceled', `File upload was canceled: ${row.name}.`, 'warning', 8000));
 			}
 		}).catch((err: any) => {
 			isUploading.value = false
 			if (row.status !== 'canceled') {
 				row.status = 'error';
 				row.error = err?.message || String(err);
+				pushNotification(new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000));
 			}
 		});
 	}

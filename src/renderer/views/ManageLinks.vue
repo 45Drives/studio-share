@@ -128,10 +128,8 @@
 										{{ expiresLabel(it) }}
 									</div>
 									<div class="ml-auto flex items-center gap-1 flex-nowrap">
-										<button class="btn btn-secondary text-xs h-7 px-2"
-											@click="makeNever(it)">Never</button>
-										<button class="btn btn-primary text-xs h-7 px-2"
-											@click="openCustom(it)">Custom</button>
+										<button class="btn btn-primary text-xs h-fit"
+											@click="openCustom(it)">Edit</button>
 									</div>
 								</div>
 
@@ -149,10 +147,12 @@
 												v-model.number="expEditor[it.id].hours" />
 										</label>
 									</div>
-									<div class="flex flex-row justify-around w-full">
+									<div class="flex flex-row justify-around w-full gap-0.5">
 										<button class="btn btn-secondary text-xs" @click="applyCustom(it)">
 											Apply
 										</button>
+										<button class="btn btn-primary text-xs"
+											@click="makeNever(it)">Never</button>
 										<button class="btn btn-danger text-xs" @click="closeCustom(it)">
 											Cancel
 										</button>
@@ -187,13 +187,13 @@
 							<!-- Actions -->
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<div class="flex flex-nowrap items-center justify-around gap-1">
-									<button class="btn btn-primary h-8 px-2 rounded-md" @click="openDetails(it)">
+									<button class="btn btn-primary h-fit px-2 rounded-md" @click="openDetails(it)">
 										Details</button>
-									<button :disabled="isDisabled(it)" class="btn btn-success h-8 px-2 rounded-md"
+									<button :disabled="isDisabled(it)" class="btn btn-success h-fit px-2 rounded-md"
 										@click="viewLink(it)">
 										Open
 									</button>
-									<button class="btn btn-danger h-8 px-2 rounded-md"
+									<button class="btn btn-danger h-fit px-2 rounded-md"
 										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
@@ -248,7 +248,7 @@ async function refresh() {
 		loading.value = false
 	}
 }
-// const showDrawer = ref(false)
+
 const showModal = ref(false)
 const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
 const { formatEpochMs } = useTime();
@@ -288,7 +288,6 @@ async function patchLink(id: number | string, body: any) {
 	return apiFetch(`/api/links/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 }
 
-
 /* ------------------- state ------------------- */
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -297,8 +296,6 @@ const q = ref('')
 const typeFilter = ref<'' | LinkType>('')
 const statusFilter = ref<'' | Status>('active') // match “Currently Active Links” by default
 const pageSize = ref(200)
-const detailsLoading = ref(false)
-const files = ref<any[]>([])
 
 watch([q, typeFilter, statusFilter], refresh)
 
@@ -322,10 +319,6 @@ function badgeClass(t: LinkType) {
 			: 'text-purple-500'
 }
 
-function isExpired(it: LinkItem) {
-	return !!(it.expiresAt && it.expiresAt <= Date.now())
-}
-
 function isDisabled(it: LinkItem) {
 	return !!(it.isDisabled)
 }
@@ -344,9 +337,12 @@ function statusChipClass(s: Status) {
 			: 'text-gray-500'
 }
 
+const nowMs = ref(Date.now())
+setInterval(() => { nowMs.value = Date.now() }, 60_000)
+
 function expiresLabel(it: LinkItem) {
 	if (!it.expiresAt) return 'Never'
-	const ms = it.expiresAt - Date.now()
+	const ms = it.expiresAt - nowMs.value
 	if (ms <= 0) return 'Expired'
 
 	// show minutes granularity:
@@ -382,8 +378,34 @@ async function copy(txt?: string | null) {
 /* ------------------- table actions ------------------- */
 async function toggleDisable(it: LinkItem) {
 	const disable = statusOf(it) !== 'disabled'
-	await patchLink(it.id, { isDisabled: disable })
-	it.isDisabled = disable
+	try {
+		await patchLink(it.id, { isDisabled: disable })
+		it.isDisabled = disable
+
+		pushNotification(
+			new Notification(
+				disable ? 'Link Disabled' : 'Link Enabled',
+				disable
+					? 'The link is now disabled and can no longer be used.'
+					: 'The link is active again and can be accessed normally.',
+				'success',
+				8000,
+			)
+		)
+	} catch (e: any) {
+		const msg = e?.message || e?.error || String(e)
+		const level: 'error' | 'denied' =
+			/forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
+
+		pushNotification(
+			new Notification(
+				'Failed to Update Link Status',
+				msg,
+				level,
+				8000,
+			)
+		)
+	}
 }
 
 
@@ -401,11 +423,51 @@ function cancelEdit() {
 	editingId.value = null
 	editTitle.value = ''
 }
+
 async function saveTitle(it: LinkItem) {
-	await patchLink(it.id, { title: editTitle.value || null })
-	it.title = editTitle.value || null
-	cancelEdit()
+	const trimmed = (editTitle.value || '').trim()
+
+	if (!trimmed) {
+		pushNotification(
+			new Notification(
+				'Invalid Title',
+				'Title cannot be empty. Keep the previous title or enter a new one.',
+				'denied',
+				8000,
+			)
+		)
+		return
+	}
+
+	try {
+		await patchLink(it.id, { title: trimmed || null })
+		it.title = trimmed || null
+
+		pushNotification(
+			new Notification(
+				'Title Updated',
+				'Link title was updated successfully.',
+				'success',
+				8000,
+			)
+		)
+		cancelEdit()
+	} catch (e: any) {
+		const msg = e?.message || e?.error || String(e)
+		const level: 'error' | 'denied' =
+			/forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
+
+		pushNotification(
+			new Notification(
+				'Failed to Update Title',
+				msg,
+				level,
+				8000,
+			)
+		)
+	}
 }
+
 
 /* ------------------- details drawer ------------------- */
 const current = ref<LinkItem | null>(null)
@@ -452,7 +514,7 @@ const filteredRows = computed(() => {
 
 function ensureExpEntry(it: LinkItem) {
 	if (!expEditor.value[it.id]) {
-		expEditor.value[it.id] = { days: 0, hours: 1, open: false } // default: +1h
+		expEditor.value[it.id] = { days: 0, hours: 0, open: false }
 	}
 }
 
@@ -475,7 +537,7 @@ function openCustom(it: LinkItem) {
 		expEditor.value[it.id].hours = hours
 	} else {
 		expEditor.value[it.id].days = 0
-		expEditor.value[it.id].hours = 1
+		expEditor.value[it.id].hours = 0
 	}
 }
 
@@ -485,20 +547,79 @@ function closeCustom(it: LinkItem) {
 	expEditor.value[it.id].open = false
 }
 
-async function applyCustom(it: LinkItem) {
+async function applyCustom(it: LinkItem, opts?: { forceNever?: boolean }) {
 	ensureExpEntry(it)
+
 	let { days, hours } = expEditor.value[it.id]
+
+	// If this was triggered by the Never button, override to 0/0
+	if (opts?.forceNever) {
+		days = 0
+		hours = 0
+	}
+
 	days = Number.isFinite(days) ? Number(days) : 0
 	hours = Number.isFinite(hours) ? Number(hours) : 0
 
 	const totalHours = days * 24 + hours
-	if (totalHours <= 0) { await makeNever(it); closeCustom(it); return }
+	const isNever = opts?.forceNever || totalHours <= 0
 
-	const newExp = Date.now() + totalHours * 3600e3
-	await patchLink(it.id, { expiresAtMs: newExp })
-	it.expiresAt = newExp
-	closeCustom(it)
+	const baseMs = nowMs.value
+	const newExp = isNever ? null : baseMs + totalHours * 3600e3
+
+	try {
+		await patchLink(it.id, { expiresAtMs: newExp })
+		it.expiresAt = newExp
+
+		// keep the editor in sync
+		ensureExpEntry(it)
+		expEditor.value[it.id].days = days
+		expEditor.value[it.id].hours = hours
+
+		closeCustom(it)
+
+		if (isNever) {
+			pushNotification(
+				new Notification(
+					'Expiry Cleared',
+					'This link will no longer expire automatically.',
+					'success',
+					8000,
+				),
+			)
+		} else {
+			pushNotification(
+				new Notification(
+					'Expiry Updated',
+					`Expiry updated to ${days} day${days === 1 ? '' : 's'} and ${hours} hour${hours === 1 ? '' : 's'}.`,
+					'success',
+					8000,
+				),
+			)
+		}
+	} catch (e: any) {
+		const msg = e?.message || e?.error || String(e)
+		const level: 'error' | 'denied' =
+			/forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
+
+		const title = isNever ? 'Failed to Clear Expiry' : 'Failed to Update Expiry'
+
+		pushNotification(
+			new Notification(
+				title,
+				msg,
+				level,
+				8000,
+			),
+		)
+	}
 }
+
+async function makeNever(it: LinkItem) {
+	// reuse applyCustom, but keep Never-specific messages
+	await applyCustom(it, { forceNever: true })
+}
+
 
 function toDateUTC(ts: unknown): Date | null {
 	if (ts == null) return null;
@@ -535,9 +656,4 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 	return new Intl.DateTimeFormat(undefined, { timeZone: userTZ, ...opts }).format(d);
 }
 
-async function makeNever(it: LinkItem) {
-	// Clear expiry so the link never expires
-	await patchLink(it.id, { expiresAtMs: null })
-	it.expiresAt = null
-}
 </script>

@@ -99,148 +99,125 @@
                                         day</button>
                                     <button type="button" class="btn btn-secondary" @click="setPreset(1, 'weeks')">1
                                         week</button>
+                                    <button type="button" class="btn btn-secondary" @click="setNever()">Never</button>
                                 </div>
 
-                                <input type="number" min="1" step="1" v-model.number="expiresValue"
-                                    class="input-textlike border rounded px-3 py-2 w-32 bg-transparent" />
+                                <input type=" number" min="1" step="1" v-model.number="expiresValue"
+                                        class="input-textlike border rounded px-3 py-2 w-32 bg-transparent" />
 
-                                <select v-model="expiresUnit"
-                                    class="input-textlike border rounded px-3 py-2 bg-transparent"
-                                    style="min-width: 8rem">
-                                    <option value="hours">hours</option>
-                                    <option value="days">days</option>
-                                    <option value="weeks">weeks</option>
-                                </select>
+                                    <select v-model="expiresUnit"
+                                        class="input-textlike border rounded px-3 py-2 bg-transparent"
+                                        style="min-width: 8rem">
+                                        <option value="hours">hours</option>
+                                        <option value="days">days</option>
+                                        <option value="weeks">weeks</option>
+                                    </select>
 
-                                <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
-                            </div>
+                                    <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
+                                </div>
 
-                            <div class="flex flex-row justify-between">
-                                <!-- Link Access -->
-                                <div class="flex items-center gap-3">
-                                    <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link Access:</label>
-                                    <Switch
-                                        id="link-access-switch"
-                                        v-model="usePublicBase"
-                                        :class="[
+                                <div class="flex flex-row justify-between">
+                                    <!-- Link Access -->
+                                    <div class="flex items-center gap-3">
+                                        <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link
+                                            Access:</label>
+                                        <Switch id="link-access-switch" v-model="usePublicBase" :class="[
                                         usePublicBase ? 'bg-secondary' : 'bg-well',
                                         'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                        ]"
-                                    >
-                                        <span class="sr-only">Toggle link access</span>
-                                        <span
-                                        aria-hidden="true"
-                                        :class="[
+                                        ]">
+                                            <span class="sr-only">Toggle link access</span>
+                                            <span aria-hidden="true" :class="[
                                             usePublicBase ? 'translate-x-5' : 'translate-x-0',
                                             'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                        ]"
-                                        />
-                                    </Switch>
-                                    <span class="text-sm select-none">
-                                        {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-                                    </span>
-                                </div>
+                                        ]" />
+                                        </Switch>
+                                        <span class="text-sm select-none">
+                                            {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
+                                        </span>
+                                    </div>
 
-                                <!-- Password (optional) -->
-                                <div class="flex items-center gap-3">
-                                    <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
-                                    <div class="flex items-center gap-2">
-                                        <Switch
-                                            id="use-password-switch"
-                                            v-model="protectWithPassword"
-                                            :class="[
+                                    <!-- Password (optional) -->
+                                    <div class="flex items-center gap-3">
+                                        <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+                                        <div class="flex items-center gap-2">
+                                            <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
                                             protectWithPassword ? 'bg-secondary' : 'bg-well',
                                             'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]"
-                                        >
-                                            <span class="sr-only">Toggle use password</span>
-                                            <span
-                                            aria-hidden="true"
-                                            :class="[
+                                            ]">
+                                                <span class="sr-only">Toggle use password</span>
+                                                <span aria-hidden="true" :class="[
                                                 protectWithPassword ? 'translate-x-5' : 'translate-x-0',
                                                 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                            ]"
-                                            />
-                                        </Switch>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <label class="text-default font-semibold ">Password</label>
-                                        <div class="flex flex-col gap-1">
-                                            <div class="relative flex items-center h-[3rem] space-x-2">
-                                                <input 
-                                                 :disabled="!protectWithPassword" :type="showPassword ? 'text' : 'password'"
-                                                v-model.trim="password"
-                                                placeholder="Enter your password"
-                                                class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed" />
-                                                <button type="button" @click="showPassword = !showPassword"
-                                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                                                <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                                                <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
-                                                </button>
+                                            ]" />
+                                            </Switch>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label class="text-default font-semibold ">Password</label>
+                                            <div class="flex flex-col gap-1">
+                                                <div class="relative flex items-center h-[3rem] space-x-2">
+                                                    <input :disabled="!protectWithPassword"
+                                                        :type="showPassword ? 'text' : 'password'"
+                                                        v-model.trim="password" placeholder="Enter your password"
+                                                        class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed" />
+                                                    <button type="button" @click="showPassword = !showPassword"
+                                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                        <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
+                                                    </button>
+                                                </div>
+
                                             </div>
-                                       
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="flex flex-row justify-between">
-                                <!-- Manage Comment Access -->
-                                <div class="flex items-center gap-4 justify-between">
-                                    <button type="button" class="btn btn-primary" @click="openUserModal()">
-                                        Manage comment access
-                                        <span v-if="commentCount"
-                                            class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
-                                            {{ commentCount }}
-                                        </span>
-                                    </button>
+                                <div class="flex flex-row justify-between">
+                                    <!-- Manage Comment Access -->
+                                    <div class="flex items-center gap-4 justify-between">
+                                        <button type="button" class="btn btn-primary" @click="openUserModal()">
+                                            Manage comment access
+                                            <span v-if="commentCount"
+                                                class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                                {{ commentCount }}
+                                            </span>
+                                        </button>
 
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <Switch
-                                                id="allow-comments-switch"
-                                                v-model="noCommentAccess"
-                                                :class="[
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <Switch id="allow-comments-switch" v-model="noCommentAccess" :class="[
                                                 !noCommentAccess ? 'bg-secondary' : 'bg-well',
                                                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                ]"
-                                            >
+                                                ]">
                                                 <span class="sr-only">Toggle use password</span>
-                                                <span
-                                                aria-hidden="true"
-                                                :class="[
+                                                <span aria-hidden="true" :class="[
                                                     !noCommentAccess ? 'translate-x-5' : 'translate-x-0',
                                                     'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                ]"
-                                                />
+                                                ]" />
                                             </Switch>
-                                        <span>{{ !noCommentAccess ? 'Allow comments by users' : 'No one can comment' }}</span>
-                                    </label>
+                                            <span>{{ !noCommentAccess ? 'Allow comments by users' : 'No one can comment'
+                                                }}</span>
+                                        </label>
+                                    </div>
+                                    <!-- Link title (optional) -->
+                                    <div class="flex items-center gap-2">
+                                        <label class="whitespace-nowrap font-semibold">Link title:</label>
+                                        <input type="text" v-model.trim="linkTitle"
+                                            class="input-textlike border rounded px-3 py-2 bg-transparent"
+                                            placeholder="Optional title for the shared link" style="min-width: 20rem" />
+                                    </div>
                                 </div>
-                                <!-- Link title (optional) -->
-                                <div class="flex items-center gap-2">
-                                    <label class="whitespace-nowrap font-semibold">Link title:</label>
-                                    <input
-                                        type="text"
-                                        v-model.trim="linkTitle"
-                                        class="input-textlike border rounded px-3 py-2 bg-transparent"
-                                        placeholder="Optional title for the shared link"
-                                        style="min-width: 20rem"
-                                    />
-                                </div>
-                            </div>
-                            <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1 justify-end">
+                                <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1 justify-end">
                                     Select at least one commenter or check “No one can comment”.
                                 </p>
 
-                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
+                                <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
                                 id: c.id,
                                 username: c.username || '',
                                 name: c.name,
                                 user_email: c.user_email,
                                 display_color: c.display_color
                             }))" @apply="onApplyUsers" />
-                                
+
+                            </div>
                         </div>
-                    </div>
                 </template>
                 <div v-if="projectSelected" class="flex flex-col">
                     <button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
@@ -401,7 +378,7 @@ const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 // const maxDownloads = ref(5)
 
-// NEW: password state
+// password state
 const protectWithPassword = ref(false)
 const password = ref('')
 const showPassword = ref(false)
@@ -416,27 +393,35 @@ const UNIT_TO_SECONDS = {
     weeks: 7 * 24 * 60 * 60,
 } as const
 
+
 // Compute the seconds value we send to the server
 const expiresSec = computed(() => {
-    const v = Math.max(1, Math.floor(expiresValue.value || 0))
-    return v * UNIT_TO_SECONDS[expiresUnit.value]
-})
+    const raw = Math.floor(expiresValue.value || 0);
+
+    // 0 → Never
+    if (raw <= 0) return 0;
+
+    return raw * UNIT_TO_SECONDS[expiresUnit.value];
+});
+
 
 // Pretty text like "3 days" / "2 weeks"
 const prettyExpiry = computed(() => {
-    const v = Math.max(1, Math.floor(expiresValue.value || 0))
-    const u = expiresUnit.value
-    // pluralize
-    const label = v === 1 ? u.slice(0, -1) : u
-    return `${v} ${label}`
-})
+    if (expiresSec.value === 0) return 'Never';
+
+    const v = Math.max(1, Math.floor(expiresValue.value || 0));
+    const u = expiresUnit.value;
+    const label = v === 1 ? u.slice(0, -1) : u;
+    return `${v} ${label}`;
+});
 
 const canGenerate = computed(() =>
     files.value.length > 0 &&
-    Number.isFinite(expiresValue.value) && expiresValue.value >= 1 &&
+    Number.isFinite(expiresValue.value) &&
+    expiresValue.value >= 0 && // 0 = never, >=1 = normal
     (!protectWithPassword.value || !!password.value) &&
     commentAccessSatisfied.value
-)
+);
 
 function invalidateLink() {
     viewUrl.value = ''
@@ -460,20 +445,47 @@ function setPreset(v: number, u: 'hours' | 'days' | 'weeks') {
     expiresUnit.value = u
 }
 
+function setNever() {
+    expiresValue.value = 0;
+    expiresUnit.value = 'hours';
+}
 
 async function generateLink() {
+    if (!canGenerate.value) {
+        // This should normally be prevented by the disabled button, but better safe than sorry.
+        pushNotification(
+            new Notification(
+                'Cannot Generate Link',
+                'Please select at least one file and fix any validation errors before creating a link.',
+                'denied',
+                8000,
+            )
+        )
+        return
+    }
+
+    if (protectWithPassword.value && !password.value) {
+        pushNotification(
+            new Notification(
+                'Password Required',
+                'Enter a password or turn off link password protection.',
+                'warning',
+                8000,
+            )
+        )
+        return
+    }
+
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
         baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
         title: linkTitle.value || undefined,
-        // baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
-    };
+    }
 
-    if (files.value.length === 1) body.filePath = files.value[0];
-    else body.filePaths = files.value.slice();
+    if (files.value.length === 1) body.filePath = files.value[0]
+    else body.filePaths = files.value.slice()
 
-    // NEW: include password if enabled
     if (protectWithPassword.value && password.value) {
         body.password = password.value
     }
@@ -488,16 +500,43 @@ async function generateLink() {
             return out
         })
     }
-    const data = await apiFetch('/api/magic-link', {
-        method: 'POST',
-        body: JSON.stringify(body),
-    });
 
-    console.log('Got magic link data', data)
-    // viewUrl.value = data.downloadUrl
-    viewUrl.value = data.viewUrl;
-    downloadUrl.value = data.downloadUrl;
+    try {
+        const data = await apiFetch('/api/magic-link', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        })
 
+        console.log('Got magic link data', data)
+
+        viewUrl.value = data.viewUrl
+        downloadUrl.value = data.downloadUrl
+
+        const label = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
+        const titlePart = linkTitle.value ? ` for “${linkTitle.value}”` : ''
+
+        pushNotification(
+            new Notification(
+                'Magic Link Created',
+                `A ${label} magic link was created${titlePart}.`,
+                'success',
+                8000,
+            )
+        )
+    } catch (e: any) {
+        const msg = e?.message || e?.error || String(e)
+        const level: 'error' | 'denied' =
+            /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
+
+        pushNotification(
+            new Notification(
+                'Failed to Create Magic Link',
+                msg,
+                level,
+                8000,
+            )
+        )
+    }
 }
 
 
@@ -514,18 +553,21 @@ async function copyLink() {
 }
 
 function openInBrowser() {
+    if (!viewUrl.value) return
     window.open(viewUrl.value, '_blank')
+
+    pushNotification(
+        new Notification(
+            'Opening Link',
+            'Magic link opened in your default browser.',
+            'info',
+            4000,
+        )
+    )
 }
 
-// function resetToProjectPicker() {
-//     // ensure we’re not in the “entire tree” mode, and drop the chosen root
-//     showEntireTree.value = false
-//     backToRoots()            // show ZFS pools list UI
-//     resetProject()           // clears projectBase, files, link, and calls loadProjectChoices()
-// }
 
 async function goBack() {
-    // router.push({ name: 'dashboard' })
     to('dashboard');
 }
 
@@ -541,7 +583,7 @@ function makeKey(name?: string, user_email?: string, username?: string) {
     const n = (name ?? '').trim().toLowerCase()
     return (u || n) + '|' + e
 }
-// Called when the modal emits @apply
+
 function onApplyUsers(
     users: any[]
 ) {

@@ -413,26 +413,60 @@ is_dpkg(){ command -v dpkg >/dev/null 2>&1; }
 
 pkg_installed=1
 if is_rpm; then
-  rpm -q houston-broadcaster >/dev/null 2>&1 && pkg_installed=0 || true
+  if rpm -q houston-broadcaster >/dev/null 2>&1; then
+    pkg_installed=0
+  fi
 elif is_dpkg; then
-  dpkg -s houston-broadcaster >/dev/null 2>&1 && pkg_installed=0 || true
+  if dpkg -s houston-broadcaster >/dev/null 2>&1; then
+    pkg_installed=0
+  fi
 fi
 
-systemctl --version >/dev/null 2>&1 || { echo '{"hasPackage":false,"servicePresent":false,"serviceActive":false,"legacyPresent":false,"legacyActive":false,"apiHealthy":false}'; exit 0; }
+systemctl --version >/dev/null 2>&1 || {
+  echo '{"hasPackage":false,"servicePresent":false,"serviceActive":false,"legacyPresent":false,"legacyActive":false,"apiHealthy":false}'
+  exit 0
+}
 
-systemctl status houston-broadcaster >/dev/null 2>&1; svc_present=$?
-systemctl is-active --quiet houston-broadcaster >/dev/null 2>&1; svc_active=$? || true
+# Guard each systemctl but still capture real exit code
+svc_present=3
+if systemctl status houston-broadcaster >/dev/null 2>&1; then
+  svc_present=0
+else
+  svc_present=$?
+fi
 
-systemctl status houston-broadcaster-legacy >/dev/null 2>&1; legacy_present=$? || true
-systemctl is-active --quiet houston-broadcaster-legacy >/dev/null 2>&1; legacy_active=$? || true
+svc_active=3
+if systemctl is-active --quiet houston-broadcaster >/dev/null 2>&1; then
+  svc_active=0
+else
+  svc_active=$?
+fi
+
+legacy_present=3
+if systemctl status houston-broadcaster-legacy >/dev/null 2>&1; then
+  legacy_present=0
+else
+  legacy_present=$?
+fi
+
+legacy_active=3
+if systemctl is-active --quiet houston-broadcaster-legacy >/dev/null 2>&1; then
+  legacy_active=0
+else
+  legacy_active=$?
+fi
 
 apiHealthy=1
 for i in {1..2}; do
-  curl -fsS --max-time 2 http://127.0.0.1:9095/healthz >/dev/null 2>&1 && { apiHealthy=0; break; }
+  if curl -fsS --max-time 2 http://127.0.0.1:9095/healthz >/dev/null 2>&1; then
+    apiHealthy=0
+    break
+  fi
   sleep 1
 done
 
-printf '{"hasPackage":%s,"servicePresent":%s,"serviceActive":%s,"legacyPresent":%s,"legacyActive":%s,"apiHealthy":%s}\\n' \
+printf '{"hasPackage":%s,"servicePresent":%s,"serviceActive":%s,' \
+       '"legacyPresent":%s,"legacyActive":%s,"apiHealthy":%s}\n' \
   "$(bool $pkg_installed)" \
   "$(bool $svc_present)" \
   "$(bool $svc_active)" \

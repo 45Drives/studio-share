@@ -85,7 +85,7 @@ export function useApi() {
 
                     if (!authRedirectInFlight) {
                         authRedirectInFlight = true
-                        pushNotification(new Notification('Session expired', 'Please log in again.', 'warning', 6000))
+                        pushNotification(new Notification('Session expired', 'Please log in again.', 'warning', 8000))
                         // Prefer named route; adjust name if yours differs
                         router.push({ name: 'server-selection' }).finally(() => {
                             // small delay so multiple 401s in flight don’t spam redirects

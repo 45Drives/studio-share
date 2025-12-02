@@ -556,7 +556,7 @@ async function tryAutomaticPortMapping() {
             if (!token) throw new Error('No token returned from login.');
             // IMPORTANT: don’t persist this token to app state/session.
         } catch (err: any) {
-            pushNotification(new Notification('Error', err?.message || 'Login failed.', 'error', 10000));
+            pushNotification(new Notification('Error', err?.message || 'Login failed.', 'error', 8000));
             return;
         }
     }
@@ -579,14 +579,14 @@ async function tryAutomaticPortMapping() {
             pushNotification(new Notification('Success', `Port 443 mapped${via}.`, 'success', 8000));
         } else {
             const reason = data?.details?.reason || data?.error || 'Unknown reason';
-            pushNotification(new Notification('Notice', `Couldn’t create port mapping (${reason}).`, 'warning', 10000));
+            pushNotification(new Notification('Notice', `Couldn’t create port mapping (${reason}).`, 'warning', 8000));
         }
         if (import.meta.env.DEV && data?.raw?.stdout) {
             console.debug('[portmap] stdout:', data.raw.stdout);
             console.debug('[portmap] stderr:', data.raw.stderr);
         }
     } catch (err: any) {
-        pushNotification(new Notification('Error', err?.message || 'UPnP/NAT-PMP request failed', 'error', 10000));
+        pushNotification(new Notification('Error', err?.message || 'UPnP/NAT-PMP request failed', 'error', 8000));
     } finally {
         statusLine.value = '';
         tryingUpnp.value = false;
@@ -621,7 +621,7 @@ async function connectToServer() {
     ensurePortConstraints('ssh');
 
     if (portError.value) {
-        pushNotification(new Notification('Error', portError.value, 'error', 10000));
+        pushNotification(new Notification('Error', portError.value, 'error', 8000));
         return;
     }
 
