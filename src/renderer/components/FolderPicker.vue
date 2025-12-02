@@ -1,11 +1,9 @@
 <!-- FolderPicker.vue -->
 <template>
-  <!-- FolderPicker.vue template (only the changed/added blocks) -->
   <section class="flex flex-col gap-2 text-left text-base rounded-md">
 
     <!-- Top summary + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
-      <!-- NEW: optional bypass -->
       <label v-if="allowEntireTree" class="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" v-model="showEntireTree" @change="changeProject" />
         <span>Show entire directory tree from root</span>
@@ -162,8 +160,7 @@ const internalDest = computed({
 /* Roots auto-detect */
 const showEntireTree = ref(false)
 const { detecting, projectRoots, loadProjectChoices } = useProjectChoices(showEntireTree)
-const clampBase = computed(() => (internalProject.value || props.base || ''))
-
+const clampBase = ref<string>(internalProject.value || props.base || '')
 /* Local state */
 const browseMode = ref<'roots' | 'dir'>('dir')
 const viewMode = ref<ViewMode>('icons') // persisted below
@@ -313,7 +310,7 @@ function openRoot(mountpoint: string) {
   cwd.value = abs
   emit('changed-cwd', cwd.value)
 
-  // NEW: auto-select this zpool as the destination
+  // auto-select this zpool as the destination
   const normalized = abs.replace(/^\/+/, '').replace(/\/+$/, '') // "tank" or "tank/projects"
   emit('update:modelValue', normalized)
 }

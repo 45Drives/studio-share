@@ -38,8 +38,6 @@
                             </div>
                         </template>
 
-
-
                         <div class="text-sm text-red-400" v-if="detectError">
                             {{ detectError }}
                         </div>
@@ -47,7 +45,7 @@
 
                     <!-- ===== Step 2: select file content (only after project chosen) ===== -->
                     <div v-else class="flex flex-col gap-2 text-left">
-                        <div class="text-sm opacity-80 -mb-1">
+                        <div class="text-sm text-muted -mb-1">
                             <span class="font-semibold">Project:</span>
                             <code class="ml-1">{{ projectBase }}</code>
                             <button class="btn btn-secondary ml-3" @click="resetProject">Change Project
