@@ -26,7 +26,7 @@
 			</div>
 
 			<!-- errors -->
-			<div v-if="error" class="p-3 rounded bg-red-900/30 text-red-200 border border-red-800 mb-3">
+			<div v-if="error" class="p-3 rounded bg-red-900/30 text-default border border-red-800 mb-3">
 				{{ error }}
 			</div>
 			<tr v-if="loading">

@@ -15,7 +15,7 @@
           <div class="flex items-center justify-between mb-2">
             <div class="font-semibold text-sm">Select existing users</div>
             <input type="text" v-model.trim="userSearch"
-              class="input-textlike border rounded px-2 py-1 text-sm bg-transparent"
+              class="input-textlike border rounded px-2 py-1 text-sm"
               placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
           </div>
 
@@ -77,23 +77,23 @@
             <div>
               <label class="text-xs opacity-80">Name <span class="text-red-500">*</span></label>
               <input type="text" v-model.trim="newUser.name"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="Jane Doe" />
+                class="input-textlike border rounded px-3 py-2 w-full" placeholder="Jane Doe" />
             </div>
             <div>
               <label class="text-xs opacity-80">Username <span class="text-red-500">*</span></label>
               <input type="text" v-model.trim="newUser.username"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane" />
+                class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane" />
             </div>
             <div>
               <label class="text-xs opacity-80">Email (optional)</label>
               <input type="email" v-model.trim="newUser.user_email"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="jane@example.com" />
+                class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane@example.com" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <label class="text-xs opacity-80">Temporary PIN <span class="text-red-500">*</span></label>
                 <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPin"
-                  :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinFormatInvalid ? 'border-red-500' : '')]"
+                  :class="['input-textlike border rounded px-3 py-2 w-full', (pinFormatInvalid ? 'border-red-500' : '')]"
                   placeholder="4–8 digits" aria-invalid="true"
                   v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}" />
                 <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8
@@ -102,7 +102,7 @@
               <div>
                 <label class="text-xs opacity-80">Confirm PIN <span class="text-red-500">*</span></label>
                 <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPinConfirm"
-                  :class="['input-textlike border rounded px-3 py-2 w-full bg-transparent', (pinMismatch ? 'border-red-500' : '')]"
+                  :class="['input-textlike border rounded px-3 py-2 w-full', (pinMismatch ? 'border-red-500' : '')]"
                   placeholder="Re-enter PIN" aria-invalid="true"
                   v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}" />
                 <p v-if="pinMismatch" id="pin-mismatch-error" class="mt-1 text-xs text-red-500">PINs do not match.</p>
@@ -111,10 +111,10 @@
             <div>
               <label class="text-xs opacity-80">Comment color</label>
               <div class="flex items-center gap-2">
-                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 bg-transparent border rounded"
+                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 border rounded"
                   title="Pick a color" />
                 <input type="text" v-model.trim="newUser.display_color"
-                  class="input-textlike border rounded px-3 py-2 w-full bg-transparent" placeholder="#aabbcc" />
+                  class="input-textlike border rounded px-3 py-2 w-full" placeholder="#aabbcc" />
               </div>
               <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
             </div>
@@ -152,19 +152,19 @@
         </div>
         <div>
           <label class="text-xs opacity-80">Name</label>
-          <input v-model.trim="editForm.name" class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+          <input v-model.trim="editForm.name" class="input-textlike border rounded px-3 py-2 w-full" />
         </div>
         <div>
           <label class="text-xs opacity-80">Email</label>
           <input v-model.trim="editForm.user_email" type="email"
-            class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+            class="input-textlike border rounded px-3 py-2 w-full" />
         </div>
         <div>
           <label class="text-xs opacity-80">Comment color</label>
           <div class="flex items-center gap-2">
-            <input type="color" v-model="editForm.display_color" class="h-8 w-10 p-0 bg-transparent border rounded" />
+            <input type="color" v-model="editForm.display_color" class="h-8 w-10 p-0 border rounded" />
             <input v-model.trim="editForm.display_color"
-              class="input-textlike border rounded px-3 py-2 w-full bg-transparent" />
+              class="input-textlike border rounded px-3 py-2 w-full" />
           </div>
         </div>
         <button class="btn btn-secondary" @click="openReset(editing)" title="Reset PIN for this user">

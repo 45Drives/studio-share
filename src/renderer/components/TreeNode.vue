@@ -1,21 +1,19 @@
 <template>
     <!-- Non-root row -->
-    <div v-if="!isRoot" class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer
-         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" :class="{ 'opacity-60': isIndeterminate }"
-         @click="modeIsUpload ? selectFolder() : onRowClick()" @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"  @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()"  role="button"
-        tabindex="0" :aria-expanded="open">
+    <div v-if="!isRoot" class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer bg-default
+         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]"
+        @click="modeIsUpload ? selectFolder() : onRowClick()"
+        @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
+        @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()" role="button" tabindex="0"
+        :aria-expanded="open">
         <!-- checkbox col: keep spacing, no checkbox for folders -->
         <div class="px-2 py-1 flex justify-center">
             <template v-if="modeIsUpload">
-                <button
-     type="button"
-    class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current"
-    :aria-checked="isFolderSelected"
-    role="radio"
-    @click.stop="selectFolder()"
-  >
-   <span v-if="isFolderSelected" class="inline-block w-2 h-2 rounded-full bg-current"></span>
-   </button>
+                <button type="button"
+                    class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current"
+                    :aria-checked="isFolderSelected" role="radio" @click.stop="selectFolder()">
+                    <span v-if="isFolderSelected" class="inline-block w-2 h-2 rounded-full bg-current"></span>
+                </button>
             </template>
             <template v-else>
                 <span class="inline-block w-4 h-4"></span>
@@ -34,7 +32,8 @@
                 </button>
 
                 <!-- label (also stops bubbling; the row already handles click) -->
-                    <button class="underline truncate" :title="label + '/'" @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
+                <button class="underline truncate" :title="label + '/'"
+                    @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
                     {{ label }}/
                 </button>
             </div>
@@ -49,7 +48,7 @@
     </div>
 
     <!-- children -->
-    <div v-show="isRoot || open">
+    <div v-show="isRoot || open" class="">
         <div v-if="loading" class="opacity-70 text-xs p-2">Loading…</div>
         <!-- empty directory notice -->
         <div v-if="!loading && open && !children.length"
@@ -62,26 +61,24 @@
             <div class="px-2 py-2"></div>
         </div>
         <template v-for="ch in children" :key="ch.path">
-            <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase" :selectedFolder="selectedFolder"  :selected="selected"
-                :selectedVersion="selectedVersion" :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
+            <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase"
+                :selectedFolder="selectedFolder" :selected="selected" :selectedVersion="selectedVersion"
+                :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
                 @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
-            <div v-else class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 cursor-pointer select-none
-         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]" 
-         :class="[
-    (!modeIsUpload && selected.has(ch.path)) ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)]' : '',
-    modeIsUpload ? 'pointer-events-none opacity-90' : ''
-  ]"
- @click="onFileToggle(ch.path)"
- @keydown.enter.prevent="onFileToggle(ch.path)"
- @keydown.space.prevent="onFileToggle(ch.path)"
-         role="button" tabindex="0"
-         :aria-pressed="!modeIsUpload && selected.has(ch.path)">
+            <div v-else :class="[
+                'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
+                (!modeIsUpload && selected.has(ch.path))
+                    ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
+                    : 'bg-default hover:bg-white/5 dark:hover:bg-white/5',
+                modeIsUpload ? 'opacity-90 pointer-events-none' : ''
+            ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
+                @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
+                :aria-pressed="!modeIsUpload && selected.has(ch.path)">
                 <!-- checkbox -->
                 <div class="px-2 py-1 flex justify-center">
                     <template v-if="!modeIsUpload">
-                        <input class="input-checkbox h-4 w-4 m-0" type="checkbox"
-                            :checked="selected.has(ch.path)" @click.stop
-                            @change="$emit('toggle', { path: ch.path, isDir: false })"
+                        <input class="input-checkbox h-4 w-4 m-0" type="checkbox" :checked="selected.has(ch.path)"
+                            @click.stop @change="$emit('toggle', { path: ch.path, isDir: false })"
                             :aria-checked="selected.has(ch.path)" />
                     </template>
                 </div>
@@ -105,7 +102,6 @@
         </template>
     </div>
 </template>
-
 
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
@@ -144,16 +140,9 @@ const open = ref<boolean>(isRoot ? true : false)
 const loading = ref(false)
 const children = ref<Array<{ name: string; isDir: boolean; path: string; size?: number; mtime?: number }>>([])
 
-const entrySize = computed(() => 0)
 const entryMtime = computed(() => 0)
 
-// const folderCb = ref<HTMLInputElement | null>(null)
-const isDir = computed(() => isRoot || props.relPath.length > 0 ? true : false) // root treated like folder row only for children
-const isFolder = computed(() => !isRoot && isDir.value)
-const isFileChecked = computed(() => props.selected.has(props.relPath))
-
 function onRowClick() {
-    // This row only renders for folders, so just expand/collapse
     toggleOpen();
 }
 
@@ -177,35 +166,7 @@ function toggleOpen() {
     }
 }
 
-// async function onFolderOrFileCheckbox(e: Event) {
-//     // Immediately expand folders for visual feedback
-//     if (isFolder.value && !open.value) {
-//         open.value = true
-//         await ensureChildren()
-//     }
-//     await ensureAllFiles()
-//     // parent handles mass add/remove of files
-//     emit('toggle', { path: props.relPath, isDir: isFolder.value })
-//     // after parent updates selection, refresh tri-state (indeterminate)
-//     await nextTick()
-//     if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
-// }
-
 const allFiles = ref<string[] | null>(null)
-
-const selectedCount = computed(() => {
-    if (!allFiles.value) return 0
-    let c = 0
-    for (const f of allFiles.value) if (props.selected.has(f)) c++
-    return c
-})
-const totalCount = computed(() => allFiles.value?.length || 0)
-
-const isChecked = computed(() => totalCount.value > 0 && selectedCount.value === totalCount.value)
-const isIndeterminate = computed(() =>
-    totalCount.value > 0 && selectedCount.value > 0 && selectedCount.value < totalCount.value
-)
-
 
 async function ensureAllFiles() {
     if (isRoot) return
@@ -214,10 +175,6 @@ async function ensureAllFiles() {
     }
 }
 
-// async function refreshTriState() {
-//     await nextTick()
-//     if (folderCb.value) folderCb.value.indeterminate = isIndeterminate.value
-// }
 
 // mount: load per-folder file list even when collapsed
 onMounted(async () => {
@@ -226,17 +183,8 @@ onMounted(async () => {
     } else {
         allFiles.value = null
         await ensureAllFiles()
-        // await refreshTriState()
     }
 })
-
-// selection changed somewhere → recompute (and make sure we have the file list)
-// watch(() => props.selectedVersion, async () => {
-//     if (!isRoot) {
-//         if (allFiles.value === null) allFiles.value = await props.getFilesFor(props.relPath || '')
-//         // await refreshTriState()
-//     }
-// })
 
 // root/folder path changed (e.g., PathInput picked a new cwd) → reset caches
 watch(() => props.relPath, async () => {
@@ -245,7 +193,6 @@ watch(() => props.relPath, async () => {
     open.value = isRoot ? true : open.value
     await ensureChildren()
     await ensureAllFiles()
-    // await refreshTriState()
 })
 
 function fmtBytes(n?: number) {

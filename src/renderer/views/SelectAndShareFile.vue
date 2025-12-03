@@ -24,7 +24,7 @@
                                 <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
                             </div>
 
-                            <div class="max-h-64 overflow-auto border rounded">
+                            <div class="max-h-64 overflow-auto border-default bg-default rounded-md">
                                 <div v-for="r in projectRoots" :key="r.mountpoint"
                                     class="flex items-center justify-between border-b border-default px-3 py-2 text-base">
                                     <div class="truncate">
@@ -55,13 +55,9 @@
                         <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
                             :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
 
-                        <!-- Selected files panel (unchanged except we ensure paths remain under project when restricted) -->
+                        <!-- Selected files panel -->
                         <div v-if="files.length" class="border rounded bg-accent">
                             <div class="flex items-center gap-2 p-2">
-                                <!-- <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
-                                    <input type="checkbox" v-model="autoRegenerate" />
-                                    Auto-regenerate link
-                                </label> -->
                                 <button class="btn btn-secondary" @click="showSelected = !showSelected">
                                     {{ showSelected ? 'Hide' : 'Show' }} list
                                 </button>
@@ -101,10 +97,10 @@
                                 </div>
 
                                 <input type=" number" min="1" step="1" v-model.number="expiresValue"
-                                        class="input-textlike border rounded px-3 py-2 w-32 bg-transparent" />
+                                        class="input-textlike border rounded px-3 py-2 w-32" />
 
                                     <select v-model="expiresUnit"
-                                        class="input-textlike border rounded px-3 py-2 bg-transparent"
+                                        class="input-textlike border rounded px-3 py-2"
                                         style="min-width: 8rem">
                                         <option value="hours">hours</option>
                                         <option value="days">days</option>
@@ -134,38 +130,12 @@
                                         </span>
                                     </div>
 
-                                    <!-- Password (optional) -->
-                                    <div class="flex items-center gap-3">
-                                        <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
-                                        <div class="flex items-center gap-2">
-                                            <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
-                                            protectWithPassword ? 'bg-secondary' : 'bg-well',
-                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
-                                                <span class="sr-only">Toggle use password</span>
-                                                <span aria-hidden="true" :class="[
-                                                protectWithPassword ? 'translate-x-5' : 'translate-x-0',
-                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                            ]" />
-                                            </Switch>
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <label class="text-default font-semibold ">Password</label>
-                                            <div class="flex flex-col gap-1">
-                                                <div class="relative flex items-center h-[3rem] space-x-2">
-                                                    <input :disabled="!protectWithPassword"
-                                                        :type="showPassword ? 'text' : 'password'"
-                                                        v-model.trim="password" placeholder="Enter your password"
-                                                        class="input-textlike border rounded px-3 py-2 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed" />
-                                                    <button type="button" @click="showPassword = !showPassword"
-                                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                                                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                                                        <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
-                                                    </button>
-                                                </div>
-
-                                            </div>
-                                        </div>
+                                    <!-- Link title (optional) -->
+                                    <div class="flex items-center gap-2">
+                                        <label class="whitespace-nowrap font-semibold">Link title:</label>
+                                        <input type="text" v-model.trim="linkTitle"
+                                            class="input-textlike border rounded px-3 py-2"
+                                            placeholder="Optional title for the shared link" style="min-width: 20rem" />
                                     </div>
                                 </div>
                                 <div class="flex flex-row justify-between">
@@ -194,17 +164,50 @@
                                                 }}</span>
                                         </label>
                                     </div>
-                                    <!-- Link title (optional) -->
-                                    <div class="flex items-center gap-2">
-                                        <label class="whitespace-nowrap font-semibold">Link title:</label>
-                                        <input type="text" v-model.trim="linkTitle"
-                                            class="input-textlike border rounded px-3 py-2 bg-transparent"
-                                            placeholder="Optional title for the shared link" style="min-width: 20rem" />
+                                    <!-- Password (optional) -->
+                                    <div class="flex items-center gap-3">
+                                        <label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+                                        <div class="flex items-center gap-2">
+                                            <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
+                                            protectWithPassword ? 'bg-secondary' : 'bg-well',
+                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]">
+                                                <span class="sr-only">Toggle use password</span>
+                                                <span aria-hidden="true" :class="[
+                                                protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                            ]" />
+                                            </Switch>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label class="text-default font-semibold ">Password</label>
+                                            <div class="flex flex-col gap-1">
+                                                <div class="relative flex items-center h-[3rem] space-x-2">
+                                                    <input :disabled="!protectWithPassword"
+                                                        :type="showPassword ? 'text' : 'password'"
+                                                        v-model.trim="password" placeholder="Enter your password"
+                                                        class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed" />
+                                                    <button type="button" @click="showPassword = !showPassword"
+                                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                        <EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
+                                                    </button>
+                                                </div>
+
+                                            </div>
+                                        </div>
                                     </div>
+                                  
                                 </div>
-                                <p v-if="!commentAccessSatisfied" class="text-sm text-red-500 mt-1 justify-end">
-                                    Select at least one commenter or check “No one can comment”.
-                                </p>
+                                <div class="w-full flex flex-row justify-between text-sm text-red-500 mt-1">
+                                     <p v-if="!commentAccessSatisfied" class="justify-start">
+                                        Select at least one commenter or check “No one can comment”.
+                                    </p>
+                                    <p v-if="protectWithPassword && !password" class="justify-end">
+                                        Password is required when protection is enabled.
+                                    </p>
+                                </div>
+                               
 
                                 <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
                                 id: c.id,
@@ -218,12 +221,16 @@
                         </div>
                 </template>
                 <div v-if="projectSelected" class="flex flex-col">
-                    <button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
-                        title="Create a magic link with the selected options">
-                        Share via magic link
-                    </button>
-                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500 mt-2">Password is required
-                        when protection is enabled.</p>
+	                    <div class="button-group-row w-full">
+							<button class="btn btn-secondary" :disabled="loading" @click="resetAll">
+								Reset
+							</button>
+							<button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
+								title="Create a magic link with the selected options">
+								Generate magic link
+							</button>
+						</div>
+                
                     <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
                         <code>{{ viewUrl }}</code>
                         <div class="button-group-row">
@@ -272,7 +279,30 @@ const noCommentAccess = ref(false)
 const commentCount = computed(() => commenters.value.length)
 const commentAccessSatisfied = computed(() => noCommentAccess.value || commentCount.value > 0)
 const linkTitle = ref('')
+const loading = ref(false)
+const error = ref<string | null>(null)
 
+function resetAll() {
+    files.value = []
+    showSelected.value = true
+    expiresValue.value = 7
+    expiresUnit.value = 'days'
+    usePublicBase.value = true
+    linkTitle.value = ''
+    commenters.value = []
+    noCommentAccess.value = false
+    password.value = ''
+    protectWithPassword.value = false
+    showPassword.value = false
+    viewUrl.value = ''
+    downloadUrl.value = ''
+    error.value = null
+    autoRegenerate.value = false
+    if (regenTimer) {
+        clearTimeout(regenTimer)
+        regenTimer = null
+    }
+}
 
 function chooseProject(dirPath: string) {
     projectBase.value = dirPath
@@ -334,9 +364,6 @@ function onExplorerAdd(paths: string[]) {
     invalidateLink();
     scheduleAutoRegen();
 }
-
-const externalBase = ref<string>(''); // e.g., "https://demo123.collab.45d.io"
-
 
 function removeFile(i: number) {
     files.value.splice(i, 1)
@@ -447,10 +474,9 @@ function setNever() {
     expiresValue.value = 0;
     expiresUnit.value = 'hours';
 }
-
 async function generateLink() {
     if (!canGenerate.value) {
-        // This should normally be prevented by the disabled button, but better safe than sorry.
+        // Safety guard – normally prevented by disabled button
         pushNotification(
             new Notification(
                 'Cannot Generate Link',
@@ -473,6 +499,11 @@ async function generateLink() {
         )
         return
     }
+
+    loading.value = true
+    error.value = null
+    viewUrl.value = ''
+    downloadUrl.value = ''
 
     const body: any = {
         expiresInSeconds: expiresSec.value,
@@ -505,8 +536,6 @@ async function generateLink() {
             body: JSON.stringify(body),
         })
 
-        console.log('Got magic link data', data)
-
         viewUrl.value = data.viewUrl
         downloadUrl.value = data.downloadUrl
 
@@ -526,6 +555,8 @@ async function generateLink() {
         const level: 'error' | 'denied' =
             /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
 
+        error.value = msg
+
         pushNotification(
             new Notification(
                 'Failed to Create Magic Link',
@@ -534,6 +565,8 @@ async function generateLink() {
                 8000,
             )
         )
+    } finally {
+        loading.value = false
     }
 }
 

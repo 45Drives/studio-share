@@ -24,7 +24,7 @@
                 inputmode="numeric"
                 pattern="\\d*"
                 v-model.trim="resetPinInput"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent pr-16"
+                class="input-textlike border rounded px-3 py-2 w-full pr-16"
                 placeholder="4–8 digits"
                 autocomplete="off"
               />
@@ -51,7 +51,7 @@
                 inputmode="numeric"
                 pattern="\\d*"
                 v-model.trim="resetPinConfirm"
-                class="input-textlike border rounded px-3 py-2 w-full bg-transparent pr-16"
+                class="input-textlike border rounded px-3 py-2 w-full pr-16"
                 placeholder="Re-enter PIN"
                 autocomplete="off"
               />

@@ -126,26 +126,29 @@
                     </button>
                 </div>
                 <div class="flex flex-row justify-center col-span-2">
-                    <button type="submit"
-                        class="btn btn-success w-80 h-12 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        :disabled="anyBusy">
-                        <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                                opacity=".25" />
-                            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                        </svg>
-                        <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
-                    </button>
-                </div>
+                    <div class="flex flex-col">
+                        <button type="submit"
+                            class="btn btn-success w-80 h-12 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                            :disabled="anyBusy">
+                            <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
+                                    opacity=".25" />
+                                <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                            </svg>
+                            <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
+                        </button>
+                        <div v-if="statusLine"
+                            class="mt-1 text-sm opacity-80 flex items-center gap-2 col-span-2 justify-center text-center">
+                            <svg v-if="isBootstrapping" class="animate-spin h-4 w-4" viewBox="0 0 24 24"
+                                aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
+                                    opacity=".25" />
+                                <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                            </svg>
+                            <span>{{ statusLine }}</span>
+                        </div>
+                    </div>
 
-                <div v-if="statusLine"
-                    class="mt-2 text-sm opacity-80 flex items-center gap-2 col-span-2 justify-center text-center">
-                    <svg v-if="isBootstrapping" class="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                            opacity=".25" />
-                        <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                    </svg>
-                    <span>{{ statusLine }}</span>
                 </div>
             </div>
         </div>

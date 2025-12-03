@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-3 max-h-[500px]">
+  <div class="flex flex-col gap-3 max-h-[500px] mt-2">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
       <div class="text-muted">Click on files to share. <span v-if="viewMode === 'grid'">Double-click on folders to
@@ -21,14 +21,14 @@
 
         <div class="text-xs opacity-75 truncate" :title="cwd">Showing: {{ cwd || '/' }}</div>
         <div class="ml-auto flex items-center">
-          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
+          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5 rounded-l-md"
             :class="viewMode === 'list' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'list'" aria-label="List view"
             title="List view" @click="viewMode = 'list'">
             <FontAwesomeIcon :icon="faList" />
             <span class="sr-only">List</span>
           </button>
           <button type="button"
-            class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5"
+            class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5 rounded-r-md"
             :class="viewMode === 'grid' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'grid'"
             aria-label="Grid view" title="Grid view" @click="viewMode = 'grid'">
             <FontAwesomeIcon :icon="faGrip" />

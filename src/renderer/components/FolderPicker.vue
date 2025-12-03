@@ -27,7 +27,7 @@
     </div>
 
     <div class="border rounded overflow-auto bg-default" :class="containerHeights">
-      <div class="sticky top-0 bg-default z-[1000] border-b border-default px-2 py-1 flex items-center gap-2">
+      <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10">
         <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
           title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
@@ -36,22 +36,22 @@
           {{ browseMode === 'roots' ? 'Pick a ZFS pool…' : (cwd || '/') }}
         </div>
 
-        <div class="ml-auto flex items-center gap-1" v-if="browseMode !== 'roots'">
+        <div class="ml-auto flex items-center" v-if="browseMode !== 'roots'">
 
-          <button v-if="uploadLink" type="button" class="btn btn-secondary text-xs mr-2 flex items-center gap-1 px-2"
+          <button type="button" class="btn btn-secondary text-xs mr-2 flex items-center gap-1 px-2"
             @click="createNewFolder" title="Create a new folder in current directory">
             <FontAwesomeIcon :icon="faFolderPlus" />
             <span>New Folder</span>
           </button>
 
-          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
+          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5 rounded-l-md"
             :class="viewMode === 'tree' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'tree'" aria-label="List view"
             title="List view" @click="viewMode = 'tree'">
             <FontAwesomeIcon :icon="faList" />
             <span class="sr-only">List</span>
           </button>
           <button type="button"
-            class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5"
+            class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5 rounded-r-md"
             :class="viewMode === 'icons' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'icons'"
             aria-label="Grid view" title="Grid view" @click="viewMode = 'icons'">
             <FontAwesomeIcon :icon="faGrip" />
@@ -60,17 +60,8 @@
         </div>
       </div>
 
-      <div v-if="browseMode !== 'roots' && viewMode !== 'icons'" class="grid sticky top-0 bg-well font-semibold border-b border-default
-               [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
-        <div class="px-2 py-2"></div>
-        <div class="px-2 py-2">Name</div>
-        <div class="px-2 py-2">Type</div>
-        <div class="px-2 py-2">Size</div>
-        <div class="px-2 py-2">Modified</div>
-      </div>
-
       <template v-if="browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
-        <div v-for="r in projectRoots" :key="r.mountpoint" class="grid items-center border-b border-default px-3 py-1
+        <div v-for="r in projectRoots" :key="r.mountpoint" class="grid items-center border-b border-default px-3 py-1 bg-default
                   [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
           <div></div>
           <div class="truncate">
@@ -98,10 +89,10 @@
           @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
       </template>
 
-      <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-900/70 flex items-center justify-center p-4">
-        <div class="bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-sm border border-gray-700">
-          <h3 class="text-lg font-semibold mb-4 text-white">Create New Folder</h3>
-          <p class="text-sm mb-4 text-gray-400">
+      <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-600/80 flex items-center justify-center p-4">
+        <div class="bg-well p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
+          <h3 class="text-lg font-semibold mb-4 text-default">Create New Folder</h3>
+          <p class="text-sm mb-4 text-muted">
             Current Path: <code>{{ cwd }}</code>
           </p>
 
@@ -109,12 +100,10 @@
             <input type="text" v-model="newFolderName" placeholder="Enter folder name" required
               class="w-full px-3 py-2 input-textlike text-default" />
             <div class="mt-6 flex justify-end gap-3">
-              <button type="button" @click="showNewFolderModal = false"
-                class="px-4 py-2 text-sm font-medium rounded-md bg-danger text-default">
+              <button type="button" @click="showNewFolderModal = false" class="btn btn-danger">
                 Cancel
               </button>
-              <button type="submit" :disabled="!newFolderName.trim()"
-                class="px-4 py-2 text-sm font-medium rounded-md bg-default text-default">
+              <button type="submit" :disabled="!newFolderName.trim()" class="btn btn-primary">
                 Create
               </button>
             </div>
@@ -246,6 +235,7 @@ function ensureSlash(p: string) {
   if (!p) return '/'
   return p.endsWith('/') ? p : p + '/'
 }
+
 function toAbsUnder(base: string, p: string) {
   const bName = (base || '').replace(/\/+$/, '').replace(/^\/+/, '')
   const clean = (p || '').replace(/^\/+/, '')
@@ -338,7 +328,7 @@ async function confirmNewFolder() {
     pushNotification(
       new Notification(
         'New Folder Created',
-        `Folder '${name}'' has been created successfully`,
+        `Folder '${name}'' has been created successfully.`,
         'success',
         8000,
       ),
@@ -348,7 +338,6 @@ async function confirmNewFolder() {
     newFolderError.value = `API failed: ${e.message || 'Unknown error'}`
   }
 }
-
 
 /* Up clamp */
 const canGoUp = computed(() => {
@@ -387,27 +376,6 @@ function onSelectFolder(rel: string) {
   emit('changed-cwd', cwd.value)
 }
 
-/* ZFS root picking */
-function openRoot(mountpoint: string) {
-  clampBase.value = mountpoint
-  browseMode.value = 'dir'
-
-  const abs = ensureSlash(mountpoint)
-  cwd.value = abs
-  emit('changed-cwd', cwd.value)
-
-  // auto-select this zpool as the destination
-  const normalized = abs.replace(/^\/+/, '').replace(/\/+$/, '') // "tank" or "tank/projects"
-  emit('update:modelValue', normalized)
-}
-
-
-/* UI */
-const selectedAbs = computed(() => {
-  if (!props.modelValue) return ''
-  const abs = '/' + props.modelValue.replace(/^\/+/, '')
-  return abs.endsWith('/') ? abs : abs + '/'
-})
 function chooseProject(dirPath: string) {
   const abs = ensureSlash(dirPath).replace(/\/+$/, '')
   internalProject.value = abs
@@ -417,12 +385,6 @@ function chooseProject(dirPath: string) {
   emit('changed-cwd', cwd.value)
 }
 
-function openRootBrowse(mountpoint: string) {
-  browseMode.value = 'dir'
-  const abs = ensureSlash(mountpoint)
-  cwd.value = abs
-  emit('changed-cwd', cwd.value)
-}
 function changeProject() {
   internalProject.value = ''
   internalDest.value = ''
