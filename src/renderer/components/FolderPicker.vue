@@ -1,16 +1,12 @@
-<!-- FolderPicker.vue -->
 <template>
   <section class="flex flex-col gap-2 text-left text-base rounded-md">
 
-    <!-- Top summary + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
       <label v-if="allowEntireTree" class="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" v-model="showEntireTree" @change="changeProject" />
         <span>Show entire directory tree from root</span>
       </label>
       <div v-if="subtitle" class="opacity-80">{{ subtitle }}</div>
-
-
 
       <div class="text-sm opacity-80 -mb-1 flex items-center justify-start gap-3 flex-wrap"
         v-if="internalProject && internalProject.trim().length > 0">
@@ -24,16 +20,13 @@
       </div>
 
 
-      <!-- Auto-detect status -->
       <div v-if="(autoDetectRoots ?? true) && !showEntireTree" class="text-xs opacity-70">
         <template v-if="detecting">Detecting ZFS pools…</template>
         <template v-else-if="browseMode === 'roots' && !projectRoots.length">No ZFS pools found; browsing /</template>
       </div>
     </div>
 
-    <!-- Browser area -->
     <div class="border rounded overflow-auto bg-default" :class="containerHeights">
-      <!-- Toolbar -->
       <div class="sticky top-0 bg-default z-[1000] border-b border-default px-2 py-1 flex items-center gap-2">
         <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
           title="Go up one directory">
@@ -42,7 +35,15 @@
         <div class="text-xs opacity-75 truncate" :title="cwd">
           {{ browseMode === 'roots' ? 'Pick a ZFS pool…' : (cwd || '/') }}
         </div>
+
         <div class="ml-auto flex items-center gap-1" v-if="browseMode !== 'roots'">
+
+          <button v-if="uploadLink" type="button" class="btn btn-secondary text-xs mr-2 flex items-center gap-1 px-2"
+            @click="createNewFolder" title="Create a new folder in current directory">
+            <FontAwesomeIcon :icon="faFolderPlus" />
+            <span>New Folder</span>
+          </button>
+
           <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
             :class="viewMode === 'tree' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'tree'" aria-label="List view"
             title="List view" @click="viewMode = 'tree'">
@@ -59,8 +60,7 @@
         </div>
       </div>
 
-      <!-- Column headers -->
-      <div v-if="browseMode !== 'roots'" class="grid sticky top-0 bg-well font-semibold border-b border-default
+      <div v-if="browseMode !== 'roots' && viewMode !== 'icons'" class="grid sticky top-0 bg-well font-semibold border-b border-default
                [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
         <div class="px-2 py-2"></div>
         <div class="px-2 py-2">Name</div>
@@ -69,7 +69,6 @@
         <div class="px-2 py-2">Modified</div>
       </div>
 
-      <!-- NEW: Roots list -->
       <template v-if="browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
         <div v-for="r in projectRoots" :key="r.mountpoint" class="grid items-center border-b border-default px-3 py-1
                   [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
@@ -85,20 +84,48 @@
         </div>
       </template>
 
-      <!-- Tree / Icon view -->
       <template v-if="browseMode !== 'roots' && viewMode === 'tree'">
-        <TreeNode :key="'tree-' + cwd" :apiFetch="apiFetch" :selected="internalSelected"
+        <TreeNode :key="'tree-' + cwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
           :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
           :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
           @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
       </template>
 
       <template v-if="browseMode !== 'roots' && viewMode === 'icons'">
-        <IconMode :key="'icons-' + cwd" :apiFetch="apiFetch" :selected="internalSelected"
+        <IconMode :key="'icons-' + cwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
           :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
           :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
           @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
       </template>
+
+      <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-900/70 flex items-center justify-center p-4">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-sm border border-gray-700">
+          <h3 class="text-lg font-semibold mb-4 text-white">Create New Folder</h3>
+          <p class="text-sm mb-4 text-gray-400">
+            Current Path: <code>{{ cwd }}</code>
+          </p>
+
+          <form @submit.prevent="confirmNewFolder">
+            <input type="text" v-model="newFolderName" placeholder="Enter folder name" required
+              class="w-full px-3 py-2 input-textlike text-default" />
+            <div class="mt-6 flex justify-end gap-3">
+              <button type="button" @click="showNewFolderModal = false"
+                class="px-4 py-2 text-sm font-medium rounded-md bg-danger text-default">
+                Cancel
+              </button>
+              <button type="submit" :disabled="!newFolderName.trim()"
+                class="px-4 py-2 text-sm font-medium rounded-md bg-default text-default">
+                Create
+              </button>
+            </div>
+          </form>
+
+          <!-- Error Message Display -->
+          <p v-if="newFolderError" class="mt-4 text-sm text-danger p-2 bg-red-900/30 rounded">
+            Error: {{ newFolderError }}
+          </p>
+        </div>
+      </div>
     </div>
   </section>
 </template>
@@ -106,7 +133,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-import { faArrowLeft, faList, faGrip } from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft, faList, faGrip, faFolderPlus } from '@fortawesome/free-solid-svg-icons'
+import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import PathInput from './PathInput.vue'
 import TreeNode from './TreeNode.vue'
 import IconMode from './IconMode.vue'
@@ -126,8 +154,8 @@ const props = defineProps<{
   showSelection?: boolean
   heightClass?: string
   allowEntireTree?: boolean
+  uploadLink?: boolean
 
-  // ADD THESE (so v-model:project / v-model:dest are typed)
   project?: string
   dest?: string
 }>()
@@ -169,6 +197,8 @@ const rootRel = computed(() => (cwd.value || '').replace(/^\/+/, '').replace(/\/
 const internalSelected = ref<Set<string>>(new Set())
 const selectedVersion = ref(0)
 const expandCache = new Map<string, string[]>()
+// used to re-render tree/icons after folder creation
+const refreshKey = ref(0)
 
 /* Persist view mode */
 onMounted(() => {
@@ -261,6 +291,62 @@ function navigateTo(rel: string) {
 async function togglePath({ path, isDir }: { path: string; isDir: boolean }) {
   if (!isDir) return
   await getFilesForFolder(path)
+}
+
+const showNewFolderModal = ref(false)
+const newFolderName = ref('')
+const newFolderError = ref<string | null>(null)
+
+/* Button click to open modal */
+function createNewFolder() {
+  newFolderName.value = '' // Clear previous name
+  newFolderError.value = null // Clear previous errors
+  showNewFolderModal.value = true // Show the custom modal
+}
+
+/* Modal submit handler */
+async function confirmNewFolder() {
+  const name = newFolderName.value.trim()
+  if (!name) return
+
+  // Build new path
+  const current = cwd.value.replace(/\/+$/, '')
+  const newPath = current + '/' + name
+
+  try {
+    // 1. Call API
+    const response = await props.apiFetch('/api/mkdir', {
+      method: 'POST',
+      body: JSON.stringify({ path: newPath })
+    })
+
+    if (response.error) {
+      newFolderError.value = response.error
+      return
+    }
+
+    // 2. Clear cache for the parent folder so the new folder appears
+    expandCache.delete(ensureSlash(current))
+    if (current === '') expandCache.delete('/') // edge case for root
+
+    // 3. Force re-render of file list
+    refreshKey.value++
+
+    // 4. Close modal and auto-select the newly created folder
+    showNewFolderModal.value = false
+    onSelectFolder(newPath)
+    pushNotification(
+      new Notification(
+        'New Folder Created',
+        `Folder '${name}'' has been created successfully`,
+        'success',
+        8000,
+      ),
+    )
+  } catch (e: any) {
+    console.error(e)
+    newFolderError.value = `API failed: ${e.message || 'Unknown error'}`
+  }
 }
 
 

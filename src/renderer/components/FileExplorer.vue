@@ -2,7 +2,8 @@
   <div class="flex flex-col gap-3 max-h-[500px]">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
-      <div class="text-muted">Click on files to share. <span v-if="viewMode === 'grid'">Double-click on folders to enter.</span></div>
+      <div class="text-muted">Click on files to share. <span v-if="viewMode === 'grid'">Double-click on folders to
+          enter.</span></div>
 
       <div class="flex flex-row gap-2 items-center">
         <span class="whitespace-nowrap ">Enter root path to use.</span>
@@ -20,15 +21,18 @@
 
         <div class="text-xs opacity-75 truncate" :title="cwd">Showing: {{ cwd || '/' }}</div>
         <div class="ml-auto flex items-center">
-          <button type="button" class="px-2 py-1 text-xs hover:bg-white/5"
-            :class="viewMode === 'list' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'list'" title="List view"
-            @click="viewMode = 'list'">
-            List
+          <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5"
+            :class="viewMode === 'list' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'list'" aria-label="List view"
+            title="List view" @click="viewMode = 'list'">
+            <FontAwesomeIcon :icon="faList" />
+            <span class="sr-only">List</span>
           </button>
-          <button type="button" class="px-2 py-1 text-xs border-l border-default hover:bg-white/5"
-            :class="viewMode === 'grid' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'grid'" title="Grid view"
-            @click="viewMode = 'grid'">
-            Grid
+          <button type="button"
+            class="px-2 py-1 text-xs flex items-center justify-center border-l border-default hover:bg-white/5"
+            :class="viewMode === 'grid' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'grid'"
+            aria-label="Grid view" title="Grid view" @click="viewMode = 'grid'">
+            <FontAwesomeIcon :icon="faGrip" />
+            <span class="sr-only">Grid</span>
           </button>
         </div>
       </div>
@@ -69,7 +73,7 @@
   import TreeNode from './TreeNode.vue'
   import IconMode from './IconMode.vue'
   import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-  import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
+  import { faArrowLeft, faList, faGrip } from '@fortawesome/free-solid-svg-icons'
   
   const props = defineProps<{
     apiFetch: (url: string, init?: any) => Promise<any>,

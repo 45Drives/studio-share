@@ -5,7 +5,7 @@
 				<template #header>
 					<!-- Heading -->
 					<div class="flex flex-col gap-2 text-left">
-						<h1 class="text-xl font-semibold">Share a Folder</h1>
+						<h2 class="text-xl font-semibold">Share a Folder</h2>
 						<div class="text-sm opacity-80 -mt-1">
 							Pick a folder on the server and generate a shareable link.
 						</div>
@@ -17,7 +17,7 @@
 					<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
 						subtitle="Pick the folder on the server where these files will be uploaded."
 						:auto-detect-roots="true" :allow-entire-tree="true" v-model:project="projectBase"
-						v-model:dest="destFolderRel" />
+						v-model:dest="destFolderRel" :uploadLink="true"/>
 				</div>
 
 				<!-- OPTIONS -->
