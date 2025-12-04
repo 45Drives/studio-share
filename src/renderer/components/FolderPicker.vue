@@ -99,6 +99,23 @@
           <form @submit.prevent="confirmNewFolder">
             <input type="text" v-model="newFolderName" placeholder="Enter folder name" required
               class="w-full px-3 py-2 input-textlike text-default" />
+
+            <!-- TODO: Implement new dataset option for new folder -->
+            <!-- <div class="mt-4 text-sm space-y-1" v-if="isUnderZFSPool">
+              <div class="font-semibold">Create as:</div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" value="dir" v-model="newFolderKind" />
+                <span>Regular folder (recommended)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" value="dataset" v-model="newFolderKind" />
+                <span>ZFS dataset (advanced)</span>
+              </label>
+              <p class="text-xs text-muted">
+                ZFS datasets can have their own snapshots, quotas, and settings.
+              </p>
+            </div> -->
+
             <div class="mt-6 flex justify-end gap-3">
               <button type="button" @click="showNewFolderModal = false" class="btn btn-danger">
                 Cancel
@@ -186,7 +203,8 @@ const rootRel = computed(() => (cwd.value || '').replace(/^\/+/, '').replace(/\/
 const internalSelected = ref<Set<string>>(new Set())
 const selectedVersion = ref(0)
 const expandCache = new Map<string, string[]>()
-// used to re-render tree/icons after folder creation
+// const newFolderKind = ref<'dir' | 'dataset'>('dir')
+
 const refreshKey = ref(0)
 
 /* Persist view mode */
