@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import CardContainer from '../components/CardContainer.vue'
+import CardContainer from '@45drives/houston-common-ui'
 import { useHeader } from '../composables/useHeader'
 import { useResilientNav } from '../composables/useResilientNav'
 import ManageLinks from './ManageLinks.vue'

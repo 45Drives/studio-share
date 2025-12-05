@@ -53,7 +53,7 @@
 
 							<span class="text-sm opacity-75">({{ prettyExpiry }})</span>
 						</div>
-						
+
 						<div class="flex flex-col">
 						<!-- top row: Link Access + Use Link Password -->
 						<div class="flex flex-row justify-between items-center">
@@ -176,11 +176,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import { useHeader } from '../composables/useHeader'
-import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import { useResilientNav } from '../composables/useResilientNav'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/20/solid'

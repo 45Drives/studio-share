@@ -158,12 +158,11 @@
 
 <script setup lang="ts">
 import { computed, inject, onUnmounted, ref, watch } from 'vue'
-import CardContainer from '../components/CardContainer.vue'
 import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
-import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
 useHeader('Welcome to the 45Studio Share App!');

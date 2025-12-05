@@ -231,14 +231,13 @@
 
 <script setup lang="ts">
 import { ref, computed, inject, watch, onMounted } from 'vue'
-import CardContainer from '../components/CardContainer.vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
 import { onBeforeRouteLeave } from 'vue-router';
-import { pushNotification, Notification } from '@45drives/houston-common-ui';
+import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui';
 const { to } = useResilientNav()
 useHeader('Upload Files')
 

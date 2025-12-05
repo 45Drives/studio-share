@@ -1244,7 +1244,7 @@ app.whenReady().then(() => {
   console.debug('userData is here:', app.getPath('userData'))
   console.debug('log dir:', resolvedLogDir);
 
-  // log.info("🟢 Logging initialized.");
+  // log.info("Logging initialized.");
   // log.info("Log file path:", // log.transports.file.getFile().path);
 
   const isInternalHost = (hostname: string) => {
@@ -1305,11 +1305,11 @@ app.whenReady().then(() => {
   // (autoUpdater.logger as typeof log).transports.file.level = 'info';
 
   // autoUpdater.on('checking-for-update', () => {
-  //   // log.info('🔄 Checking for update...');
+  //   // log.info(' Checking for update...');
   // });
 
   // autoUpdater.on('update-available', (info) => {
-  //   // log.info('⬇️ Update available:', info);
+  //   // log.info(' Update available:', info);
 
   //   if (process.platform === 'linux') {
   //     // Notify renderer that a manual download is needed
@@ -1328,7 +1328,7 @@ app.whenReady().then(() => {
   // });
 
   // autoUpdater.on('download-progress', (progressObj) => {
-  //   const logMsg = `📦 Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
+  //   const logMsg = ` Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
   //     1
   //   )}% (${progressObj.transferred}/${progressObj.total})`;
   //   // log.info(logMsg);

@@ -252,9 +252,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useApi } from '../composables/useApi'
-import CardContainer from '../components/CardContainer.vue'
 import FileExplorer from '../components/FileExplorer.vue'
-import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import { useProjectChoices } from '../composables/useProjectChoices'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import type { Commenter } from '../typings/electron'
