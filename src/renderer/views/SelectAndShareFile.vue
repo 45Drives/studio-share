@@ -83,61 +83,49 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
                             <!-- Expiry -->
-                            <div class="flex items-center gap-3">
-                                <label class="whitespace-nowrap font-semibold">Expires in:</label>
+                            <div class="flex items-center gap-2">
+                                <div class="flex flex-row justify-between w-full">
+                                    <div class="flex flex-row w-full items-center text-center gap-2">
+                                        <label class="whitespace-nowrap font-semibold">Expires in:</label>
 
-                                <div class="flex flex-wrap gap-2 text-sm">
-                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'hours')">1
-                                        hour</button>
-                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">1
-                                        day</button>
-                                    <button type="button" class="btn btn-secondary" @click="setPreset(1, 'weeks')">1
-                                        week</button>
-                                    <button type="button" class="btn btn-secondary" @click="setNever()">Never</button>
-                                </div>
+                                        <div class="flex flex-wrap gap-1 text-sm">
+                                            <button type="button" class="btn btn-secondary"
+                                                @click="setPreset(1, 'hours')">1
+                                                hour</button>
+                                            <button type="button" class="btn btn-secondary"
+                                                @click="setPreset(1, 'days')">1
+                                                day</button>
+                                            <button type="button" class="btn btn-secondary"
+                                                @click="setPreset(1, 'weeks')">1
+                                                week</button>
+                                            <button type="button" class="btn btn-secondary"
+                                                @click="setNever()">Never</button>
+                                        </div>
 
-                                <input type=" number" min="1" step="1" v-model.number="expiresValue"
-                                        class="input-textlike border rounded px-3 py-2 w-32" />
+                                        <input type=" number" min="1" step="1" v-model.number="expiresValue"
+                                            class="input-textlike border rounded px-3 py-2 w-24" />
 
-                                    <select v-model="expiresUnit"
-                                        class="input-textlike border rounded px-3 py-2"
-                                        style="min-width: 8rem">
-                                        <option value="hours">hours</option>
-                                        <option value="days">days</option>
-                                        <option value="weeks">weeks</option>
-                                    </select>
+                                        <select v-model="expiresUnit"
+                                            class="input-textlike border rounded px-3 py-2 w-24">
+                                            <option value="hours">hours</option>
+                                            <option value="days">days</option>
+                                            <option value="weeks">weeks</option>
+                                        </select>
 
-                                    <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
-                                </div>
-
-                                <div class="flex flex-row justify-between">
-                                    <!-- Link Access -->
-                                    <div class="flex items-center gap-3">
-                                        <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link
-                                            Access:</label>
-                                        <Switch id="link-access-switch" v-model="usePublicBase" :class="[
-                                        usePublicBase ? 'bg-secondary' : 'bg-well',
-                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                        ]">
-                                            <span class="sr-only">Toggle link access</span>
-                                            <span aria-hidden="true" :class="[
-                                            usePublicBase ? 'translate-x-5' : 'translate-x-0',
-                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                        ]" />
-                                        </Switch>
-                                        <span class="text-sm select-none">
-                                            {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-                                        </span>
+                                        <span class="text-sm opacity-75">({{ prettyExpiry }})</span>
                                     </div>
-
-                                    <!-- Link title (optional) -->
-                                    <div class="flex items-center gap-2">
-                                        <label class="whitespace-nowrap font-semibold">Link title:</label>
-                                        <input type="text" v-model.trim="linkTitle"
-                                            class="input-textlike border rounded px-3 py-2"
-                                            placeholder="Optional title for the shared link" style="min-width: 20rem" />
                                     </div>
-                                </div>
+                                    <div class="flex flex-row">
+                                        <!-- Link title (optional) -->
+                                        <div class="flex items-center gap-2">
+                                            <label class="whitespace-nowrap font-semibold">Link title:</label>
+                                            <input type="text" v-model.trim="linkTitle"
+                                                class="input-textlike border rounded px-3 py-2"
+                                                placeholder="Optional title for the shared link"
+                                                style="min-width: 20rem" />
+                                        </div>
+                                    </div>
+                                </div>                           
                                 <div class="flex flex-row justify-between">
                                     <!-- Manage Comment Access -->
                                     <div class="flex items-center gap-4 justify-between">
@@ -180,7 +168,7 @@
                                             </Switch>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <label class="text-default font-semibold ">Password</label>
+                                            <label class="text-default font-semibold">Password</label>
                                             <div class="flex flex-col gap-1">
                                                 <div class="relative flex items-center h-[3rem] space-x-2">
                                                     <input :disabled="!protectWithPassword"
@@ -199,14 +187,15 @@
                                     </div>
                                   
                                 </div>
-                                <div class="w-full flex flex-row justify-between text-sm text-red-500 mt-1">
-                                     <p v-if="!commentAccessSatisfied" class="justify-start">
-                                        Select at least one commenter or check “No one can comment”.
-                                    </p>
-                                    <p v-if="protectWithPassword && !password" class="justify-end">
-                                        Password is required when protection is enabled.
-                                    </p>
-                                </div>
+                               <div class="w-full flex flex-row text-sm text-red-500 mt-1">
+                                <p v-if="!commentAccessSatisfied" class="mr-auto">
+                                    Select at least one commenter or check “No one can comment”.
+                                </p>
+
+                                <p v-if="protectWithPassword && !password" class="ml-auto text-right">
+                                    Password is required when protection is enabled.
+                                </p>
+                            </div>
                                
 
                                 <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
@@ -286,7 +275,6 @@ function resetAll() {
     showSelected.value = true
     expiresValue.value = 7
     expiresUnit.value = 'days'
-    usePublicBase.value = true
     linkTitle.value = ''
     commenters.value = []
     noCommentAccess.value = false
@@ -330,8 +318,6 @@ function clearAll() {
     files.value = []
     invalidateLink()
 }
-
-const usePublicBase = ref(true);
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
@@ -507,7 +493,6 @@ async function generateLink() {
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
-        baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
         title: linkTitle.value || undefined,
     }
 
@@ -535,16 +520,13 @@ async function generateLink() {
             body: JSON.stringify(body),
         })
 
-        viewUrl.value = data.viewUrl
-        downloadUrl.value = data.downloadUrl
-
-        const label = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
-        const titlePart = linkTitle.value ? ` for “${linkTitle.value}”` : ''
+        viewUrl.value = data.url
+        downloadUrl.value = ''
 
         pushNotification(
             new Notification(
                 'Magic Link Created',
-                `A ${label} magic link was created${titlePart}.`,
+                `A  magic link was created.`,
                 'success',
                 8000,
             )

@@ -87,7 +87,7 @@
 </template>
   
   <script setup lang="ts">
-  import { ref, computed, watch, defineProps, defineEmits } from 'vue'
+  import { ref, computed, watch,} from 'vue'
   import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
   import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
   

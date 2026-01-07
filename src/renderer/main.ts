@@ -9,7 +9,9 @@ console.warn = (...args: any[]) => {
     const msg = args.map(String).join(' ')
     if (
         msg.includes('APPIMAGE env is not defined') ||
-        msg.includes('NODE_TLS_REJECT_UNAUTHORIZED')
+        msg.includes('NODE_TLS_REJECT_UNAUTHORIZED') ||
+        msg.includes('setup() return property "_" should not start with "$" or "_"') ||
+        msg.includes('Extraneous non-props attributes')
     ) return
     _origWarn(...args)
 }
@@ -42,16 +44,3 @@ app.use(pinia);
 app.mount('#app');
 document.documentElement.classList.add('theme-studio');
 window.electron?.ipcRenderer.send('renderer-ready');
-
-const IGNORE = [
-    'setup() return property "_" should not start with "$" or "_"',
-    'Extraneous non-props attributes'
-]
-
-app.config.warnHandler = (msg, instance, trace) => {
-    // swallow any warning whose text matches one of the patterns
-    if (IGNORE.some(p => msg.includes(p))) return
-
-    // otherwise let it through
-    console.warn(`[Vue warn]: ${msg}${trace}`)
-}

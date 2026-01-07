@@ -98,33 +98,6 @@
             </CardContainer>
 
             <div class="col-span-2 grid grid-cols-2 gap-4">
-                <div class="flex flex-row justify-between w-full items-center text-center gap-2 col-span-2">
-                    <span class="text-danger text-base semibold justify-center">
-                        <b>ALSO:</b> To allow sharing links outside your network, <b>HTTPS port
-                            (443 by default) <u>must</u> </b> be open or forwarded from your router.
-                    </span>
-                    <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
-                        class="btn btn-secondary w-fit text-base justify-end">
-                        Click here to find out how.
-                    </button>
-                </div>
-                <div class="col-start-2 flex flex-row justify-end">
-                    <button type="button" @click.prevent="tryAutomaticPortMapping"
-                        :title="`Uses UPNP (Universal Plug N' Play) to automatically open necessary ports on router (not all routers support this).`"
-                        class="btn btn-danger w-fit text-base justify-end items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        :disabled="anyBusy">
-                        <svg v-if="tryingUpnp" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                                opacity=".25" />
-                            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                        </svg>
-                        <span>
-                            {{ tryingUpnp ? 'Connecting + Mapping…' : 'Connect and Port Forward with UPNP' }}
-                        </span>
-                        <br v-if="!tryingUpnp" />
-                        <span v-if="!tryingUpnp">**EXPERIMENTAL - USE AT OWN RISK**</span>
-                    </button>
-                </div>
                 <div class="flex flex-row justify-center col-span-2">
                     <div class="flex flex-col">
                         <button type="submit"
@@ -818,23 +791,6 @@ async function connectToServer() {
         statusLine.value = '';
         
         try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }
-
-        // Seed internal/external base on the server for later link generation
-        try {
-            const hdrs = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            };
-
-            // One shot: let the server detect both. Internal = LAN IP, External = WAN IP.
-            await fetch(`${apiBase}/api/settings`, {
-                method: 'POST',
-                headers: hdrs,
-                body: JSON.stringify({ internalBase: 'auto', externalBase: 'auto' }),
-            });
-        } catch (e: any) {
-            window.appLog?.warn('settings.seed.failed', { message: e?.message });
-        }
 
         rememberPortsForHost(ip, {
             sshPort: sshPortToUse,

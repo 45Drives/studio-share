@@ -55,78 +55,49 @@
 						</div>
 
 						<div class="flex flex-col">
-						<!-- top row: Link Access + Use Link Password -->
-						<div class="flex flex-row justify-between items-center">
-							<!-- Link access -->
-							<div class="flex items-center gap-3">
-							<label class="whitespace-nowrap font-semibold" for="link-access-switch">
-								Link Access:
-							</label>
-							<Switch id="link-access-switch" v-model="usePublicBase" :class="[
-								usePublicBase ? 'bg-secondary' : 'bg-well',
-								'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent ' +
-								'transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 ' +
-								'focus:ring-slate-600 focus:ring-offset-2'
-							]">
-								<span class="sr-only">Toggle link access</span>
-								<span aria-hidden="true" :class="[
-								usePublicBase ? 'translate-x-5' : 'translate-x-0',
-								'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 ' +
-								'transition duration-200 ease-in-out'
-								]" />
-							</Switch>
-							<span class="text-sm select-none">
-								{{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-							</span>
-							</div>
-
-							<!-- Use Link Password block (without error) -->
-							<div class="flex items-center gap-3">
-							<label class="whitespace-nowrap font-semibold">Use Link Password:</label>
-							<div class="flex items-center gap-2">
-								<Switch id="use-password-switch" v-model="protectWithPassword" :class="[
-								protectWithPassword ? 'bg-secondary' : 'bg-well',
-								'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent ' +
-								'transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 ' +
-								'focus:ring-slate-600 focus:ring-offset-2'
-								]">
-								<span class="sr-only">Toggle use password</span>
-								<span aria-hidden="true" :class="[
-									protectWithPassword ? 'translate-x-5' : 'translate-x-0',
-									'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 ' +
-									'transition duration-200 ease-in-out'
-								]" />
-								</Switch>
-							</div>
-							<div class="flex items-center gap-2">
-								<label class="text-default font-semibold">Password</label>
-								<div class="relative flex items-center h-[3rem] space-x-2">
-								<input
-									:disabled="!protectWithPassword"
-									:type="showPassword ? 'text' : 'password'"
-									v-model.trim="password"
-									placeholder="Enter your password"
-									class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-								/>
-								<button
-									type="button"
-									@click="showPassword = !showPassword"
-									class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted"
-								>
-									<EyeIcon v-if="!showPassword" class="w-5 h-5" />
-									<EyeSlashIcon v-else class="w-5 h-5" />
-								</button>
+							<!-- top row: Use Link Password -->
+							<div class="flex flex-row items-center">
+								<!-- Use Link Password block -->
+								<div class="flex items-center gap-3">
+									<label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+									<div class="flex items-center gap-2">
+										<Switch id="use-password-switch" v-model="protectWithPassword" :class="[
+											protectWithPassword ? 'bg-secondary' : 'bg-well',
+											'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent ' +
+											'transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 ' +
+											'focus:ring-slate-600 focus:ring-offset-2'
+										]">
+											<span class="sr-only">Toggle use password</span>
+											<span aria-hidden="true" :class="[
+												protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+												'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 ' +
+												'transition duration-200 ease-in-out'
+											]" />
+										</Switch>
+									</div>
+									<div class="flex items-center gap-2">
+										<label class="text-default font-semibold">Password</label>
+										<div class="relative flex items-center h-[3rem] space-x-2">
+											<input :disabled="!protectWithPassword"
+												:type="showPassword ? 'text' : 'password'" v-model.trim="password"
+												placeholder="Enter your password"
+												class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed" />
+											<button type="button" @click="showPassword = !showPassword"
+												class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+												<EyeIcon v-if="!showPassword" class="w-5 h-5" />
+												<EyeSlashIcon v-else class="w-5 h-5" />
+											</button>
+										</div>
+									</div>
 								</div>
 							</div>
-							</div>
-						</div>
 
-						<!-- second row: error only, aligned to the right -->
-						<div class="flex justify-end text-sm text-red-500 mt-1">
-							<p v-if="protectWithPassword && !password">
-							Password is required when protection is enabled.
-							</p>
-						</div>
+							<!-- second row: error only, aligned to the right -->
+							<div class="flex justify-end text-sm text-red-500 mt-1">
+								<p v-if="protectWithPassword && !password">
+									Password is required when protection is enabled.
+								</p>
+							</div>
 						</div>
 
 
@@ -195,9 +166,6 @@ const { apiFetch } = useApi()
 const cwd = ref<string>('')                 // purely for the breadcrumb text
 const destFolderRel = ref<string>('')       // FolderPicker v-model
 const projectBase = ref<string>('')
-
-// Link base selection
-const usePublicBase = ref(true)
 
 // Share options
 const expiresValue = ref(1)
@@ -286,7 +254,6 @@ async function generateLink() {
 			// 0 = never, >0 = TTL in seconds
 			expiresIn: Number(expiresSec.value) || 0,
 			title: linkTitle.value || undefined,
-			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 		}
 		if (password.value) body.password = password.value
 
@@ -295,21 +262,19 @@ async function generateLink() {
 			body: JSON.stringify(body),
 		})
 
-		if (!resp?.shortUrl) throw new Error(resp?.error || 'Failed to create link')
+		if (!resp?.url) throw new Error(resp?.error || 'Failed to create link')
 
 		result.value = {
-			url: resp.shortUrl,
+			url: resp.url,
 			code: resp.code,
 			password: !!password.value,
 			expiresAt: resp.expiresAt,
 		}
 
-		const modeLabel = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
-
 		pushNotification(
 			new Notification(
 				'Upload Link Created',
-				`An ${modeLabel} upload link was created for “/${destFolderRel.value.replace(/^\/+/, '')}”.`,
+				`An upload link was created for “/${destFolderRel.value.replace(/^\/+/, '')}”.`,
 				'success',
 				8000,
 			),
@@ -345,7 +310,6 @@ function resetAll() {
 	linkTitle.value = ''
 	result.value = null
 	error.value = null
-	usePublicBase.value = true
 }
 
 async function copyLink() {

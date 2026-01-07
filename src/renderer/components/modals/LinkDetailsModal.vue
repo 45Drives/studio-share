@@ -24,8 +24,8 @@
 
           <div class="break-all space-x-2">
             <span class="text-default font-bold"> Link:</span>
-            <a :href="link?.shortUrl" target="_blank" class="hover:underline">{{ link?.shortUrl }}</a>
-            <button class="ml-2 text-blue-500 hover:underline text-xs" @click="copy(link?.shortUrl)">Copy</button>
+            <a :href="link?.url" target="_blank" class="hover:underline">{{ link?.url }}</a>
+            <button class="ml-2 text-blue-500 hover:underline text-xs" @click="copy(link?.url)">Copy</button>
           </div>
 
           <div class="space-x-2">

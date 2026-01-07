@@ -108,24 +108,47 @@ run_root() {
   if have_sudo; then sudo "$@"; else printf '%s\\n' "$PW" | sudo -S -p '' "$@"; fi
 }
 
+APPDIR="/opt/45drives/houston-broadcaster"
+UNIT="/usr/lib/systemd/system/houston-broadcaster.service"
+
+manual_files_ok=0
+if [ -f "$APPDIR/server/database/db.js" ] && [ -f "$APPDIR/scripts/bootstrap-studio-share.sh" ]; then
+  manual_files_ok=1
+fi
+
+manual_active_ok=0
+if systemctl cat houston-broadcaster >/dev/null 2>&1; then
+  if systemctl cat houston-broadcaster 2>/dev/null | grep -q "$APPDIR"; then
+    manual_active_ok=1
+  fi
+fi
+
+if [ "$manual_active_ok" -eq 1 ]; then
+  echo "Detected manual install is active (systemd points at $APPDIR). Skipping package install."
+  exit 0
+fi
+
+if [ "$manual_files_ok" -eq 1 ]; then
+  echo "Detected manual install files at $APPDIR but systemd is not clearly pointing at them."
+  echo "Skipping package install anyway (assuming you will deploy/enable service separately)."
+  exit 0
+fi
+
+echo "No manual install detected; installing package via OS package manager..."
+
 if command -v rpm >/dev/null 2>&1; then
-  # --- RHEL/CentOS/Rocky/Fedora family ---
   if command -v dnf >/dev/null 2>&1; then
     run_root dnf -y --refresh install houston-broadcaster
   else
     run_root yum -y install houston-broadcaster
   fi
-
   run_root systemctl enable --now houston-broadcaster || true
   exit 0
-
 elif command -v dpkg >/dev/null 2>&1; then
-  # --- Debian/Ubuntu family ---
   run_root apt-get update -y
   DEBIAN_FRONTEND=noninteractive run_root apt-get install -y houston-broadcaster
   run_root systemctl enable --now houston-broadcaster || true
   exit 0
-
 else
   echo "No supported package manager found" >&2
   exit 2
@@ -134,7 +157,7 @@ fi
 
   const res = await ssh.execCommand(`bash -lc ${q(script)}`);
   if ((res.code ?? 1) !== 0) {
-    throw new Error(`install failed: ${res.stderr || res.stdout}`);
+    throw new Error(`ensureBroadcasterInstalled failed: ${res.stderr || res.stdout}`);
   }
 }
 

@@ -35,7 +35,7 @@ export type LinkItem = {
   title?: string | null
   notes?: string | null
   token?: string | null
-  shortUrl: string
+  url: string
   createdAt: number
   expiresAt: number | null
   isDisabled: boolean
