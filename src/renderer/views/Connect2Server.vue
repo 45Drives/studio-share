@@ -32,7 +32,7 @@
                 <div class="mt-4 text-left">
                     <span class="block text-sm mb-2">Ports (optional)</span>
 
-                    <div class="grid grid-cols-3 gap-4 text-sm">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
                         <!-- SSH -->
                         <label class="flex flex-col">
                             <span class="mb-1 opacity-80">SSH</span>
@@ -51,18 +51,10 @@
                                 class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
                                 placeholder="9095" />
                         </label>
-
-                        <!-- HTTPS -->
-                        <label class="flex flex-col">
-                            <span class="mb-1 opacity-80">HTTPS</span>
-                            <input v-model.number="httpsPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
-                                placeholder="443" />
-                        </label>
                     </div>
 
                     <p class="mt-1 text-xs opacity-75">
-                        Leave blank to use defaults: SSH 22, API 9095, HTTPS 443. Ports must be different for each
+                        Leave blank to use defaults: 22 for SSH and 9095 for the API. Ports must be different for each
                         service.
                     </p>
 

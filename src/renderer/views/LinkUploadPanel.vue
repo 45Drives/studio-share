@@ -21,92 +21,88 @@
 				</div>
 
 				<!-- OPTIONS -->
-				<div class="flex flex-col gap-3 text-left mt-2">
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base">
-						<!-- Expiration -->
-						<div class="flex items-center gap-3">
-							<label class="whitespace-nowrap font-semibold">Expires in:</label>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base mt-2">
+					<!-- Expiry -->
+					<div class="flex items-center gap-2">
+						<div class="flex flex-row justify-between w-full">
+							<div class="flex flex-row w-full items-center text-center gap-2">
+								<label class="whitespace-nowrap font-semibold">Expires in:</label>
 
-							<div class="flex flex-wrap gap-2 text-sm">
-								<button type="button" class="btn btn-secondary" @click="setPreset(1, 'hours')">
-									1 hour
-								</button>
-								<button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">
-									1 day
-								</button>
-								<button type="button" class="btn btn-secondary" @click="setPreset(1, 'weeks')">
-									1 week
-								</button>
-								<button type="button" class="btn btn-secondary" @click="setNever">
-									Never
-								</button>
-							</div>
-
-							<input type="number" min="0" step="1" v-model.number="expiresValue"
-								class="input-textlike border rounded px-3 py-2 w-24" />
-
-							<select v-model="expiresUnit" class="input-textlike border rounded px-3 py-2 w-24">
-								<option value="hours">hours</option>
-								<option value="days">days</option>
-								<option value="weeks">weeks</option>
-							</select>
-
-							<span class="text-sm opacity-75">({{ prettyExpiry }})</span>
-						</div>
-
-						<div class="flex flex-col">
-							<!-- top row: Use Link Password -->
-							<div class="flex flex-row items-center">
-								<!-- Use Link Password block -->
-								<div class="flex items-center gap-3">
-									<label class="whitespace-nowrap font-semibold">Use Link Password:</label>
-									<div class="flex items-center gap-2">
-										<Switch id="use-password-switch" v-model="protectWithPassword" :class="[
-											protectWithPassword ? 'bg-secondary' : 'bg-well',
-											'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent ' +
-											'transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 ' +
-											'focus:ring-slate-600 focus:ring-offset-2'
-										]">
-											<span class="sr-only">Toggle use password</span>
-											<span aria-hidden="true" :class="[
-												protectWithPassword ? 'translate-x-5' : 'translate-x-0',
-												'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 ' +
-												'transition duration-200 ease-in-out'
-											]" />
-										</Switch>
-									</div>
-									<div class="flex items-center gap-2">
-										<label class="text-default font-semibold">Password</label>
-										<div class="relative flex items-center h-[3rem] space-x-2">
-											<input :disabled="!protectWithPassword"
-												:type="showPassword ? 'text' : 'password'" v-model.trim="password"
-												placeholder="Enter your password"
-												class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed" />
-											<button type="button" @click="showPassword = !showPassword"
-												class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-												<EyeIcon v-if="!showPassword" class="w-5 h-5" />
-												<EyeSlashIcon v-else class="w-5 h-5" />
-											</button>
-										</div>
-									</div>
+								<div class="flex flex-wrap gap-1 text-sm">
+									<button type="button" class="btn btn-secondary" @click="setPreset(1, 'hours')">1
+										hour</button>
+									<button type="button" class="btn btn-secondary" @click="setPreset(1, 'days')">1
+										day</button>
+									<button type="button" class="btn btn-secondary" @click="setPreset(1, 'weeks')">1
+										week</button>
+									<button type="button" class="btn btn-secondary" @click="setNever()">Never</button>
 								</div>
-							</div>
 
-							<!-- second row: error only, aligned to the right -->
-							<div class="flex justify-end text-sm text-red-500 mt-1">
-								<p v-if="protectWithPassword && !password">
-									Password is required when protection is enabled.
-								</p>
+								<input type=" number" min="1" step="1" v-model.number="expiresValue"
+									class="input-textlike border rounded px-3 py-2 w-24" />
+
+								<select v-model="expiresUnit" class="input-textlike border rounded px-3 py-2 w-24">
+									<option value="hours">hours</option>
+									<option value="days">days</option>
+									<option value="weeks">weeks</option>
+								</select>
+
+								<span class="text-sm opacity-75">({{ prettyExpiry }})</span>
 							</div>
 						</div>
-
-
-						<div class="flex items-center gap-3 mt-2">
-							<label class="whitespace-nowrap font-semibold">Link title:</label>
-							<input type="text" v-model.trim="linkTitle" class="input-textlike border rounded px-3 py-2"
-								placeholder="Optional title for the shared link" style="min-width: 20rem" />
+						<div class="flex flex-row">
+							<!-- Link title (optional) -->
+							<div class="flex items-center gap-2">
+								<label class="whitespace-nowrap font-semibold">Link title:</label>
+								<input type="text" v-model.trim="linkTitle"
+									class="input-textlike border rounded px-3 py-2"
+									placeholder="Optional title for the shared link" style="min-width: 20rem" />
+							</div>
 						</div>
 					</div>
+					<div class="flex flex-row">
+						<!-- Password (optional) -->
+						<div class="flex items-center gap-3">
+							<label class="whitespace-nowrap font-semibold">Use Link Password:</label>
+							<div class="flex items-center gap-2">
+								<Switch id="use-password-switch" v-model="protectWithPassword" :class="[
+									protectWithPassword ? 'bg-secondary' : 'bg-well',
+									'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+								]">
+									<span class="sr-only">Toggle use password</span>
+									<span aria-hidden="true" :class="[
+										protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+										'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+									]" />
+								</Switch>
+							</div>
+							<div class="flex items-center gap-2">
+								<label class="text-default font-semibold">Password</label>
+								<div class="flex flex-col gap-1">
+									<div class="relative flex items-center h-[3rem] space-x-2">
+										<input :disabled="!protectWithPassword"
+											:type="showPassword ? 'text' : 'password'" v-model.trim="password"
+											placeholder="Enter your password"
+											class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed" />
+										<button type="button" @click="showPassword = !showPassword"
+											class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+											<EyeIcon v-if="!showPassword" class="w-5 h-5" />
+											<EyeSlashIcon v-if="showPassword" class="w-5 h-5" />
+										</button>
+									</div>
+
+								</div>
+							</div>
+						</div>
+
+					</div>
+					<div class="w-full flex flex-row text-sm text-red-500 mt-1">
+						<p v-if="protectWithPassword && !password" class="">
+							Password is required when protection is enabled.
+						</p>
+					</div>
+
+
 				</div>
 
 				<!-- ACTIONS -->
