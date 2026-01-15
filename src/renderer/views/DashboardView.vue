@@ -2,11 +2,22 @@
 	<CardContainer class="overflow-y-auto h-full min-h-0">
 		<template #header>
 			<!-- Top buttons -->
-			<div class="flex justify-center gap-4">
-				<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New File Share Link</button>
-				<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files Locally</button>
-				<button @click="goToLinkUploadPanel" class="btn btn-primary px-6 py-3">New Upload Link</button>
+			<div class="relative flex items-center w-full">
+				<div class="absolute left-1/2 -translate-x-1/2 flex gap-4">
+					<button @click="goToShareFiles" class="btn btn-primary px-6 py-3">New File Share Link</button>
+					<button @click="goToUploadFiles" class="btn btn-primary px-6 py-3">Upload Files Locally</button>
+					<button @click="goToLinkUploadPanel" class="btn btn-primary px-6 py-3">New Upload Link</button>
+				</div>
+
+				<div class="ml-auto">
+					<button @click="goToSettings">
+						<Cog6ToothIcon class="w-8 h-8 text-muted hover:text-primary" />
+					</button>
+				</div>
 			</div>
+
+
+
 		</template>
 		<div>
 			<ManageLinks/>
@@ -29,6 +40,7 @@ import { CardContainer } from '@45drives/houston-common-ui'
 import { useHeader } from '../composables/useHeader'
 import { useResilientNav } from '../composables/useResilientNav'
 import ManageLinks from './ManageLinks.vue'
+import { Cog6ToothIcon } from '@heroicons/vue/24/solid'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()

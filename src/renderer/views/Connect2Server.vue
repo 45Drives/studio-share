@@ -99,30 +99,13 @@
 
             <div class="col-span-2 grid grid-cols-2 gap-4">
                 <div class="flex flex-row justify-between w-full items-center text-center gap-2 col-span-2">
-                    <span class="text-danger text-base semibold justify-center">
+                    <span class="text-danger text-base semibold text-left">
                         <b>ALSO:</b> To allow sharing links outside your network, <b>HTTPS port
-                            (443 by default) <u>must</u> </b> be open or forwarded from your router.
+                            (443 by default, unless you change it above) <u>must</u> </b> be open or forwarded from your router.
                     </span>
                     <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
                         class="btn btn-secondary w-fit text-base justify-end">
                         Click here to find out how.
-                    </button>
-                </div>
-                <div class="col-start-2 flex flex-row justify-end">
-                    <button type="button" @click.prevent="tryAutomaticPortMapping"
-                        :title="`Uses UPNP (Universal Plug N' Play) to automatically open necessary ports on router (not all routers support this).`"
-                        class="btn btn-danger w-fit text-base justify-end items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        :disabled="anyBusy">
-                        <svg v-if="tryingUpnp" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                                opacity=".25" />
-                            <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                        </svg>
-                        <span>
-                            {{ tryingUpnp ? 'Connecting + Mapping…' : 'Connect and Port Forward with UPNP' }}
-                        </span>
-                        <br v-if="!tryingUpnp" />
-                        <span v-if="!tryingUpnp">**EXPERIMENTAL - USE AT OWN RISK**</span>
                     </button>
                 </div>
                 <div class="flex flex-row justify-center col-span-2">
@@ -508,91 +491,11 @@ const statusLine = ref<string>('');  // one line only
 const isBusy = ref(false);           // disables UI + button during whole flow
 const isBootstrapping = ref(false);  // shows spinner while remote deps/bootstrap running
 let unlistenProgress: (() => void) | null = null;
-const anyBusy = computed(() => isBusy.value || tryingUpnp.value);
+const anyBusy = computed(() => isBusy.value);
 
 const showPortFwdModal = ref(false);
 function togglePortFwdModal() {
     showPortFwdModal.value = !showPortFwdModal.value;
-}
-
-const tryingUpnp = ref(false);
-
-async function tryAutomaticPortMapping() {
-    // Try to resolve apiBase from connectionMeta or current IP selection.
-    const resolveApiBase = () => {
-        const rawIp = (selectedServer.value?.ip || manualIp.value).trim();
-        if (!rawIp) return '';
-        const apiPortToUse = connectionMeta.value?.port || DEFAULT_API_PORT;
-        return `http://${rawIp}:${apiPortToUse}`;
-    };
-
-    let apiBase = connectionMeta.value?.apiBase || resolveApiBase();
-    if (!apiBase) {
-        pushNotification(new Notification('Error', 'Please select or enter a server first.', 'error', 8000));
-        return;
-    }
-
-    // Prefer an existing token; otherwise try a one-off login if creds were entered.
-    let token = connectionMeta.value?.token;
-
-    if (!token) {
-        const u = username.value.trim();
-        const p = password.value.trim();
-        if (!u || !p) {
-            pushNotification(new Notification('Error', 'Please enter a Username and Password.', 'error', 8000));
-            return;
-        }
-
-        try {
-            const loginRes = await fetch(`${apiBase}/api/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: u, password: p }),
-            });
-            if (!loginRes.ok) {
-                const txt = await loginRes.text().catch(() => '');
-                throw new Error(txt || `Login failed (${loginRes.status})`);
-            }
-            const j = await loginRes.json();
-            token = j?.token || '';
-            if (!token) throw new Error('No token returned from login.');
-            // IMPORTANT: don’t persist this token to app state/session.
-        } catch (err: any) {
-            pushNotification(new Notification('Error', err?.message || 'Login failed.', 'error', 8000));
-            return;
-        }
-    }
-
-    tryingUpnp.value = true;
-    statusLine.value = 'Attempting UPnP/NAT-PMP mapping (experimental)…';
-    try {
-        const r = await fetch(`${apiBase}/api/portmap`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ also80: false }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (data.ok) {
-            const det = data.details;
-            const via = det?.tool ? ` via ${det.tool}` : '';
-            pushNotification(new Notification('Success', `Port 443 mapped${via}.`, 'success', 8000));
-        } else {
-            const reason = data?.details?.reason || data?.error || 'Unknown reason';
-            pushNotification(new Notification('Notice', `Couldn’t create port mapping (${reason}).`, 'warning', 8000));
-        }
-        if (import.meta.env.DEV && data?.raw?.stdout) {
-            console.debug('[portmap] stdout:', data.raw.stdout);
-            console.debug('[portmap] stderr:', data.raw.stderr);
-        }
-    } catch (err: any) {
-        pushNotification(new Notification('Error', err?.message || 'UPnP/NAT-PMP request failed', 'error', 8000));
-    } finally {
-        statusLine.value = '';
-        tryingUpnp.value = false;
-    }
 }
 
 
@@ -830,7 +733,11 @@ async function connectToServer() {
             await fetch(`${apiBase}/api/settings`, {
                 method: 'POST',
                 headers: hdrs,
-                body: JSON.stringify({ internalBase: 'auto', externalBase: 'auto' }),
+                body: JSON.stringify({
+                    internalBase: 'auto',
+                    externalBase: 'auto',
+                    externalHttpsPort: httpsPort.value ?? 443
+                }),
             });
         } catch (e: any) {
             window.appLog?.warn('settings.seed.failed', { message: e?.message });
