@@ -1,5 +1,5 @@
 <template>
-    <div class="w-full min-w-0">
+    <div class="w-full min-w-0 text-center">
         <div class="flex items-center gap-2 min-w-0">
             <button type="button" class="btn btn-primary whitespace-nowrap px-3 py-2 text-base w-full" :class="buttonClass"
                 :disabled="disabled || checking" @click="runCheck">
@@ -110,8 +110,10 @@ const detailsLine = computed(() => {
 });
 
 const badgeText = computed(() => {
-    if (status.value === "enabled") return "Port Forwarding Enabled";
-    if (status.value === "disabled") return "Port Forwarding Disabled";
+    // if (status.value === "enabled") return "Port forwarding working";
+    if (status.value === "enabled") return "External access is working!";
+    // if (status.value === "disabled") return "Port forwarding not working";
+    if (status.value === "disabled") return "External access not working (check your Port Forwarding)";
     if (status.value === "error") return "Test Failed";
     return "Not Tested";
 });
@@ -192,9 +194,10 @@ async function runCheck() {
             message.value = "Forwarding is correctly reaching this Studio.";
         } else {
             status.value = "disabled";
-            const gotToken = json.gotToken ?? "missing";
+            // const gotToken = json.gotToken ?? "missing";
             const httpStatus = typeof json.httpStatus === "number" ? json.httpStatus : "unknown";
-            message.value = `Probe did not match this Studio (HTTP ${httpStatus}, token ${gotToken}).`;
+            // message.value = `Probe did not match this Studio (HTTP ${httpStatus}, token ${gotToken}).`;
+            message.value = `Probe did not reach this Studio (HTTP ${httpStatus}).`;
         }
 
         emit("result", { ok: true, enabled, response: json });
