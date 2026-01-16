@@ -112,23 +112,29 @@
 
                                 <div class="flex flex-row justify-between">
                                     <!-- Link Access -->
-                                    <div class="flex items-center gap-3">
-                                        <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link
-                                            Access:</label>
-                                        <Switch id="link-access-switch" v-model="usePublicBase" :class="[
-                                        usePublicBase ? 'bg-secondary' : 'bg-well',
-                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                        ]">
-                                            <span class="sr-only">Toggle link access</span>
-                                            <span aria-hidden="true" :class="[
-                                            usePublicBase ? 'translate-x-5' : 'translate-x-0',
-                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                        ]" />
-                                        </Switch>
-                                        <span class="text-sm select-none">
-                                            {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-                                        </span>
+                                    <div class="flex flex-col gap-4">
+
+                                        <div class="flex items-center gap-3">
+                                            <label class="whitespace-nowrap font-semibold" for="link-access-switch">Link
+                                                Access:</label>
+                                            <Switch id="link-access-switch" v-model="usePublicBase" :class="[
+                                            usePublicBase ? 'bg-secondary' : 'bg-well',
+                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]">
+                                                <span class="sr-only">Toggle link access</span>
+                                                <span aria-hidden="true" :class="[
+                                                usePublicBase ? 'translate-x-5' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                            ]" />
+                                            </Switch>
+                                            <span class="text-sm select-none">
+                                                {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
+                                            </span>
+                                        </div>
+                                       <CheckPortForwarding :apiFetch="apiFetch" endpoint="/api/forwarding/check"
+                                        :autoCheckOnMount="false" />
                                     </div>
+
 
                                     <!-- Link title (optional) -->
                                     <div class="flex items-center gap-2">
@@ -261,6 +267,7 @@ import { useHeader } from '../composables/useHeader'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { useResilientNav } from '../composables/useResilientNav'
+import CheckPortForwarding from '../components/CheckPortForwarding.vue'
 const { to } = useResilientNav()
 useHeader('Select Files to Share');
 
@@ -270,8 +277,7 @@ const projectSelected = ref(false)
 const showEntireTree = ref(false)
 const projectBase = ref<string>('')
 const {
-    detecting, detectError, projectRoots, projectDirs,
-    browseMode, browsePath, canGoUp,  backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
+    detecting, detectError, projectRoots, browseMode, loadProjectChoices,
 } = useProjectChoices(showEntireTree)
 const commenters = ref<Commenter[]>([])
 const noCommentAccess = ref(false)
@@ -280,6 +286,8 @@ const commentAccessSatisfied = computed(() => noCommentAccess.value || commentCo
 const linkTitle = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+const forwardingOk = ref<boolean | null>(null)
 
 function resetAll() {
     files.value = []
@@ -345,7 +353,6 @@ function toAbsUnder(base: string, p: string) {
     }
     return '/' + bName + '/' + clean;                                    // "/tank/foo"
 }
-
 
 // When FileExplorer emits @add, normalize relative paths to live under the chosen project (if restricted)
 function onExplorerAdd(paths: string[]) {
