@@ -1,26 +1,35 @@
 <template>
-    <div class="pf-check">
-        <!-- Row 1 -->
-        <button type="button" class="btn btn-primary pf-check__btn" :class="buttonClass"
-            :disabled="disabled || checking" @click="runCheck">
-            {{ checking ? checkingLabel : buttonLabel }}
-        </button>
+    <div class="w-full min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+            <button type="button" class="btn btn-primary whitespace-nowrap px-3 py-2 text-base w-full" :class="buttonClass"
+                :disabled="disabled || checking" @click="runCheck">
+                {{ checking ? checkingLabel : buttonLabel }}
+            </button>
 
-        <span class="badge pf-check__badge" :class="badgeClass">
-            {{ badgeText }}
-        </span>
+          
 
-        <p v-if="message" class="pf-check__message">
-            {{ message }}
+            <button type="button" class="btn btn-danger w-full text-base"
+                :disabled="checking" @click="reset" title="Reset status">
+                Reset
+            </button>
+        </div>
+        <div>
+            <span
+                class="inline-flex items-center justify-center whitespace-nowrap select-none rounded-full border text-[0.72rem] font-bold h-5 px-2 w-full"
+                :class="badgeTwClass">
+                {{ badgeText }}
+            </span>
+        </div>
+
+        <p class="mt-2 mb-0 min-w-0 opacity-90 leading-5 break-words text-sm">
+            <span v-if="message">{{ message }}</span>
+            <span v-else class="opacity-70">Run a check to verify port forwarding.</span>
         </p>
-        <p v-else class="pf-check__message pf-check__message--empty">
-            <span class="opacity-70">Run a check to verify port forwarding.</span>
-        </p>
 
-        <!-- Row 2 -->
-        <p v-if="showDetails && detailsLine" class="pf-check__details">
+        <p v-if="showDetails && detailsLine" class="mt-1 mb-0 text-xs opacity-70 break-words">
             {{ detailsLine }}
         </p>
+      
     </div>
 </template>
 
@@ -107,11 +116,11 @@ const badgeText = computed(() => {
     return "Not Tested";
 });
 
-const badgeClass = computed(() => {
-    if (status.value === "enabled") return "badge-success";
-    if (status.value === "disabled") return "badge-warning";
-    if (status.value === "error") return "badge-error";
-    return "badge-neutral";
+const badgeTwClass = computed(() => {
+    if (status.value === "enabled") return "bg-green-500/15 border-green-500/30 text-green-100";
+    if (status.value === "disabled") return "bg-amber-500/15 border-amber-500/30 text-amber-100";
+    if (status.value === "error") return "bg-red-500/15 border-red-500/30 text-red-100";
+    return "bg-white/10 border-white/15 text-white/85";
 });
 
 function reset() {
@@ -204,105 +213,3 @@ onMounted(() => {
 
 defineExpose({ runCheck, reset });
 </script>
-
-<style scoped>
-/* Layout: 3 columns, details spans cols 2-3 */
-.pf-check {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    column-gap: 0.75rem;
-    row-gap: 0.25rem;
-    align-items: center;
-    width: 100%;
-    min-width: 0;
-}
-
-.pf-check__btn {
-    white-space: nowrap;
-}
-
-.pf-check__message {
-    min-width: 0;
-    margin: 0;
-    font-size: 0.95rem;
-    line-height: 1.25rem;
-    opacity: 0.9;
-    word-break: break-word;
-}
-
-.pf-check__message--empty {
-    opacity: 0.65;
-}
-
-.pf-check__details {
-    grid-column: 2 / 4;
-    margin: 0;
-    font-size: 0.8rem;
-    line-height: 1.1rem;
-    opacity: 0.7;
-    word-break: break-word;
-}
-
-/* Badge system (since you said these classes don't exist) */
-.badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    user-select: none;
-
-    height: 1.5rem;
-    padding: 0 0.6rem;
-    border-radius: 9999px;
-    border: 1px solid transparent;
-
-    font-size: 0.75rem;
-    line-height: 1rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-}
-
-.badge-neutral {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.86);
-}
-
-.badge-success {
-    background: rgba(34, 197, 94, 0.14);
-    border-color: rgba(34, 197, 94, 0.28);
-    color: rgba(187, 247, 208, 0.95);
-}
-
-.badge-warning {
-    background: rgba(245, 158, 11, 0.16);
-    border-color: rgba(245, 158, 11, 0.30);
-    color: rgba(254, 243, 199, 0.95);
-}
-
-.badge-error {
-    background: rgba(239, 68, 68, 0.16);
-    border-color: rgba(239, 68, 68, 0.30);
-    color: rgba(254, 202, 202, 0.95);
-}
-
-/* Responsive: stack nicely on narrow widths */
-@media (max-width: 640px) {
-    .pf-check {
-        grid-template-columns: auto 1fr;
-        row-gap: 0.4rem;
-    }
-
-    .pf-check__badge {
-        justify-self: start;
-    }
-
-    .pf-check__message {
-        grid-column: 1 / 3;
-    }
-
-    .pf-check__details {
-        grid-column: 1 / 3;
-    }
-}
-</style>
