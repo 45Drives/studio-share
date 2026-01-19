@@ -41,7 +41,6 @@
             </div>
         </div>
 
-        <!-- Errors pinned left/right -->
         <div v-if="$slots.errorLeft || $slots.errorRight" class="clc__errors">
             <div class="clc__errorLeft">
                 <slot name="errorLeft" />
@@ -64,11 +63,9 @@
     margin-top: 0.5rem;
 }
 
-/* 3-lane grid, stretch so lanes match height */
 .clc__grid {
     display: grid;
-    grid-template-columns:
-        minmax(360px, 1.05fr) minmax(360px, 1.1fr) minmax(420px, 1.25fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
     align-items: stretch;
     width: 100%;
@@ -82,9 +79,9 @@
     background: rgba(255, 255, 255, 0.02);
     border-radius: 0.6rem;
     padding: 0.75rem;
+    overflow: hidden;
 }
 
-/* Sections stack with automatic dividers */
 .clc__sections {
     display: flex;
     flex-direction: column;
@@ -101,16 +98,14 @@
     padding-top: 0;
 }
 
-/* Divider between sections */
 .clc__section+.clc__section {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     margin-top: 0.65rem;
 }
 
-/* Errors pinned left/right */
 .clc__errors {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1rem;
     margin-top: 0.6rem;
     align-items: start;
@@ -133,10 +128,10 @@
     min-width: 0;
 }
 
-/* Responsive: 2 cols */
-@media (max-width: 1280px) {
+/* Responsive: 2 cols (collapse earlier than before to avoid overflow) */
+@media (max-width: 1100px) {
     .clc__grid {
-        grid-template-columns: minmax(340px, 1fr) minmax(420px, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .clc__grid> :nth-child(3) {
@@ -145,13 +140,13 @@
 }
 
 /* Responsive: 1 col */
-@media (max-width: 900px) {
+@media (max-width: 750px) {
     .clc__grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .clc__errors {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .clc__errorRight {

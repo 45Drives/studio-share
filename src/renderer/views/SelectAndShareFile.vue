@@ -1,267 +1,271 @@
 <template>
-    <div class="h-full flex items-start justify-center pt-6 overflow-y-auto">
-        <div class="grid grid-cols-1 gap-10 text-2xl w-9/12 mx-auto">
-            <CardContainer class="bg-accent rounded-md shadow-xl">
-                <template #header>
-                    <!-- ===== Step 1: Project selection ===== -->
-                    <div v-if="!projectSelected" class="flex flex-col gap-3 text-left">
-                        <h2 class="text-xl font-semibold">Select a project</h2>
+    <div class="h-full min-h-0 flex items-start justify-center pt-2 overflow-y-auto">
+        <!-- was: w-9/12 mx-auto -->
+        <div class="w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 gap-4 text-2xl min-w-0">
+                <CardContainer class="bg-accent rounded-md shadow-xl min-w-0">
+                    <template #header>
+                        <!-- ===== Step 1: Project selection ===== -->
+                        <div v-if="!projectSelected" class="flex flex-col gap-3 text-left min-w-0">
+                            <h2 class="text-xl font-semibold">Select a project</h2>
 
-                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                            <input type="checkbox" v-model="showEntireTree" @change="loadProjectChoices" />
-                            Show entire directory tree from root
-                        </label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
+                                <input type="checkbox" v-model="showEntireTree" @change="loadProjectChoices" />
+                                <span class="min-w-0">Show entire directory tree from root</span>
+                            </label>
 
-                        <!-- Mode: ROOTS -->
-                        <template v-if="browseMode === 'roots'">
-                            <div class="text-sm opacity-80">
-                                <span class="font-semibold">ZFS Pools:</span>
-                                <span v-if="detecting" class="ml-1">Detecting…</span>
-                                <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
-                            </div>
+                            <!-- Mode: ROOTS -->
+                            <template v-if="browseMode === 'roots'">
+                                <div class="text-sm opacity-80 min-w-0">
+                                    <span class="font-semibold">ZFS Pools:</span>
+                                    <span v-if="detecting" class="ml-1">Detecting…</span>
+                                    <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
+                                </div>
 
-                            <div class="max-h-64 overflow-auto border-default bg-default rounded-md">
-                                <div v-for="r in projectRoots" :key="r.mountpoint"
-                                    class="flex items-center justify-between border-b border-default px-3 py-2 text-base">
-                                    <div class="truncate">
-                                        <code :title="`${r.name} → ${r.mountpoint}`">{{ r.mountpoint }}</code>
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <button class="btn btn-primary"
-                                            @click="chooseProject(r.mountpoint)">Select</button>
+                                <div class="max-h-64 overflow-auto border-default bg-default rounded-md min-w-0">
+                                    <div v-for="r in projectRoots" :key="r.mountpoint"
+                                        class="flex items-center justify-between gap-2 border-b border-default px-3 py-2 text-base min-w-0">
+                                        <div class="min-w-0 flex-1">
+                                            <code class="block truncate" :title="`${r.name} → ${r.mountpoint}`">{{
+                                                r.mountpoint }}</code>
+                                        </div>
+                                        <div class="flex gap-2 flex-shrink-0">
+                                            <button class="btn btn-primary" @click="chooseProject(r.mountpoint)">Select</button>
+                                        </div>
                                     </div>
                                 </div>
+                            </template>
+
+                            <div class="text-sm text-red-400" v-if="detectError">
+                                {{ detectError }}
                             </div>
-                        </template>
-
-                        <div class="text-sm text-red-400" v-if="detectError">
-                            {{ detectError }}
-                        </div>
-                    </div>
-
-                    <!-- ===== Step 2: select file content (only after project chosen) ===== -->
-                    <div v-else class="flex flex-col gap-2 text-left">
-                        <div class="text-sm text-muted -mb-1">
-                            <span class="font-semibold">Project:</span>
-                            <code class="ml-1">{{ projectBase }}</code>
-                            <button class="btn btn-secondary ml-3" @click="resetProject">Change Project
-                                Directory</button>
                         </div>
 
-                        <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
-                            :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
-
-                        <!-- Selected files panel -->
-                        <div v-if="files.length" class="border rounded bg-accent">
-                            <div class="flex items-center gap-2 p-2">
-                                <button class="btn btn-secondary" @click="showSelected = !showSelected">
-                                    {{ showSelected ? 'Hide' : 'Show' }} list
+                        <!-- ===== Step 2: select file content (only after project chosen) ===== -->
+                        <div v-else class="flex flex-col gap-2 text-left min-w-0">
+                            <div class="text-sm text-muted -mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                                <span class="font-semibold">Project:</span>
+                                <code class="min-w-0 truncate">{{ projectBase }}</code>
+                                <button class="btn btn-secondary sm:ml-3" @click="resetProject">
+                                    Change Project Directory
                                 </button>
-                                <button class="btn btn-danger" @click="clearAll">Clear all</button>
                             </div>
-                            <div v-show="showSelected" class="max-h-40 overflow-auto">
-                                <div v-for="(f, i) in files" :key="f"
-                                    class="grid items-center [grid-template-columns:1fr_auto] border-t border-default text-sm">
-                                    <div class="relative px-3 py-2 rounded-md bg-default">
-                                        <!-- pulsing overlay -->
-                                        <span aria-hidden="true"
-                                            class="pointer-events-none absolute inset-0 rounded-md bg-green-500/50 animate-pulse z-0"></span>
 
-                                        <span class="truncate block text-default relative z-10">{{ f }}</span>
+                            <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd"
+                                :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
+
+                            <!-- Selected files panel -->
+                            <div v-if="files.length" class="border rounded bg-accent min-w-0">
+                                <div class="flex flex-wrap items-center gap-2 p-2 min-w-0">
+                                    <button class="btn btn-secondary" @click="showSelected = !showSelected">
+                                        {{ showSelected ? 'Hide' : 'Show' }} list
+                                    </button>
+                                    <button class="btn btn-danger" @click="clearAll">Clear all</button>
+                                </div>
+
+                                <div v-show="showSelected" class="max-h-40 overflow-auto min-w-0">
+                                    <div v-for="(f, i) in files" :key="f"
+                                        class="grid items-center [grid-template-columns:minmax(0,1fr)_auto] border-t border-default text-sm min-w-0">
+                                        <div class="relative px-3 py-2 rounded-md bg-default min-w-0">
+                                            <span aria-hidden="true"
+                                                class="pointer-events-none absolute inset-0 rounded-md bg-green-500/50 animate-pulse z-0"></span>
+                                            <span class="truncate block text-default relative z-10 min-w-0">{{ f }}</span>
+                                        </div>
+
+                                        <button class="btn btn-danger m-2 px-2 py-1" @click="removeFile(i)"
+                                            title="Remove">✕</button>
                                     </div>
-
-                                    <button class="btn btn-danger m-2 px-2 py-1" @click="removeFile(i)"
-                                        title="Remove">✕</button>
                                 </div>
                             </div>
 
-                        </div>
-                        <div class="border-t border-default mt-4 pt-4">
-                            <!-- ===== Common link options ===== -->
-                            <CommonLinkControls>
-                                <template #expiry>
-                                    <div class="flex flex-col gap-3 min-w-0">
-                                        <div class="flex items-center gap-3">
-                                            <label class="whitespace-nowrap font-semibold">Expires in:</label>
+                            <div class="border-t border-default mt-4 pt-4 min-w-0">
+                                <!-- ===== Common link options ===== -->
+                                <CommonLinkControls>
+                                    <template #expiry>
+                                        <div class="flex flex-col gap-3 min-w-0">
+                                            <!-- Row 1: label + input + select (always one row; inputs stay together) -->
+                                            <div class="flex items-center gap-3 min-w-0">
+                                                <label class="font-semibold whitespace-nowrap flex-shrink-0">Expires
+                                                    in:</label>
 
-                                            <div class="flex flex-row gap-1 items-center">
-                                                <input type="number" min="1" step="1" v-model.number="expiresValue"
-                                                    class="input-textlike border rounded px-3 py-2 w-full" />
+                                                <div class="flex items-center gap-2 min-w-0 flex-1">
+                                                    <input type="number" min="1" step="1" v-model.number="expiresValue"
+                                                        class="input-textlike border rounded px-3 py-2 w-24" />
 
-                                                <select v-model="expiresUnit"
-                                                    class="input-textlike border rounded px-3 py-2 w-full">
-                                                    <option value="hours">hours</option>
-                                                    <option value="days">days</option>
-                                                    <option value="weeks">weeks</option>
-                                                </select>
-                                                <!-- <div class="text-sm opacity-75">
-                                                ({{ prettyExpiry }})
-                                            </div> -->
+                                                    <select v-model="expiresUnit"
+                                                        class="input-textlike border rounded px-3 py-2 w-32">
+                                                        <option value="hours">hours</option>
+                                                        <option value="days">days</option>
+                                                        <option value="weeks">weeks</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- Row 2: preset buttons -->
+                                            <div class="flex flex-nowrap gap-1 text-xs min-w-0">
+                                                <button type="button" class="btn btn-secondary w-20"
+                                                    @click="setPreset(1, 'hours')">1 hour</button>
+                                                <button type="button" class="btn btn-secondary w-20"
+                                                    @click="setPreset(1, 'days')">1 day</button>
+                                                <button type="button" class="btn btn-secondary w-20"
+                                                    @click="setPreset(1, 'weeks')">1 week</button>
+                                                <button type="button" class="btn btn-secondary w-20"
+                                                    @click="setNever()">Never</button>
                                             </div>
                                         </div>
-                                        <div class="flex flex-row flex-nowrap mx-auto gap-3 text-sm text-nowrap">
-                                            <!-- <label class="text-lg">Presets:</label> -->
-                                            <button type="button" class="btn btn-secondary w-20"
-                                                @click="setPreset(1, 'hours')">1 hour</button>
-                                            <button type="button" class="btn btn-secondary w-20"
-                                                @click="setPreset(1, 'days')">1 day</button>
-                                            <button type="button" class="btn btn-secondary w-20"
-                                                @click="setPreset(1, 'weeks')">1 week</button>
-                                            <button type="button" class="btn btn-secondary w-20"
-                                                @click="setNever()">Never</button>
+                                    </template>
+
+                                    <template #title>
+                                        <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                            <label class="font-semibold sm:whitespace-nowrap">Link Title:</label>
+                                            <input type="text" v-model.trim="linkTitle"
+                                                class="input-textlike border rounded px-3 py-2 w-full min-w-[12rem]"
+                                                placeholder="Optional title for the shared link" />
                                         </div>
-                                    </div>
-                                </template>
+                                    </template>
 
-                                <template #title>
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <label class="whitespace-nowrap font-semibold">Link Title:</label>
-                                        <input type="text" v-model.trim="linkTitle"
-                                            class="input-textlike border rounded px-3 py-2 w-full"
-                                            placeholder="Optional title for the shared link" />
-                                    </div>
-                                </template>
+                                    <template #access>
+                                        <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
+                                                Link Access:
+                                            </label>
 
-
-                                <template #access>
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <label class="whitespace-nowrap font-semibold" for="link-access-switch">
-                                            Link Access:
-                                        </label>
-
-                                        <Switch id="link-access-switch" v-model="usePublicBase" :class="[
-                                            usePublicBase ? 'bg-secondary' : 'bg-well',
-                                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                        ]">
-                                            <span class="sr-only">Toggle link access</span>
-                                            <span aria-hidden="true" :class="[
-                                                usePublicBase ? 'translate-x-5' : 'translate-x-0',
-                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                            ]" />
-                                        </Switch>
-
-                                        <span class="text-sm select-none truncate">
-                                            {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-                                        </span>
-                                    </div>
-                                </template>
-
-                                <template #accessExtra>
-                                    <CheckPortForwarding v-if="usePublicBase" :apiFetch="apiFetch"
-                                        endpoint="/api/forwarding/check" :autoCheckOnMount="false" :showDetails="true" />
-                                </template>
-
-                                <template #password>
-                                    <div class="flex flex-col gap-2 min-w-0">
-                                        <div class="flex items-center gap-3">
-                                            <label class="whitespace-nowrap font-semibold">Password Protected Link:</label>
-
-                                            <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
-                                                protectWithPassword ? 'bg-secondary' : 'bg-well',
+                                            <Switch id="link-access-switch" v-model="usePublicBase" :class="[
+                                                usePublicBase ? 'bg-secondary' : 'bg-well',
                                                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                             ]">
-                                                <span class="sr-only">Toggle use password</span>
+                                                <span class="sr-only">Toggle link access</span>
                                                 <span aria-hidden="true" :class="[
-                                                    protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+                                                    usePublicBase ? 'translate-x-5' : 'translate-x-0',
                                                     'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
                                                 ]" />
                                             </Switch>
-                                        </div>
 
-                                        <div class="flex items-center gap-3 min-w-0">
-                                            <label class="text-default font-semibold whitespace-nowrap">Password</label>
-
-                                            <div class="relative flex items-center min-w-0 w-full">
-                                                <input :disabled="!protectWithPassword"
-                                                    :type="showPassword ? 'text' : 'password'" v-model.trim="password"
-                                                    placeholder="Enter your password"
-                                                    class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed w-full pr-10" />
-                                                <button type="button" @click="showPassword = !showPassword"
-                                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                                                    <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                                                    <EyeSlashIcon v-else class="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <template #commenters>
-                                    <div class="flex flex-col gap-2 min-w-0">
-                                        <div class="flex items-center gap-3">
-                                            <label class="whitespace-nowrap font-semibold">Allow Users to
-                                                Comment</label>
-                                            <Switch id="allow-comments-switch" v-model="noCommentAccess" :class="[
-                                                !noCommentAccess ? 'bg-secondary' : 'bg-well',
-                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
-                                                <span class="sr-only">Toggle comments</span>
-                                                <span aria-hidden="true" :class="[
-                                                    !noCommentAccess ? 'translate-x-5' : 'translate-x-0',
-                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                ]" />
-                                            </Switch>
-                                          
-                                        </div>
-
-                                        <button type="button" class="btn btn-primary" :class="noCommentAccess ? 'disabled' : ''" @click="openUserModal()">
-                                            {{ !noCommentAccess ? 'Manage Commenting Users' : 'No Comments' }}
-                                            <span v-if="commentCount"
-                                                class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
-                                                {{ commentCount }}
+                                            <span class="text-sm select-none truncate min-w-0 flex-1">
+                                                {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
                                             </span>
-                                        </button>
-                                    </div>
-                                </template>
+                                        </div>
+                                    </template>
 
-                                <template #errorLeft>
-                                    <p v-if="!commentAccessSatisfied" class="text-sm text-red-500">
-                                        At least one commenting user is required when comments are allowed.
-                                    </p>
-                                </template>
+                                    <template #accessExtra>
+                                        <CheckPortForwarding v-if="usePublicBase" :apiFetch="apiFetch"
+                                            endpoint="/api/forwarding/check" :autoCheckOnMount="false" :showDetails="true" />
+                                    </template>
 
-                                <template #errorRight>
-                                    <p v-if="protectWithPassword && !password" class="text-sm text-red-500">
-                                        Password is required when protection is enabled.
-                                    </p>
-                                </template>
+                                    <template #password>
+                                        <div class="flex flex-col gap-2 min-w-0">
+                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                                <label class="font-semibold sm:whitespace-nowrap">Password Protected Link:</label>
 
+                                                <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
+                                                    protectWithPassword ? 'bg-secondary' : 'bg-well',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
+                                                    <span class="sr-only">Toggle use password</span>
+                                                    <span aria-hidden="true" :class="[
+                                                        protectWithPassword ? 'translate-x-5' : 'translate-x-0',
+                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                    ]" />
+                                                </Switch>
+                                            </div>
 
-                            </CommonLinkControls>
+                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                                <label class="text-default font-semibold sm:whitespace-nowrap">Password</label>
+
+                                                <div class="relative flex items-center min-w-0 w-full">
+                                                    <input :disabled="!protectWithPassword"
+                                                        :type="showPassword ? 'text' : 'password'" v-model.trim="password"
+                                                        placeholder="Enter your password"
+                                                        class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed w-full pr-10 min-w-0" />
+                                                    <button type="button" @click="showPassword = !showPassword"
+                                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                        <EyeSlashIcon v-else class="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template #commenters>
+                                        <div class="flex flex-col gap-2 min-w-0">
+                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                                <label class="font-semibold sm:whitespace-nowrap">Allow Users to Comment</label>
+
+                                                <Switch id="allow-comments-switch" v-model="noCommentAccess" :class="[
+                                                    !noCommentAccess ? 'bg-secondary' : 'bg-well',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
+                                                    <span class="sr-only">Toggle comments</span>
+                                                    <span aria-hidden="true" :class="[
+                                                        !noCommentAccess ? 'translate-x-5' : 'translate-x-0',
+                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                    ]" />
+                                                </Switch>
+                                            </div>
+
+                                            <button type="button" class="btn btn-primary" :class="noCommentAccess ? 'disabled' : ''"
+                                                @click="openUserModal()">
+                                                {{ !noCommentAccess ? 'Manage Commenting Users' : 'No Comments' }}
+                                                <span v-if="commentCount"
+                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                                    {{ commentCount }}
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </template>
+
+                                    <template #errorLeft>
+                                        <p v-if="!commentAccessSatisfied" class="text-sm text-red-500">
+                                            At least one commenting user is required when comments are allowed.
+                                        </p>
+                                    </template>
+
+                                    <template #errorRight>
+                                        <p v-if="protectWithPassword && !password" class="text-sm text-red-500">
+                                            Password is required when protection is enabled.
+                                        </p>
+                                    </template>
+                                </CommonLinkControls>
+                            </div>
+
+                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
+                                id: c.id,
+                                username: c.username || '',
+                                name: c.name,
+                                user_email: c.user_email,
+                                display_color: c.display_color
+                            }))" @apply="onApplyUsers" />
                         </div>
-                        <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
-                            id: c.id,
-                            username: c.username || '',
-                            name: c.name,
-                            user_email: c.user_email,
-                            display_color: c.display_color
-                        }))" @apply="onApplyUsers" />
-                    </div>
-                </template>
-                <div v-if="projectSelected" class="flex flex-col">
-	                    <div class="button-group-row w-full">
-							<button class="btn btn-secondary" :disabled="loading" @click="resetAll">
-								Reset
-							</button>
-							<button class="btn btn-secondary w-full" :disabled="!canGenerate" @click="generateLink"
-								title="Create a magic link with the selected options">
-								Generate magic link
-							</button>
-						</div>
-                
-                    <div v-if="viewUrl" class="p-3 border rounded space-x-2 flex flex-col items-center mt-1">
-                        <code>{{ viewUrl }}</code>
-                        <div class="button-group-row">
-                            <button class="btn btn-secondary" @click="copyLink">Copy</button>
-                            <button class="btn btn-primary" @click="openInBrowser">Open</button>
+                    </template>
+
+                    <div v-if="projectSelected" class="flex flex-col min-w-0">
+                        <!-- was: button-group-row + w-full on generate -->
+                        <div class="flex flex-wrap gap-2 w-full min-w-0">
+                            <button class="btn btn-secondary" :disabled="loading" @click="resetAll">
+                                Reset
+                            </button>
+                            <button class="btn btn-secondary flex-1 min-w-[14rem]" :disabled="!canGenerate"
+                                @click="generateLink" title="Create a magic link with the selected options">
+                                Generate magic link
+                            </button>
+                        </div>
+
+                        <div v-if="viewUrl" class="p-3 border rounded flex flex-col items-center mt-1 min-w-0">
+                            <code class="max-w-full break-all">{{ viewUrl }}</code>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                <button class="btn btn-secondary" @click="copyLink">Copy</button>
+                                <button class="btn btn-primary" @click="openInBrowser">Open</button>
+                            </div>
                         </div>
                     </div>
+                </CardContainer>
+
+                <div class="button-group-row col-span-1 min-w-0">
+                    <button @click="goBack" class="btn btn-danger justify-start">
+                        Return to Dashboard
+                    </button>
                 </div>
-            </CardContainer>
-            <div class="button-group-row col-span-1">
-                <button @click="goBack" class="btn btn-danger justify-start">
-                    Return to Dashboard
-                </button>
             </div>
         </div>
     </div>
