@@ -248,6 +248,12 @@ watch(projectRoots, (roots) => {
   }
 })
 
+watch(cwd, (v) => {
+  if (browseMode.value === 'roots' && v !== '/') {
+    browseMode.value = 'dir'
+  }
+})
+
 /* Helpers */
 function ensureSlash(p: string) {
   if (!p) return '/'
@@ -281,12 +287,23 @@ async function getFilesForFolder(folder: string): Promise<string[]> {
 
 /* PathInput choose */
 function onChoose(pick: { path: string; isDir: boolean }) {
-  const next = pick.isDir ? ensureSlash(pick.path)
+  if (browseMode.value === 'roots') {
+    browseMode.value = 'dir'
+  }
+
+  const next = pick.isDir
+    ? ensureSlash(pick.path)
     : ensureSlash(pick.path.replace(/\/[^/]+$/, '') || '/')
-  const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, next)) : next
+
+  const clamped = clampBase.value
+    ? ensureSlash(toAbsUnder(clampBase.value, next))
+    : next
+
   cwd.value = clamped
   emit('changed-cwd', cwd.value)
 }
+
+
 
 /* Navigation from children */
 function navigateTo(rel: string) {
