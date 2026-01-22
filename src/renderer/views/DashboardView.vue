@@ -33,6 +33,8 @@
 			</div>
 		</template>
 	</CardContainer>
+	<SettingsModal v-if="showSettings" @close="showSettings = false" />
+
 </template>
 
 <script setup lang="ts">
@@ -40,7 +42,9 @@ import { CardContainer } from '@45drives/houston-common-ui'
 import { useHeader } from '../composables/useHeader'
 import { useResilientNav } from '../composables/useResilientNav'
 import ManageLinks from './ManageLinks.vue'
+import SettingsModal from '../components/modals/SettingsModal.vue'
 import { Cog6ToothIcon } from '@heroicons/vue/24/solid'
+import { ref } from 'vue'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()
@@ -49,6 +53,12 @@ const leaveServer = () => {
 	// router.push({ name: 'server-selection'});
 	to('server-selection');
 }
+
+const showSettings = ref(false);
+const goToSettings = () => {
+	showSettings.value = true;
+}
+
 
 const goToShareFiles = () => {
 	// router.push({ name: 'select-file'})

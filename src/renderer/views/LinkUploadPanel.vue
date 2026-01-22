@@ -1,8 +1,8 @@
 <template>
-	<div class="h-full min-h-0 flex items-start justify-center pt-6 overflow-y-auto">
-		<div class="w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-			<div class="grid grid-cols-1 gap-5 text-xl min-w-0">
-				<CardContainer class="bg-accent rounded-md shadow-xl min-w-0">
+	<div class="h-full min-h-0 flex items-start justify-center pt-2 overflow-y-auto">
+		<div class="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+			<div class="grid w-full grid-cols-1 gap-4 text-2xl min-w-0">
+				<CardContainer class="w-full bg-accent rounded-md shadow-xl min-w-0">
 					<template #header>
 						<div class="flex flex-col gap-2 text-left min-w-0">
 							<h2 class="text-xl font-semibold">Share a Folder</h2>

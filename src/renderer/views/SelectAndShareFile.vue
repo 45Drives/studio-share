@@ -1,12 +1,11 @@
 <template>
     <div class="h-full min-h-0 flex items-start justify-center pt-2 overflow-y-auto">
-        <!-- was: w-9/12 mx-auto -->
-        <div class="w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-            <div class="grid grid-cols-1 gap-4 text-2xl min-w-0">
-                <CardContainer class="bg-accent rounded-md shadow-xl min-w-0">
+        <div class="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+            <div class="grid w-full grid-cols-1 gap-4 text-2xl min-w-0">
+                <CardContainer class="w-full bg-accent rounded-md shadow-xl min-w-0">
                     <template #header>
                         <!-- ===== Step 1: Project selection ===== -->
-                        <div v-if="!projectSelected" class="flex flex-col gap-3 text-left min-w-0">
+                        <div v-if="!projectSelected" class="flex w-full flex-col gap-3 text-left min-w-0">
                             <h2 class="text-xl font-semibold">Select a project</h2>
 
                             <label class="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
@@ -304,14 +303,12 @@ const linkTitle = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const forwardingOk = ref<boolean | null>(null)
-
 function resetAll() {
     files.value = []
     showSelected.value = true
     expiresValue.value = 7
     expiresUnit.value = 'days'
-    usePublicBase.value = true
+    usePublicBase.value = defaultUsePublicBase.value
     linkTitle.value = ''
     commenters.value = []
     noCommentAccess.value = false
@@ -357,6 +354,20 @@ function clearAll() {
 }
 
 const usePublicBase = ref(true);
+const defaultUsePublicBase = ref(true);
+
+async function loadLinkDefaults() {
+    try {
+        const s = await apiFetch("/api/settings", { method: "GET" });
+        const isInternal = (s?.defaultLinkAccess === "internal");
+        defaultUsePublicBase.value = !isInternal;
+        usePublicBase.value = defaultUsePublicBase.value;
+    } catch {
+        // Keep current default if settings can't be loaded
+        defaultUsePublicBase.value = true;
+        usePublicBase.value = true;
+    }
+}
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
@@ -594,9 +605,9 @@ async function generateLink() {
 }
 
 
-onMounted(() => {
-    // Initial: land on project selection
-    loadProjectChoices()
+onMounted(async () => {
+    await loadLinkDefaults();
+    loadProjectChoices();
 })
 
 
