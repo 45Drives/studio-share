@@ -90,14 +90,14 @@
       </template>
 
       <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-600/80 flex items-center justify-center p-4">
-        <div class="bg-well p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
+        <div class="bg-accent p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
           <h3 class="text-lg font-semibold mb-4 text-default">Create New Folder</h3>
           <p class="text-sm mb-4 text-muted">
             Current Path: <code>{{ cwd }}</code>
           </p>
 
           <form @submit.prevent="confirmNewFolder">
-            <input type="text" v-model="newFolderName" placeholder="Enter folder name" required
+            <input ref="folderNameInput" type="text" v-model="newFolderName" placeholder="Enter folder name" required autofocus
               class="w-full px-3 py-2 input-textlike text-default" />
 
             <!-- TODO: Implement new dataset option for new folder -->
@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import { faArrowLeft, faList, faGrip, faFolderPlus } from '@fortawesome/free-solid-svg-icons'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
@@ -230,6 +230,7 @@ onMounted(async () => {
   emit('changed-cwd', cwd.value)
 })
 
+
 watch(() => props.base, (v) => {
   clampBase.value = v ?? ''
   if (v) {
@@ -317,19 +318,29 @@ async function togglePath({ path, isDir }: { path: string; isDir: boolean }) {
   if (!isDir) return
   await getFilesForFolder(path)
 }
-
 const showNewFolderModal = ref(false)
 const newFolderName = ref('')
 const newFolderError = ref<string | null>(null)
+const folderNameInput = ref<HTMLInputElement | null>(null)
 
-/* Button click to open modal */
+// Watch for when the modal is opened and focus on the input field
+watch(showNewFolderModal, (isOpen) => {
+  if (isOpen && folderNameInput.value) {
+    // Wait for the next DOM update and focus on the input element
+    nextTick(() => {
+      folderNameInput.value?.focus()
+    })
+  }
+})
+
+// Function to open the modal and reset the input
 function createNewFolder() {
   newFolderName.value = '' // Clear previous name
   newFolderError.value = null // Clear previous errors
-  showNewFolderModal.value = true // Show the custom modal
+  showNewFolderModal.value = true // Show the modal
 }
 
-/* Modal submit handler */
+// Function to handle the form submission
 async function confirmNewFolder() {
   const name = newFolderName.value.trim()
   if (!name) return
@@ -339,7 +350,7 @@ async function confirmNewFolder() {
   const newPath = current + '/' + name
 
   try {
-    // 1. Call API
+    // API call to create the folder
     const response = await props.apiFetch('/api/mkdir', {
       method: 'POST',
       body: JSON.stringify({ path: newPath })
@@ -350,20 +361,20 @@ async function confirmNewFolder() {
       return
     }
 
-    // 2. Clear cache for the parent folder so the new folder appears
+    // Clear the cache and force re-render
     expandCache.delete(ensureSlash(current))
     if (current === '') expandCache.delete('/') // edge case for root
 
-    // 3. Force re-render of file list
+    // Force re-render of the file list
     refreshKey.value++
 
-    // 4. Close modal and auto-select the newly created folder
+    // Close modal and auto-select the newly created folder
     showNewFolderModal.value = false
     onSelectFolder(newPath)
     pushNotification(
       new Notification(
         'New Folder Created',
-        `Folder '${name}'' has been created successfully.`,
+        `Folder '${name}' has been created successfully.`,
         'success',
         8000,
       ),

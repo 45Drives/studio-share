@@ -11,10 +11,10 @@
         </h3>
 
         <div class="flex items-center gap-2">
-          <button v-if="!editMode" class="btn btn-secondary" @click="beginEdit" :disabled="!link">Edit</button>
+          <button v-if="!editMode" class="btn btn-primary" @click="beginEdit" :disabled="!link">Edit</button>
 
-          <button v-else class="btn btn-primary" @click="saveAll" :disabled="saving">
-            Save
+          <button v-else class="btn btn-success" @click="saveAll" :disabled="saving">
+            Save Changes
           </button>
           <button v-if="editMode" class="btn btn-secondary" @click="cancelEdit" :disabled="saving">
             Cancel
@@ -34,9 +34,15 @@
           </div>
 
           <div class="break-all space-x-2">
-            <span class="text-default font-bold"> Link:</span>
-            <a :href="link?.shortUrl" target="_blank" class="hover:underline">{{ link?.shortUrl }}</a>
-            <button class="ml-2 text-blue-500 hover:underline text-xs" @click="copy(link?.shortUrl)">Copy</button>
+            <span class="text-default font-bold">Link:</span>
+            <a :href="primaryUrl" target="_blank" rel="noopener" class="hover:underline">{{ primaryUrl }}</a>
+            <button class="ml-2 text-blue-500 hover:underline text-xs" @click="copy(primaryUrl)">Copy</button>
+          </div>
+
+          <div v-if="downloadUrl" class="break-all space-x-2">
+            <span class="text-default font-bold">Download:</span>
+            <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline">{{ downloadUrl }}</a>
+            <button class="ml-2 text-blue-500 hover:underline text-xs" @click="copy(downloadUrl)">Copy</button>
           </div>
 
           <div class="space-x-2">
@@ -295,6 +301,17 @@ const currentUploadDir = computed(() => {
   if (!it || it.type !== 'upload') return ''
   return (it.target?.dirRel || (it as any).dirRel || '') as string
 })
+
+const primaryUrl = computed(() => {
+  const it: any = props.link
+  return (it?.url || it?.viewUrl || '') as string
+})
+
+const downloadUrl = computed(() => {
+  const it: any = props.link
+  return (it?.downloadUrl || '') as string
+})
+
 
 function canonPaths(arr: string[]) {
   return (arr || [])
@@ -588,14 +605,12 @@ async function saveAll() {
     }
 
     // 2) Files (download/collection)
+    let filesResp: any | null = null
     if (shouldUpdateFiles) {
-      const body =
-        props.link.type === 'download'
-          ? { filePath: toRel(draftFilePaths.value[0]) }
-          : { filePaths: draftFilePaths.value.map(toRel) }
+      const body = { filePaths: draftFilePaths.value.map(toRel) }
 
       try {
-        await props.apiFetch(`/api/links/${id}/files`, {
+        filesResp = await props.apiFetch(`/api/links/${id}/files`, {
           method: 'PUT',
           body: JSON.stringify(body),
         })
@@ -664,15 +679,17 @@ async function saveAll() {
       notes: draftNotes.value || null,
     }
 
-    if (props.link.type === 'upload' && did.uploadDest) {
-      const dirRel = uploadResp?.dirRel ?? originalUploadDir.value
-      updatedPayload.target = { ...(props.link.target || {}), dirRel }
+    if (did.files && filesResp && typeof filesResp.type === 'string') {
+      updatedPayload.type = filesResp.type
+      updatedPayload.filesCount = draftFilePaths.value.length
+      updatedPayload.target = { ...(props.link.target || {}), files: draftFilePaths.value.map(p => ({ p: toRel(p) })) }
     }
 
     emit('updated', updatedPayload)
 
     // Optional success notification (only if something changed)
     if (did.details || did.files || did.uploadDest) {
+      close();
       pushNotification(
         new Notification(
           'Saved',

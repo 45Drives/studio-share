@@ -604,12 +604,10 @@ async function generateLink() {
     }
 }
 
-
 onMounted(async () => {
     await loadLinkDefaults();
     loadProjectChoices();
 })
-
 
 async function copyLink() {
     if (!viewUrl.value) return

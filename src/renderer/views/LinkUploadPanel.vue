@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import CommonLinkControls from '../components/CommonLinkControls.vue'
@@ -236,9 +236,6 @@ const { apiFetch } = useApi()
 const cwd = ref<string>('')                 // purely for the breadcrumb text
 const destFolderRel = ref<string>('')       // FolderPicker v-model
 const projectBase = ref<string>('')
-
-// Link base selection
-const usePublicBase = ref(true)
 
 // Share options
 const expiresValue = ref(1)
@@ -273,6 +270,25 @@ function setNever() {
 	expiresUnit.value = 'hours';
 }
 
+const usePublicBase = ref(true);
+const defaultUsePublicBase = ref(true);
+
+async function loadLinkDefaults() {
+	try {
+		const s = await apiFetch("/api/settings", { method: "GET" });
+		const isInternal = (s?.defaultLinkAccess === "internal");
+		defaultUsePublicBase.value = !isInternal;
+		usePublicBase.value = defaultUsePublicBase.value;
+	} catch {
+		// Keep current default if settings can't be loaded
+		defaultUsePublicBase.value = true;
+		usePublicBase.value = true;
+	}
+}
+
+onMounted(async () => {
+	await loadLinkDefaults();
+})
 
 // Pretty text like "3 days" / "Never"
 const prettyExpiry = computed(() => {
@@ -336,10 +352,10 @@ async function generateLink() {
 			body: JSON.stringify(body),
 		})
 
-		if (!resp?.shortUrl) throw new Error(resp?.error || 'Failed to create link')
+		if (!resp?.url) throw new Error(resp?.error || 'Failed to create link')
 
 		result.value = {
-			url: resp.shortUrl,
+			url: resp.url,
 			code: resp.code,
 			password: !!password.value,
 			expiresAt: resp.expiresAt,
@@ -386,7 +402,7 @@ function resetAll() {
 	linkTitle.value = ''
 	result.value = null
 	error.value = null
-	usePublicBase.value = true
+	usePublicBase.value = defaultUsePublicBase.value
 }
 
 async function copyLink() {

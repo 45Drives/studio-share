@@ -59,7 +59,7 @@
 						<tr class="bg-default text-default border-b border-default">
 							<th class="text-left p-2 font-semibold border border-default">Title</th>
 							<th class="text-left p-2 font-semibold border border-default">Type</th>
-							<th class="text-left p-2 font-semibold border border-default">Short Link</th>
+							<th class="text-left p-2 font-semibold border border-default">Link</th>
 							<th class="text-left p-2 font-semibold border border-default">Expires</th>
 							<th class="text-left p-2 font-semibold border border-default">Status</th>
 							<th class="text-left p-2 font-semibold border border-default">Password</th>
@@ -108,15 +108,15 @@
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
 							</td>
 
-							<!-- Short link -->
+							<!-- Link -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div class="min-w-0 flex items-center gap-2 justify-between">
-									<a :href="it.shortUrl" target="_blank" rel="noopener"
+									<a :href="it.url" target="_blank" rel="noopener"
 										class="hover:underline block truncate max-w-[28ch] md:max-w-[34ch]">
-										{{ it.shortUrl }}
+										{{ it.url }}
 									</a>
 									<button class="text-blue-500 hover:underline text-xs shrink-0"
-										@click="copy(it.shortUrl)">Copy</button>
+										@click="copy(it.url)">Copy</button>
 								</div>
 							</td>
 
@@ -410,7 +410,9 @@ async function toggleDisable(it: LinkItem) {
 
 
 function viewLink(it: LinkItem) {
-	if (it.shortUrl) window.open(it.shortUrl, '_blank', 'noopener,noreferrer')
+	const anyIt: any = it as any
+	const u = anyIt.downloadUrl || anyIt.url
+	if (u) window.open(u, '_blank', 'noopener,noreferrer')
 }
 /* ------------------- inline title edit ------------------- */
 const editingId = ref<number | string | null>(null)

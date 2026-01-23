@@ -24,31 +24,31 @@
                             <div class="flex flex-col gap-1">
                                 <label>Default Link Access</label>
                                 <div class="flex items-center gap-4">
-                                    <!-- Internal -->
+                                    <!-- Internal (active when switch OFF) -->
                                     <span class="text-sm" :class="[
-                                        !defaultAccessIsInternal
+                                        !defaultAccessIsExternal
                                             ? 'border-b-2 border-primary pb-0.5 font-semibold'
                                             : 'opacity-70'
                                     ]">
                                         Internal
                                     </span>
 
-                                    <!-- Switch -->
-                                    <Switch id="link-access-switch" v-model="defaultAccessIsInternal" :class="[
-                                        defaultAccessIsInternal ? 'bg-primary' : 'bg-well',
+                                    <!-- Switch (ON = External) -->
+                                    <Switch id="link-access-switch" v-model="defaultAccessIsExternal" :class="[
+                                        defaultAccessIsExternal ? 'bg-primary' : 'bg-well',
                                         'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                     ]">
                                         <span class="sr-only">Toggle link access</span>
                                         <span aria-hidden="true" :class="[
-                                            defaultAccessIsInternal ? 'translate-x-5' : 'translate-x-0',
+                                            defaultAccessIsExternal ? 'translate-x-5' : 'translate-x-0',
                                             'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
                                         ]" />
                                     </Switch>
 
-                                    <!-- External -->
+                                    <!-- External (active when switch ON) -->
                                     <span class="text-sm" :class="[
-                                        defaultAccessIsInternal
-                                            ? 'border-b-2 border-primary font-semibold'
+                                        defaultAccessIsExternal
+                                            ? 'border-b-2 border-primary pb-0.5 font-semibold'
                                             : 'opacity-70'
                                     ]">
                                         External
@@ -202,6 +202,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { CardContainer } from "@45drives/houston-common-ui";
 import { Switch } from "@headlessui/vue";
 import { useApi } from "../../composables/useApi";
+import { pushNotification, Notification } from '@45drives/houston-common-ui';
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -224,7 +225,7 @@ const saveOk = ref(false);
 
 const defaultLinkAccess = ref<"external" | "internal">("internal");
 
-const defaultAccessIsInternal = computed({
+const defaultAccessIsExternal = computed({
     get: () => defaultLinkAccess.value === "external",
     set: (v: boolean) => {
         defaultLinkAccess.value = v ? "external" : "internal";
@@ -408,7 +409,14 @@ async function save() {
         await reload();
 
         saveOk.value = true;
-
+        pushNotification(
+            new Notification(
+                'Saved',
+                'Settings were saved successfully.',
+                'success',
+                6000
+            )
+        )
         emit("saved", {
             externalBaseCustom: externalBaseCustom.value,
             externalBaseEffective: externalBaseEffective.value,
@@ -417,6 +425,7 @@ async function save() {
             defaultLinkAccess: defaultLinkAccess.value,
             externalMode: externalAuto.value ? "auto" : "custom",
         });
+        emit("close")
     } catch (e: any) {
         saveError.value = e?.message || "Failed to save settings.";
     } finally {

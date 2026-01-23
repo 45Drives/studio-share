@@ -16,11 +16,11 @@
 
             <div class="px-4 pt-4 pb-4 space-y-4 max-h-[75vh] overflow-y-auto">
                 <div class="text-sm opacity-80">
-                    <template v-if="linkType === 'download'">
-                        Select exactly 1 file.
+                    <template v-if="selected.length === 1">
+                        Selecting 1 file will make this a single-file link (DOWNLOAD).
                     </template>
                     <template v-else>
-                        Select 1 or more files.
+                        Selecting 2+ files will make this a collection link (COLLECTION).
                     </template>
                 </div>
 
@@ -142,13 +142,12 @@ function onExplorerAdd(paths: string[]) {
 }
 
 const validationError = computed(() => {
-    if (props.linkType === 'download') {
-        if (selected.value.length !== 1) return 'Download links must have exactly 1 file selected.'
-    } else {
-        if (selected.value.length < 1) return 'Collection links must have 1 or more files selected.'
-    }
+    if (selected.value.length < 1) return 'Select at least 1 file.'
     return ''
 })
+
+const nextType = computed(() => (selected.value.length === 1 ? 'download' : 'collection'))
+const typeWillChange = computed(() => props.linkType !== nextType.value)
 
 function apply() {
     if (validationError.value) return
