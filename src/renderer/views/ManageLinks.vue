@@ -193,8 +193,8 @@
 										@click="viewLink(it)">
 										Open
 									</button>
-									<button class="btn btn-danger h-fit px-2 rounded-md"
-										:class="statusOf(it) === 'disabled' ? '' : 'bg-yellow-50/10'"
+									<button class="btn h-fit px-2 rounded-md"
+										:class="statusOf(it) === 'disabled' ? 'btn-success' : 'btn-danger'"
 										@click="toggleDisable(it)">
 										{{ statusOf(it) === 'disabled' ? 'Enable' : 'Disable' }}
 									</button>
