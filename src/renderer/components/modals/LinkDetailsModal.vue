@@ -152,7 +152,7 @@
               <thead>
                 <tr class="bg-default text-gray-300">
                   <th class="text-left px-3 py-2 border border-default">Name</th>
-                  <th v-if="link?.type === 'upload'" class="text-left px-3 py-2 border border-default">Saved As</th>
+                  <!-- <th v-if="link?.type === 'upload'" class="text-left px-3 py-2 border border-default">Saved As</th> -->
                   <th class="text-right px-3 py-2 border border-default">Size</th>
                   <th class="text-left px-3 py-2 border border-default">MIME</th>
                   <th v-if="link?.type === 'upload'" class="text-left px-3 py-2 border border-default">Uploader</th>
@@ -163,9 +163,9 @@
               <tbody>
                 <tr v-for="f in files" :key="f.key" class="border-t border-default">
                   <td class="px-3 py-2 break-all border border-default">{{ f.name }}</td>
-                  <td v-if="link?.type === 'upload'" class="px-3 py-2 break-all border border-default">
+                  <!-- <td v-if="link?.type === 'upload'" class="px-3 py-2 break-all border border-default">
                     {{ f.saved_as || '—' }}
-                  </td>
+                  </td> -->
                   <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(f.size) }}</td>
                   <td class="px-3 py-2 border border-default">{{ f.mime || '—' }}</td>
                   <td v-if="link?.type === 'upload'" class="px-3 py-2 border border-default">{{ f.uploader_label || '—'

@@ -187,9 +187,9 @@
 							<!-- Actions -->
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<div class="flex flex-nowrap items-center justify-around gap-1">
-									<button class="btn btn-primary h-fit px-2 rounded-md" @click="openDetails(it)">
+									<button class="btn btn-secondary h-fit px-2 rounded-md" @click="openDetails(it)">
 										Details</button>
-									<button :disabled="isDisabled(it)" class="btn btn-success h-fit px-2 rounded-md"
+									<button :disabled="isDisabled(it)" class="btn btn-primary h-fit px-2 rounded-md"
 										@click="viewLink(it)">
 										Open
 									</button>
