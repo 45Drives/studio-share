@@ -171,6 +171,68 @@ function st(ip: string): SseState {
   return s;
 }
 
+function normalizeDestRel(destDir: string, shareRoot?: string): string {
+  let d = String(destDir || '').trim();
+  if (!d) return '';
+
+  // normalize slashes and remove trailing slash
+  d = d.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  // If shareRoot is provided and destDir is absolute under it, strip it.
+  if (shareRoot) {
+    let root = String(shareRoot).trim().replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!root) root = '/';
+
+    // Ensure root is absolute-like
+    if (!root.startsWith('/')) root = '/' + root;
+
+    // If d starts with root, strip it.
+    if (root === '/') {
+      // For root, just remove leading slashes
+      d = d.replace(/^\/+/, '');
+    } else if (d === root) {
+      d = '';
+    } else if (d.startsWith(root + '/')) {
+      d = d.slice(root.length + 1);
+    }
+  } else {
+    // No shareRoot knowledge: best-effort fallback
+    d = d.replace(/^\/+/, '');
+  }
+
+  // Final cleanup
+  d = d.replace(/^\/+/, '');
+  return d;
+}
+
+// Cache shareRoot per host so we don't fetch it every upload
+const shareRootByHost = new Map<string, string>();
+
+async function getShareRootForHost(host: string, port = 9095): Promise<string | undefined> {
+  const cached = shareRootByHost.get(host);
+  if (cached) return cached;
+
+  const url = `http://${host}:${port}/.well-known/houston`;
+  try {
+    const r = await fetch(url, { method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(2500) });
+    const j: any = await r.json().catch(() => ({}));
+
+    const sr = typeof j?.shareRoot === 'string' ? j.shareRoot : undefined;
+    if (sr) {
+      shareRootByHost.set(host, sr);
+      jl('info', 'wellknown.houston.ok', { host, port, shareRoot: sr });
+      return sr;
+    }
+
+    jl('warn', 'wellknown.houston.missing-shareRoot', { host, port, keys: Object.keys(j || {}) });
+    return undefined;
+  } catch (e: any) {
+    jl('warn', 'wellknown.houston.fail', { host, port, error: e?.message || String(e) });
+    return undefined;
+  }
+}
+
+
 export function attachSetupSSE(ip: string, seedDelayMs = 0) {
   // Schedule an attempt (optionally delayed); actual attach happens in tryAttach()
   const s = st(ip);
@@ -1571,7 +1633,7 @@ ipcMain.on('upload:file:cancel', (event, { id }) => {
 
 })
 
-type RsyncStartOpts = {
+export type RsyncStartOpts = {
   id: string
   src: string           // local path (file or folder)
   host: string
@@ -1581,6 +1643,8 @@ type RsyncStartOpts = {
   keyPath?: string      // ~/.ssh/id_ed25519 etc (optional if using agent)
   bwlimitKb?: number    // optional bandwidth limit (KB/s)
   extraArgs?: string[]  // any other rsync flags
+  shareRoot?: string
+  knownHostsPath?: string;
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -1643,13 +1707,72 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
       cmd: picked.cmd,
       args: picked.args,
       win: BrowserWindow.getAllWindows()[0]
-    })
+    });
 
-    if (code === 0) {
-      event.sender.send(`upload:done:${id}`, { ok: true })
-    } else {
-      event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
+    if (code !== 0) {
+      event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` });
+      jl('info', 'rsync.close', { id, code });
+      return;
     }
+
+    // rsync success
+    event.sender.send(`upload:done:${id}`, { ok: true });
+
+    // Only register single files in Phase 1
+    let isDir = false;
+    try { isDir = fs.statSync(src).isDirectory(); } catch { }
+
+    if (!isDir) {
+      const fileName = path.basename(src);
+
+      const port = opts.port ?? 9095;
+      const base = `http://${opts.host}:${port}`;
+
+      const remotePort = opts.port ?? 9095;
+
+      // Prefer explicit opts.shareRoot if caller provided it; otherwise fetch from well-known
+      const shareRoot = opts.shareRoot || await getShareRootForHost(opts.host, remotePort);
+
+      // Convert whatever we have (absolute or relative) into SHARE_ROOT-relative for ingest
+      const destRel = normalizeDestRel(opts.destDir, shareRoot);
+
+      jl('info', 'ingest.dest.normalize', {
+        id,
+        host: opts.host,
+        destDir: opts.destDir,
+        shareRoot: shareRoot || null,
+        destRel,
+      });
+
+      if (!destRel) {
+        jl('warn', 'ingest.dest.empty', { id, host: opts.host, destDir: opts.destDir, shareRoot: shareRoot || null });
+        // Don't call ingest; it will definitely be wrong.
+        return;
+      }
+
+      const url =
+        `${base}/api/ingest/register` +
+        `?dest=${encodeURIComponent(destRel)}` +
+        `&name=${encodeURIComponent(fileName)}` +
+        `&uploader=${encodeURIComponent(os.userInfo().username)}`;
+
+
+      try {
+        const r = await fetch(url, { method: 'POST' });
+        const text = await r.text();
+        let j: any = {};
+        try { j = JSON.parse(text); } catch { j = { raw: text }; }
+
+        jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j });
+
+        if (!r.ok || !j?.ok) {
+          jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url });
+        }
+      } catch (e: any) {
+        jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url });
+      }
+    }
+
     jl('info', 'rsync.close', { id, code })
   } catch (err: any) {
     event.sender.send(`upload:done:${id}`, { error: err?.message || 'spawn error' })

@@ -3,20 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import { spawnSync } from 'node:child_process';
 import path from 'path';
-import { jl } from '../main';
-
-type RsyncStartOpts = {
-  id: string;
-  src: string;           // local path (file or folder)
-  host: string;
-  user: string;
-  destDir: string;       // remote directory (no filename)
-  port?: number;
-  keyPath?: string;      // ~/.ssh/id_ed25519 etc (optional if using agent)
-  bwlimitKb?: number;    // optional bandwidth limit (KB/s)
-  extraArgs?: string[];  // any other rsync flags
-  knownHostsPath?: string; // <- pass from main (e.g., app.getPath('userData')/known_hosts)
-};
+import { jl, type RsyncStartOpts } from '../main';
 
 const pathExists = (p: string) => { try { fs.accessSync(p); return true; } catch { return false; } };
 
@@ -26,13 +13,13 @@ export function findRsyncPath(): { cmd: string; useWSL: boolean } {
     '/usr/local/bin/rsync',
     '/usr/bin/rsync',
   ];
-  const winCandidates = [
-    'C:\\Program Files\\Git\\usr\\bin\\rsync.exe',
-    'C:\\Program Files\\Git\\mingw64\\bin\\rsync.exe',
-    'C:\\Program Files\\cwRsync\\rsync.exe',
-    'C:\\cygwin64\\bin\\rsync.exe',
-    'C:\\cygwin\\bin\\rsync.exe',
-  ];
+  // const winCandidates = [
+  //   'C:\\Program Files\\Git\\usr\\bin\\rsync.exe',
+  //   'C:\\Program Files\\Git\\mingw64\\bin\\rsync.exe',
+  //   'C:\\Program Files\\cwRsync\\rsync.exe',
+  //   'C:\\cygwin64\\bin\\rsync.exe',
+  //   'C:\\cygwin\\bin\\rsync.exe',
+  // ];
   const which = (bin: string) => {
     const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8' });
     return r.status === 0 ? r.stdout.split(/\r?\n/).find(s => s.trim())?.trim() : '';
