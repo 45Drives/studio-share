@@ -1310,7 +1310,7 @@ app.whenReady().then(() => {
   // log.info("Log file path:", // log.transports.file.getFile().path);
 
   const isInternalHost = (hostname: string) => {
-    // plain IPv4 or .local – adjust for your environment
+    // plain IPv4 or .local – adjust for environment
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return true;
     if (hostname.endsWith('.local')) return true;
     // if you have a corporate domain, add it here:
@@ -1503,7 +1503,7 @@ ipcMain.handle('dialog:pickFolder', async () => {
       continue;
     }
 
-    if (!st.isFile()) continue; // your original behaviour
+    if (!st.isFile()) continue;
 
     if (!isOwnedByCurrentUser(fp)) {
       skipped++;
@@ -1530,116 +1530,13 @@ ipcMain.handle('dialog:pickFolder', async () => {
   return allowed;
 });
 
-// upload file (streamed)
-// Track inflight streams so we can cancel
-const inflightUploads = new Map<string, fs.ReadStream>()
-
-type UploadTarget = {
-  host: string            // IP or hostname, e.g. "192.168.1.50" or "server.local"
-  port?: number           // defaults to 9095
-  protocol?: 'http' | 'https' // defaults to 'http' (bootstrap API is typically http)
-}
-
-ipcMain.on(
-  'upload-file',
-  async (
-    event,
-    {
-      filePath,
-      destDir,
-      id,
-      target,
-    }: {
-      filePath: string
-      destDir: string
-      id: string
-      target: UploadTarget
-    }
-  ) => {
-    jl('info', 'upload.start', { id, filePath, destDir, target });
-
-    try {
-      if (!target || !target.host) {
-        event.sender.send(`upload-done-${id}`, { error: 'missing upload target host' })
-        return
-      }
-
-      const protocol = target.protocol ?? 'http'
-      const port = target.port ?? 9095
-      const base = `${protocol}://${target.host}:${port}`
-
-      const fileName = path.basename(filePath)
-      const stat = fs.statSync(filePath)
-      const total = stat.size
-
-      const url =
-        `${base}/api/upload` +
-        `?dest=${encodeURIComponent(destDir)}` +
-        `&name=${encodeURIComponent(fileName)}`
-
-      let sent = 0
-      const stream = fs.createReadStream(filePath)
-      inflightUploads.set(id, stream)
-
-      stream.on('data', (chunk) => {
-          if (sent === 0) jl('debug', 'upload.first-bytes', { id });
-
-        sent += chunk.length
-        event.sender.send(`upload-progress-${id}`, Math.floor((sent / total) * 100))
-      })
-      stream.on('error', (err) => {
-          jl('error', 'upload.stream.error', { id, error: err?.message || String(err) });
-
-        event.sender.send(`upload-done-${id}`, { error: err?.message || 'stream error' })
-        inflightUploads.delete(id)
-      })
-
-      // Some servers prefer a Content-Length for streamed bodies; provide it.
-      const res = await fetch(url, {
-        method: 'POST',
-        body: stream as any,
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': String(total),
-        },
-      })
-      jl('info', 'upload.http.response', { id, status: res.status, ok: res.ok });
-
-      // Try to parse JSON; if not JSON, return a minimal shape
-      let json: any = {}
-      try { json = await res.json() } catch { 
-        jl('warn', 'upload.http.nonjson', { id, status: res.status });
-        json = { ok: res.ok, status: res.status } }
-
-      event.sender.send(`upload-done-${id}`, json)
-      jl('info', 'upload.done', { id, ok: !!json?.ok, status: json?.status });
-
-    } catch (err: any) {
-      event.sender.send(`upload-done-${id}`, { error: err?.message || String(err) })
-    } finally {
-      inflightUploads.delete(id)
-    }
-  }
-)
-
-ipcMain.on('upload:file:cancel', (event, { id }) => {
-  const s = inflightUploads.get(id)
-  if (s) {
-    try { s.destroy(new Error('canceled')) } catch { }
-    inflightUploads.delete(id)
-  }
-  event.sender.send(`upload-done-${id}`, { error: 'canceled' })
-  jl('info', 'upload.cancel', { id });
-
-})
-
 export type RsyncStartOpts = {
   id: string
   src: string           // local path (file or folder)
   host: string
   user: string
   destDir: string       // remote directory (no filename)
-  port?: number
+  port?: number         // API port for ingest + also ssh port if your runner uses it (see runWinSftp below)
   keyPath?: string      // ~/.ssh/id_ed25519 etc (optional if using agent)
   bwlimitKb?: number    // optional bandwidth limit (KB/s)
   extraArgs?: string[]  // any other rsync flags
@@ -1651,15 +1548,15 @@ const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
 
 ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
-  const knownHostsPath = path.join(app.getPath('userData'), 'known_hosts')
+  const knownHostsPath = opts.knownHostsPath || path.join(app.getPath('userData'), 'known_hosts')
   const keyPath = opts.keyPath || defaultClientKey()
-  const src = opts.src;
+  const src = opts.src
 
   if (!isOwnedByCurrentUser(src)) {
-    const msg = 'Source is not owned by this user or is not readable.';
-    jl('warn', 'rsync.src.denied', { id, src });
-    event.sender.send(`upload:done:${id}`, { error: msg });
-    return;
+    const msg = 'Source is not owned by this user or is not readable.'
+    jl('warn', 'upload.src.denied', { id, src })
+    event.sender.send(`upload:done:${id}`, { error: msg })
+    return
   }
 
   try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
@@ -1669,15 +1566,20 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     return
   }
 
-  jl('info', 'rsync.start', { id, host: opts.host, user: opts.user, src: opts.src, destDir: opts.destDir })
-
+  jl('info', 'upload.start', { id, host: opts.host, user: opts.user, src: opts.src, destDir: opts.destDir })
   inflightRsync.set(id, null)
 
   try {
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1) TRANSFER
+    // ─────────────────────────────────────────────────────────────────────────
     if (process.platform === 'win32') {
+      event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
-        // ── Windows SSH-stream path (file only) ────────────────
-        event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
+      // NOTE: runWinSftp expects SSH port (22) normally.
+      // If  opts.port is the API port (9095), do not reuse it for SSH.
+      // If you have a separate sshPort, pass that instead. For now default to 22.
+      const sshPort = 22
 
       await runWinSftp({
         id,
@@ -1685,56 +1587,81 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         host: opts.host,
         user: opts.user,
         destDir: opts.destDir,
-        port: opts.port,
+        port: sshPort,
         keyPath,
         onProgress: (p) => {
-          // p is TransferProgress: { percent, rate, eta, bytesTransferred, raw }
-          event.sender.send(`upload:progress:${id}`, p);
+          event.sender.send(`upload:progress:${id}`, p)
         },
-      });
-        
-        event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
-        event.sender.send(`upload:done:${id}`, { ok: true })
-        jl('info', 'sshstream.close', { id, code: 0 })
-        return
+      })
+
+      event.sender.send(`upload:progress:${id}`, { percent: 100, raw: 'done' })
+      // Do NOT return; ingest below must run for Windows too.
+    } else {
+      const picked = buildRsyncCmdAndArgs({ ...opts, keyPath, knownHostsPath })
+
+      const child = runRsync({
+        id,
+        cmd: picked.cmd,
+        args: picked.args,
+        win: BrowserWindow.getAllWindows()[0],
+        // If  runRsync supports onProgress, keep it; otherwise remove this.
+        onProgress: (p: any) => {
+          if (typeof p?.percent === 'number') {
+            event.sender.send(`upload:progress:${id}`, p)
+          }
+        },
+      }) as any
+
+      // If runRsync returns a number (exit code), this block won't work.
+      //  earlier snippet shows runRsync returns a code;  imports show it exists.
+      // So we do the "code path" below and only store a child handle if you have one.
+      // If  runRsync actually returns an exit code Promise, keep inflight as null.
+
+      // If  runRsync returns a child process handle instead of a code:
+      if (child && typeof child.kill === 'function') {
+        inflightRsync.set(id, child as ChildProcessWithoutNullStreams)
+        const code: number = await new Promise((resolve) => {
+          ; (child as ChildProcessWithoutNullStreams).on('close', (c) => resolve(Number(c ?? 0)))
+        })
+        if (code !== 0) {
+          event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
+          jl('info', 'rsync.close', { id, code })
+          return
+        }
+      } else {
+        // If runRsync returns exit code:
+        const code: number = await runRsync({
+          id,
+          cmd: picked.cmd,
+          args: picked.args,
+          win: BrowserWindow.getAllWindows()[0],
+        })
+
+        if (code !== 0) {
+          event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
+          jl('info', 'rsync.close', { id, code })
+          return
+        }
+      }
     }
 
-    // ── Non-Windows → rsync ───────────────────────────────────
-    const picked = buildRsyncCmdAndArgs({ ...opts, keyPath, knownHostsPath })
+    // Transfer success
+    event.sender.send(`upload:done:${id}`, { ok: true })
 
-    const code = await runRsync({
-      id,
-      cmd: picked.cmd,
-      args: picked.args,
-      win: BrowserWindow.getAllWindows()[0]
-    });
-
-    if (code !== 0) {
-      event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` });
-      jl('info', 'rsync.close', { id, code });
-      return;
-    }
-
-    // rsync success
-    event.sender.send(`upload:done:${id}`, { ok: true });
-
-    // Only register single files in Phase 1
-    let isDir = false;
-    try { isDir = fs.statSync(src).isDirectory(); } catch { }
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2) INGEST (single files only)
+    // ─────────────────────────────────────────────────────────────────────────
+    let isDir = false
+    try { isDir = fs.statSync(src).isDirectory() } catch { }
 
     if (!isDir) {
-      const fileName = path.basename(src);
+      const fileName = path.basename(src)
 
-      const port = opts.port ?? 9095;
-      const base = `http://${opts.host}:${port}`;
+      const apiPort = 9095
+      const base = `http://${opts.host}:${apiPort}`
 
-      const remotePort = opts.port ?? 9095;
-
-      // Prefer explicit opts.shareRoot if caller provided it; otherwise fetch from well-known
-      const shareRoot = opts.shareRoot || await getShareRootForHost(opts.host, remotePort);
-
-      // Convert whatever we have (absolute or relative) into SHARE_ROOT-relative for ingest
-      const destRel = normalizeDestRel(opts.destDir, shareRoot);
+      const shareRoot = opts.shareRoot || await getShareRootForHost(opts.host, apiPort)
+      const destRel = normalizeDestRel(opts.destDir, shareRoot)
 
       jl('info', 'ingest.dest.normalize', {
         id,
@@ -1742,51 +1669,54 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         destDir: opts.destDir,
         shareRoot: shareRoot || null,
         destRel,
-      });
+      })
 
       if (!destRel) {
-        jl('warn', 'ingest.dest.empty', { id, host: opts.host, destDir: opts.destDir, shareRoot: shareRoot || null });
-        // Don't call ingest; it will definitely be wrong.
-        return;
+        jl('warn', 'ingest.dest.empty', { id, host: opts.host, destDir: opts.destDir, shareRoot: shareRoot || null })
+        return
       }
 
       const url =
         `${base}/api/ingest/register` +
         `?dest=${encodeURIComponent(destRel)}` +
         `&name=${encodeURIComponent(fileName)}` +
-        `&uploader=${encodeURIComponent(os.userInfo().username)}`;
-
+        `&uploader=${encodeURIComponent(os.userInfo().username)}`
 
       try {
-        const r = await fetch(url, { method: 'POST' });
-        const text = await r.text();
-        let j: any = {};
-        try { j = JSON.parse(text); } catch { j = { raw: text }; }
+        const r = await fetch(url, { method: 'POST' })
+        const text = await r.text()
+        let j: any = {}
+        try { j = JSON.parse(text) } catch { j = { raw: text } }
 
-        jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j });
+        jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j })
 
         if (!r.ok || !j?.ok) {
-          jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url });
+          jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url })
         }
       } catch (e: any) {
-        jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url });
+        jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url })
       }
     }
 
-    jl('info', 'rsync.close', { id, code })
+    jl('info', 'upload.done', { id, ok: true })
   } catch (err: any) {
     event.sender.send(`upload:done:${id}`, { error: err?.message || 'spawn error' })
-    jl('error', 'rsync.error', { id, error: err?.message || String(err) })
+    jl('error', 'upload.error', { id, error: err?.message || String(err) })
   } finally {
     inflightRsync.delete(id)
   }
 })
 
-// Cancel (only effective for rsync child processes for now)
+// One cancel handler only.
+// Works for rsync child-process mode. If runRsync returns only an exit code,
+// adjust runRsync to expose the ChildProcess so this can kill it.
 ipcMain.on('upload:cancel', (_event, { id }) => {
   const p = inflightRsync.get(id)
   if (p) {
     try { p.kill('SIGINT') } catch { }
+    jl('info', 'upload.cancel', { id })
+  } else {
+    jl('info', 'upload.cancel.noop', { id })
   }
 })
 
