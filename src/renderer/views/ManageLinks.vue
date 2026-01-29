@@ -411,7 +411,7 @@ async function toggleDisable(it: LinkItem) {
 
 function viewLink(it: LinkItem) {
 	const anyIt: any = it as any
-	const u = anyIt.downloadUrl || anyIt.url
+	const u = anyIt.url
 	if (u) window.open(u, '_blank', 'noopener,noreferrer')
 }
 /* ------------------- inline title edit ------------------- */
