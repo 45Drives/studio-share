@@ -76,6 +76,26 @@
 							</template>
 
 							<template #access>
+								  <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+										<label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
+											Generate Proxy Files:
+										</label>
+
+										<Switch id="link-access-switch" v-model="transcodeProxy" :class="[
+											transcodeProxy ? 'bg-secondary' : 'bg-well',
+											'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+										]">
+											<span class="sr-only">Toggle proxy file generation</span>
+											<span aria-hidden="true" :class="[
+												transcodeProxy ? 'translate-x-5' : 'translate-x-0',
+												'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+											]" />
+										</Switch>
+
+										<span class="text-sm select-none truncate min-w-0 flex-1">
+											{{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+										</span>
+									</div>
 								<div class="flex flex-wrap items-center gap-3 min-w-0">
 									<label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
 										Link Access:
@@ -245,6 +265,11 @@ const password = ref('')
 const showPassword = ref(false)
 const linkTitle = ref('')
 
+const transcodeProxy = ref(false)
+
+// Always on for share links
+const adaptiveHls = computed(() => false)
+
 // Units → seconds
 const UNIT_TO_SECONDS = {
 	hours: 3600,
@@ -346,6 +371,9 @@ async function generateLink() {
 			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 		}
 		if (password.value) body.password = password.value
+
+		body.generateReviewProxy = !!transcodeProxy.value
+		body.adaptiveHls = !!adaptiveHls.value
 
 		const resp = await apiFetch('/api/create-upload-link', {
 			method: 'POST',

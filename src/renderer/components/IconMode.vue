@@ -10,7 +10,7 @@
 
         <!-- icon grid -->
         <div v-else class="grid gap-3 justify-start [grid-template-columns:repeat(auto-fill,minmax(9rem,9rem))]">
-            <button v-for="ent in entries" :key="ent.path" type="button" class="group relative rounded-xl border border-default bg-default hover:bg-white/5
+            <button v-for="ent in entries" :key="ent.path" data-fp-item type="button" class="group relative rounded-xl border border-default bg-default hover:bg-white/5
          focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-[var(--btn-primary-border)]
          p-1 text-left" :class="[
             foldersOnly && !ent.isDir ? 'pointer-events-none opacity-60 select-none' : '',
@@ -23,7 +23,8 @@
                 @click="ent.isDir ? selectFolderOnly(ent) : onFileClick(ent)"
                 @dblclick.prevent="ent.isDir ? openFolder(ent) : onFileKey(ent)"
                 @keydown.space.prevent="ent.isDir ? selectFolderOnly(ent) : onFileKey(ent)"
-                @keydown.enter.prevent="ent.isDir ? openFolder(ent) : onFileKey(ent)"> <!-- icon -->
+                @keydown.enter.prevent="ent.isDir ? openFolder(ent) : onFileKey(ent)">
+                <!-- icon -->
                 <div class="flex justify-center">
                     <FolderIcon v-if="ent.isDir" class="w-6 h-6 text-amber-300 opacity-90" />
                     <template v-else>

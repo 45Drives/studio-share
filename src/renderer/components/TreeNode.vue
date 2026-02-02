@@ -1,6 +1,6 @@
 <template>
     <!-- Non-root row -->
-    <div v-if="!isRoot" class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer bg-default
+    <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer bg-default
          [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]"
         @click="modeIsUpload ? selectFolder() : onRowClick()"
         @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"

@@ -24,6 +24,7 @@
     </main>
     <GlobalModalConfirm />
     <NotificationView />
+    <TransferProgressDock v-if="!hideTransfers" />
   </div>
 </template>
 
@@ -38,6 +39,7 @@ import { useThemeFromAlias } from '../renderer/composables/useThemeFromAlias'
 import { useRoute, useRouter } from 'vue-router'
 import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
 import { registerIpcActionListener } from "../renderer/composables/registerIpcActionListener";
+import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
 
 // provide shared refs
 const currentServer = ref<Server | null>(null)
@@ -47,6 +49,12 @@ const route = useRoute()
 const router = useRouter()
 const hideHeader = computed(() => route.meta.hideHeader === true)
 const { headerTitle } = useHeaderTitle()
+const hideTransfers = computed(() => route.meta.hideTransfers === true)
+
+const hasToken = computed(() => {
+  if (connectionMeta.value?.token) return true
+  try { return !!sessionStorage.getItem('hb_token') } catch { return false }
+})
 
 provide(currentServerInjectionKey, currentServer)
 provide(divisionCodeInjectionKey, divisionCode)
@@ -58,7 +66,7 @@ provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
 provide(connectionMetaInjectionKey, connectionMeta)
 
-const { currentTheme, currentDivision, applyThemeFromAlias } = useThemeFromAlias()
+const { currentDivision } = useThemeFromAlias()
 
 watch(currentDivision, (d) => { divisionCode.value = d as DivisionType }, { immediate: true })
 

@@ -1542,6 +1542,7 @@ export type RsyncStartOpts = {
   extraArgs?: string[]  // any other rsync flags
   shareRoot?: string
   knownHostsPath?: string;
+  transcodeProxy?: boolean
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -1671,16 +1672,14 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         destRel,
       })
 
-      if (!destRel) {
-        jl('warn', 'ingest.dest.empty', { id, host: opts.host, destDir: opts.destDir, shareRoot: shareRoot || null })
-        return
-      }
+      const wantsProxy = (opts as any).transcodeProxy === true
 
       const url =
         `${base}/api/ingest/register` +
         `?dest=${encodeURIComponent(destRel)}` +
         `&name=${encodeURIComponent(fileName)}` +
-        `&uploader=${encodeURIComponent(os.userInfo().username)}`
+        `&uploader=${encodeURIComponent(os.userInfo().username)}` +
+        (wantsProxy ? `&proxy=1` : ``)
 
       try {
         const r = await fetch(url, { method: 'POST' })
@@ -1692,6 +1691,26 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
         if (!r.ok || !j?.ok) {
           jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url })
+        }
+
+        if (j?.ok) {
+          const fileId = Number(j.fileId ?? j.file_id ?? j?.file?.id);
+          const assetVersionId = j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id ?? null;
+
+          if (Number.isFinite(fileId) && fileId > 0) {
+            event.sender.send(`upload:ingest:${id}`, {
+              ok: true,
+              fileId,
+              assetVersionId,
+              host: opts.host,
+              apiPort: apiPort,
+            });
+            jl('info', 'ingest.register.emit', { id, fileId, assetVersionId });
+          } else {
+            jl('warn', 'ingest.register.no-fileId', { id, resp: j });
+          }
+        } else {
+          event.sender.send(`upload:ingest:${id}`, { ok: false, error: j?.error || 'ingest not ok' });
         }
       } catch (e: any) {
         jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url })

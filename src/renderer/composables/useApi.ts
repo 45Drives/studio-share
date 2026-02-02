@@ -12,6 +12,7 @@ type ApiInit = RequestInit & {
     retry?: number
     retryDelayMs?: number
     parse?: 'json' | 'text' | 'auto'
+    suppressAuthRedirect?: boolean // ADD
 }
 
 const DEFAULT_TIMEOUT = 12_000
@@ -79,16 +80,21 @@ export function useApi() {
                 window.appLog?.info('api.response', { url, status: res.status })
 
                 if (res.status === 401) {
-                    // One-time bounce to login
+                    // If caller wants to handle auth failure itself (polling), don't global-logout
+                    if (init.suppressAuthRedirect) {
+                        clearTimeout(timer)
+                        const e = Object.assign(new Error('Unauthorized'), { status: 401 })
+                        throw e
+                    }
+
+                    // existing behavior:
                     try { sessionStorage.removeItem('hb_token') } catch { }
                     meta.value = { ...meta.value, token: undefined }
 
                     if (!authRedirectInFlight) {
                         authRedirectInFlight = true
                         pushNotification(new Notification('Session expired', 'Please log in again.', 'warning', 8000))
-                        // Prefer named route; adjust name if yours differs
                         router.push({ name: 'server-selection' }).finally(() => {
-                            // small delay so multiple 401s in flight don’t spam redirects
                             setTimeout(() => { authRedirectInFlight = false }, 500)
                         })
                     }

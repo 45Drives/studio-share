@@ -204,19 +204,48 @@
 				</section>
 
 				<template #footer>
-					<div class="flex items-center gap-2">
-						<!-- Back (hidden on step 1) -->
-						<button v-if="step !== 1" class="btn btn-secondary" @click="prevStep">Back</button>
+					<div class="grid grid-cols-[auto_1fr_auto] items-center gap-2">
+						<!-- Left -->
+						<div class="justify-self-start">
+							<button v-if="step !== 1" class="btn btn-secondary" @click="prevStep">Back</button>
+						</div>
 
-						<!-- spacer keeps Next on the right even when Back is hidden -->
-						<div class="grow"></div>
+						<!-- Center -->
+						<div class="justify-self-center">
+							<div v-if="step === 3"
+								class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
+								<label class="font-semibold whitespace-nowrap">
+									Generate Proxy Files:
+								</label>
 
-						<!-- Next / Start Upload / Finish -->
-						<button class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
-							{{ nextLabel }}
-						</button>
+								<Switch v-model="transcodeProxyAfterUpload" :class="[
+									transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
+									'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+								]">
+									<span class="sr-only">Toggle proxy file generation</span>
+									<span aria-hidden="true" :class="[
+										transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-0',
+										'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+									]" />
+								</Switch>
+
+								<!-- fixed width so text changes don't move anything -->
+								<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+									{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files only' }}
+								</span>
+							</div>
+						</div>
+
+						<!-- Right -->
+						<div class="justify-self-end">
+							<button class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
+								{{ nextLabel }}
+							</button>
+						</div>
 					</div>
 				</template>
+
+
 
 			</CardContainer>
 			<div class="button-group-row">
@@ -233,16 +262,18 @@
 import { ref, computed, inject, watch, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
+import { Switch } from '@headlessui/vue';
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
 import { onBeforeRouteLeave } from 'vue-router';
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui';
+import { useTransferProgress } from '../composables/useTransferProgress'
 const { to } = useResilientNav()
 useHeader('Upload Files')
+const transfer = useTransferProgress()
 
 type LocalFile = { path: string; name: string; size: number }
-
 
 const connectionMeta = inject(connectionMetaInjectionKey)!;
 const ssh = connectionMeta.value.ssh
@@ -291,6 +322,40 @@ function stepClass(n: number) {
 		'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
 		step.value >= n ? 'bg-[#584c91] text-white' : 'bg-slate-700 text-slate-300'
 	].join(' ')
+}
+
+function waitForIngestAndStartTranscode(opts: {
+	uploadId: string
+	rowName: string
+	wantProxy: boolean
+}) {
+	if (!opts.wantProxy) return () => { };
+
+	const chan = `upload:ingest:${opts.uploadId}`;
+
+	const handler = (_e: any, payload: any) => {
+		try {
+			if (!payload?.ok) return;
+
+			const fileId = Number(payload.fileId);
+			if (!Number.isFinite(fileId) || fileId <= 0) return;
+
+			transfer.startTranscodeTask({
+				apiFetch,
+				fileIds: [fileId],
+				title: `Transcoding: ${opts.rowName}`,
+				detail: 'Generating proxy/hls…',
+				intervalMs: 1500,
+			});
+		} finally {
+			window.electron?.ipcRenderer.removeListener(chan, handler);
+		}
+	};
+
+	window.electron?.ipcRenderer.on(chan, handler);
+
+	// return an unsubscribe for cancel/route leave
+	return () => window.electron?.ipcRenderer.removeListener(chan, handler);
 }
 
 /** ── Step 1: local files ───────────────────────────────── */
@@ -369,6 +434,9 @@ function hasAlreadyUploaded(path: string, dest: string) {
 }
 
 /** ── Step 3: upload & progress ─────────────────────────── */
+const transcodeProxyAfterUpload = ref(false)
+const adaptiveHls = ref(false);
+
 function finish() {
 	// Reset the wizard (or route away)
 	selected.value = []
@@ -408,7 +476,7 @@ watch(step, (s, old) => {
 	if (old === 3 && s !== 3 && allTerminal.value) {
 		resetUploadState()
 
-		// full reset when leaving step 3 after all terminal
+	// full reset when leaving step 3 after all terminal
 	/*  selected.value = [];
 		uploadedRegistry.value.clear();
 		destFolderRel.value = '';
@@ -435,6 +503,9 @@ type UploadRow = {
 	startedAt?: number | null
 	completedAt?: number | null
 	completedIn?: string | null
+	dockTaskId?: string | null
+	ingestUnsub?: (() => void) | null
+
 }
 const uploads = ref<UploadRow[]>([])
 
@@ -520,36 +591,70 @@ async function startUploads() {
 		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
 
+		const taskId = transfer.createUploadTask({
+			title: `Uploading: ${row.name}`,
+			detail: `${row.dest}`,
+			cancel: () => {
+				if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
+			},
+		})
+		row.dockTaskId = taskId
+
 		const { id, done } = await window.electron.rsyncStart(
 			{
 				host: ssh?.server,
 				user: ssh?.username,
 				src: row.path,
-				destDir: row.dest,  // use the row's dest (captured at time of prepareRows)
+				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
+				transcodeProxy: transcodeProxyAfterUpload.value,
 			},
 			p => {
-				// ... existing progress handling ...
-				let pct: number | undefined = typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
+				let pct: number | undefined =
+					typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
+
 				if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
 					pct = (p.bytesTransferred / row.size) * 100;
 				}
+
 				if (pct === undefined && typeof p.raw === 'string') {
 					const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
 					if (m) pct = parseFloat(m[1]);
 				}
 
 				updateRowProgress(row, pct, p.rate, p.eta);
+
+				transfer.updateUpload(taskId, {
+					status: 'uploading',
+					progress: typeof pct === 'number' ? pct : row.progress,
+					speed: p.rate ?? null,
+					eta: p.eta ?? null,
+				});
 			}
 		);
 
 		row.rsyncId = id;
 
+		// Start listening for ingest -> fileId (so we can track transcode progress)
+		const stopIngestListener = waitForIngestAndStartTranscode({
+			uploadId: id,
+			rowName: row.name,
+			wantProxy: transcodeProxyAfterUpload.value,
+		});
+		row.ingestUnsub = stopIngestListener;
+		// Ensure we clean up no matter what
+		const cleanup = () => {
+			try { stopIngestListener?.(); } catch { }
+		};
+
 		done.then((res: any) => {
+			cleanup();
+
 			if (res.ok) {
 				row.status = row.status === 'canceled' ? 'canceled' : 'done';
 				row.progress = 100;
+				transfer.finishUpload(taskId, true);
 
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
@@ -557,19 +662,32 @@ async function startUploads() {
 					const start = row.startedAt ?? end;
 					row.completedAt = end;
 					row.completedIn = formatDuration(end - start);
-					pushNotification(new Notification('Upload Completed', `File was uploaded successfully: ${row.name}.`, 'success', 8000));
+
+					pushNotification(
+						new Notification('Upload Completed', `File was uploaded successfully: ${row.name}.`, 'success', 8000)
+					);
 				}
 			} else if (row.status !== 'canceled') {
 				row.status = 'error';
 				row.error = res.error || 'rsync failed';
-				pushNotification(new Notification('Upload Canceled', `File upload was canceled: ${row.name}.`, 'warning', 8000));
+				transfer.finishUpload(taskId, false, res.error || 'rsync failed');
+
+				pushNotification(
+					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
+				);
 			}
 		}).catch((err: any) => {
-			isUploading.value = false
+			cleanup();
+			isUploading.value = false;
+
 			if (row.status !== 'canceled') {
 				row.status = 'error';
 				row.error = err?.message || String(err);
-				pushNotification(new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000));
+				transfer.finishUpload(taskId, false, err?.message || 'rsync failed');
+
+				pushNotification(
+					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
+				);
 			}
 		});
 	}
@@ -578,18 +696,12 @@ async function startUploads() {
 
 function cancelOne(row: UploadRow) {
 	if (!row.rsyncId) return
+	if (row.dockTaskId) transfer.cancelUpload(row.dockTaskId)
+	try { row.ingestUnsub?.(); } catch { }
+	row.ingestUnsub = null;
 	window.electron.rsyncCancel(row.rsyncId)
 	row.status = 'canceled'
 }
-
-// function cancelAll() {
-// 	for (const r of uploads.value) {
-// 		if (r.rsyncId && r.status === 'uploading') {
-// 			window.electron.rsyncCancel(r.rsyncId)
-// 			r.status = 'canceled'
-// 		}
-// 	}
-// }
 
 const allDone = computed(() =>
 	uploads.value.length > 0 &&

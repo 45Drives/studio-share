@@ -124,6 +124,26 @@
                                     </template>
 
                                     <template #access>
+                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
+                                                Generate Proxy Files:
+                                            </label>
+
+                                            <Switch id="link-access-switch" v-model="transcodeProxy" :class="[
+                                                transcodeProxy ? 'bg-secondary' : 'bg-well',
+                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]">
+                                                <span class="sr-only">Toggle proxy file generation</span>
+                                                <span aria-hidden="true" :class="[
+                                                    transcodeProxy ? 'translate-x-5' : 'translate-x-0',
+                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                ]" />
+                                            </Switch>
+
+                                            <span class="text-sm select-none truncate min-w-0 flex-1">
+                                                {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                            </span>
+                                        </div>
                                         <div class="flex flex-wrap items-center gap-3 min-w-0">
                                             <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
                                                 Link Access:
@@ -283,9 +303,12 @@ import type { Commenter } from '../typings/electron'
 import { useHeader } from '../composables/useHeader'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
-import { useResilientNav } from '../composables/useResilientNav'
+import { useResilientNav } from '../composables/useResilientNav';
+import { useTransferProgress } from '../composables/useTransferProgress'
+
 const { to } = useResilientNav()
 useHeader('Select Files to Share');
+const transfer = useTransferProgress()
 
 const { apiFetch } = useApi()
 // ================== Project selection state ==================
@@ -445,6 +468,11 @@ const showPassword = ref(false)
 const viewUrl = ref('')
 const downloadUrl = ref('')
 
+const transcodeProxy = ref(false)
+
+// Always on for share links
+const adaptiveHls = computed(() => true)
+
 // Map units → seconds
 const UNIT_TO_SECONDS = {
     hours: 60 * 60,
@@ -508,6 +536,54 @@ function setNever() {
     expiresValue.value = 0;
     expiresUnit.value = 'hours';
 }
+
+type MagicLinkTranscode = {
+    fileId?: string | number;
+    assetVersionId?: string | number;
+    jobs?: any;
+};
+
+function extractAssetVersionIdsFromMagicLinkResponse(data: any): number[] {
+    const ids: number[] = [];
+    const push = (v: any) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) ids.push(n);
+    };
+
+    const t = data?.transcodes;
+
+    if (Array.isArray(t)) {
+        for (const rec of t as MagicLinkTranscode[]) push(rec?.assetVersionId);
+    } else if (t && typeof t === "object") {
+        for (const k of Object.keys(t)) push((t as any)[k]?.assetVersionId);
+    }
+
+    return Array.from(new Set(ids));
+}
+
+function extractDbFileIdsFromMagicLinkResponse(data: any): number[] {
+    const ids: number[] = [];
+    const push = (v: any) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) ids.push(n);
+    };
+
+    const t = data?.transcodes;
+    if (Array.isArray(t)) {
+        for (const rec of t as MagicLinkTranscode[]) push(rec?.fileId);
+    }
+
+    // single-file response shape
+    push(data?.file?.id);
+
+    // collection response shape
+    if (Array.isArray(data?.files)) {
+        for (const f of data.files) push(f?.id);
+    }
+
+    return Array.from(new Set(ids));
+}
+
 async function generateLink() {
     if (!canGenerate.value) {
         // Safety guard – normally prevented by disabled button
@@ -564,6 +640,9 @@ async function generateLink() {
         })
     }
 
+    body.generateReviewProxy = !!transcodeProxy.value
+    body.adaptiveHls = !!adaptiveHls.value
+
     try {
         const data = await apiFetch('/api/magic-link', {
             method: 'POST',
@@ -572,6 +651,74 @@ async function generateLink() {
 
         viewUrl.value = data.viewUrl
         downloadUrl.value = data.downloadUrl
+
+        if (transcodeProxy.value || adaptiveHls.value) {
+            const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
+            const ctx = {
+                linkUrl: data.viewUrl,
+                linkTitle: linkTitle.value || undefined,
+                files: files.value.slice(),
+            }
+
+            if (versionIds.length) {
+                if (transcodeProxy.value) {
+                    transfer.startAssetVersionTranscodeTask({
+                        apiFetch,
+                        assetVersionIds: versionIds,
+                        title: "Generating proxy files",
+                        detail: `Tracking ${versionIds.length} asset version(s)`,
+                        intervalMs: 1500,
+                        jobKind: "proxy_mp4",
+                        context: ctx, 
+                    });
+                }
+
+                if (adaptiveHls.value) {
+                    transfer.startAssetVersionTranscodeTask({
+                        apiFetch,
+                        assetVersionIds: versionIds,
+                        title: "Generating adaptive stream",
+                        detail: `Tracking ${versionIds.length} asset version(s)`,
+                        intervalMs: 1500,
+                        jobKind: "hls",
+                        context: ctx, 
+                    });
+                }
+            } else {
+                // fallback (only if server didn't return transcodes for some reason)
+                const fileIds = extractDbFileIdsFromMagicLinkResponse(data);
+
+                if (fileIds.length) {
+                    // NOTE: fileId polling can't separate proxy vs hls unless you also add jobKind support to summarize()
+                    // If you want two rows even in fallback mode, you need the deterministic taskId approach or extend startTranscodeTask similarly.
+                    transfer.startTranscodeTask({
+                        apiFetch,
+                        fileIds,
+                        title: "Generating transcodes",
+                        detail: `Tracking ${fileIds.length} file(s)`,
+                        intervalMs: 1500,
+                    });
+
+                    pushNotification(
+                        new Notification(
+                            "Transcode Tracking Limited",
+                            "The server did not return asset version IDs, so progress tracking may be less detailed.",
+                            "warning",
+                            8000
+                        )
+                    );
+                } else {
+                    pushNotification(
+                        new Notification(
+                            "Transcode Generation Requested",
+                            "Transcode generation was requested, but the server did not return tracking IDs.",
+                            "warning",
+                            8000
+                        )
+                    );
+                }
+            }
+        }
 
         const label = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
         const titlePart = linkTitle.value ? ` for “${linkTitle.value}”` : ''

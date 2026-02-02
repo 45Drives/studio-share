@@ -75,26 +75,29 @@
           </div>
         </div>
       </template>
-
       <template v-if="browseMode !== 'roots' && viewMode === 'tree'">
-        <TreeNode :key="'tree-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
-          :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
-          :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
-          @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
+        <div class="min-h-full" @click="onBrowserBackgroundClick">
+          <TreeNode :key="'tree-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
+            :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
+            :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
+            @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
+        </div>
       </template>
 
       <template v-if="browseMode !== 'roots' && viewMode === 'icons'">
-        <IconMode :key="'icons-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
-          :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
-          :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
-          @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
+        <div class="min-h-full" @click="onBrowserBackgroundClick">
+          <IconMode :key="'icons-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
+            :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
+            :isRoot="true" :useCase="useCase || 'upload'" v-model:selectedFolder="selectedFolderBridge"
+            @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
+        </div>
       </template>
 
       <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-600/80 flex items-center justify-center p-4">
         <div class="bg-accent p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
           <h3 class="text-lg font-semibold mb-4 text-default">Create New Folder</h3>
           <p class="text-sm mb-4 text-muted">
-            Current Path: <code>{{ browseCwd }}</code>
+            Current Path: <code>{{ newFolderBasePath }}</code>
           </p>
 
           <form @submit.prevent="confirmNewFolder">
@@ -329,11 +332,27 @@ async function togglePath({ path, isDir }: { path: string; isDir: boolean }) {
   await getFilesForFolder(path)
 }
 
+function onBrowserBackgroundClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  if (browseMode.value === 'roots') return
+
+  // If the click happened inside an item (folder row/tile), do nothing.
+  if (target.closest('[data-fp-item]')) return
+
+  // Ignore interactive elements
+  if (target.closest('button, a, input, select, textarea, label')) return
+
+  // Select current directory
+  onSelectFolder(browseCwd.value)
+}
+
 /* New folder modal */
 const showNewFolderModal = ref(false)
 const newFolderName = ref('')
 const newFolderError = ref<string | null>(null)
 const folderNameInput = ref<HTMLInputElement | null>(null)
+const newFolderBasePath = ref<string>('/')
 
 watch(showNewFolderModal, (isOpen) => {
   if (isOpen) {
@@ -344,6 +363,11 @@ watch(showNewFolderModal, (isOpen) => {
 function createNewFolder() {
   newFolderName.value = ''
   newFolderError.value = null
+
+  // Use the user's current selection (destAbs). Fallback to browseCwd if somehow empty.
+  const base = destAbs.value && destAbs.value.trim() ? destAbs.value : browseCwd.value
+  newFolderBasePath.value = ensureSlash(base)
+
   showNewFolderModal.value = true
 }
 
@@ -351,7 +375,7 @@ async function confirmNewFolder() {
   const name = newFolderName.value.trim()
   if (!name) return
 
-  const current = browseCwd.value.replace(/\/+$/, '')
+  const current = (newFolderBasePath.value || browseCwd.value || '/').replace(/\/+$/, '')
   const newPath = current + '/' + name
 
   try {
@@ -369,13 +393,19 @@ async function confirmNewFolder() {
     if (current === '') expandCache.delete('/')
 
     refreshKey.value++
-
     showNewFolderModal.value = false
 
-    // Select the newly created folder (single-click behavior: destination only)
+    // Select the newly created folder
     onSelectFolder(newPath)
 
-    pushNotification(new Notification('New Folder Created', `Folder '${name}' has been created successfully.`, 'success', 8000))
+    pushNotification(
+      new Notification(
+        'New Folder Created',
+        `Folder '${name}' has been created successfully.`,
+        'success',
+        8000,
+      ),
+    )
   } catch (e: any) {
     console.error(e)
     newFolderError.value = `API failed: ${e.message || 'Unknown error'}`
