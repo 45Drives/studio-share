@@ -1679,8 +1679,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         `?dest=${encodeURIComponent(destRel)}` +
         `&name=${encodeURIComponent(fileName)}` +
         `&uploader=${encodeURIComponent(os.userInfo().username)}` +
-        (wantsProxy ? `&proxy=1` : ``)
-
+        `&hls=1` + (wantsProxy ? `&proxy=1` : ``)
       try {
         const r = await fetch(url, { method: 'POST' })
         const text = await r.text()
@@ -1695,19 +1694,26 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
         if (j?.ok) {
           const fileId = Number(j.fileId ?? j.file_id ?? j?.file?.id);
-          const assetVersionId = j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id ?? null;
+          const assetVersionId = Number(j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id);
+
+          const jobs = j.jobs || { queuedKinds: [], skippedKinds: [] };
 
           if (Number.isFinite(fileId) && fileId > 0) {
+            if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) {
+              jl('warn', 'ingest.register.missing_asset_version', { id, fileId, resp: j });
+            }
             event.sender.send(`upload:ingest:${id}`, {
               ok: true,
               fileId,
-              assetVersionId,
+              assetVersionId: Number.isFinite(assetVersionId) ? assetVersionId : null,
               host: opts.host,
-              apiPort: apiPort,
+              apiPort,
+              // add a "transcodes" array so your existing extractJobInfoByVersion() works unchanged:
+              transcodes: Number.isFinite(assetVersionId) ? [{
+                assetVersionId,
+                jobs
+              }] : [],
             });
-            jl('info', 'ingest.register.emit', { id, fileId, assetVersionId });
-          } else {
-            jl('warn', 'ingest.register.no-fileId', { id, resp: j });
           }
         } else {
           event.sender.send(`upload:ingest:${id}`, { ok: false, error: j?.error || 'ingest not ok' });
@@ -1751,4 +1757,3 @@ app.on('window-all-closed', () => {
   jl('info', 'app.window-all-closed', { platform: process.platform });
 
 });
-

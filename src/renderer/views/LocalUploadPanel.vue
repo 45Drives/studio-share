@@ -324,39 +324,143 @@ function stepClass(n: number) {
 	].join(' ')
 }
 
+function joinPath(dir: string, name: string) {
+	const d = String(dir || '').replace(/\/+$/, '')
+	const n = String(name || '').replace(/^\/+/, '')
+	return (d ? d : '/') + '/' + n
+}
+
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
+	const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
+	const t = data?.transcodes;
+	if (!Array.isArray(t)) return map;
+
+	for (const rec of t as any[]) {
+		const vId = Number(rec?.assetVersionId);
+		if (!Number.isFinite(vId) || vId <= 0) continue;
+
+		map[vId] = {
+			queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
+			skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
+		};
+	}
+	return map;
+}
+
 function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
 	wantProxy: boolean
+	groupId: string
+	destDir: string
+	destFileAbs: string
 }) {
-	if (!opts.wantProxy) return () => { };
-
-	const chan = `upload:ingest:${opts.uploadId}`;
+	const chan = `upload:ingest:${opts.uploadId}`
 
 	const handler = (_e: any, payload: any) => {
 		try {
 			if (!payload?.ok) return;
 
 			const fileId = Number(payload.fileId);
+			const assetVersionId = Number(payload.assetVersionId);
+
 			if (!Number.isFinite(fileId) || fileId <= 0) return;
 
-			transfer.startTranscodeTask({
-				apiFetch,
-				fileIds: [fileId],
-				title: `Transcoding: ${opts.rowName}`,
-				detail: 'Generating proxy/hls…',
-				intervalMs: 1500,
-			});
+			const jobInfo = extractJobInfoByVersion(payload);
+			const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
+
+			const shouldTrack = (kind: string) => {
+				// If we don't have job info, preserve old behavior and track.
+				if (!rec) return true;
+
+				if (rec.queuedKinds?.includes(kind)) return true;
+				if (rec.skippedKinds?.includes(kind)) return false;
+
+				// Unknown: be permissive
+				return true;
+			};
+
+			// Prefer assetVersion polling when available
+			const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
+
+			// HLS (you said always)
+			if (shouldTrack('hls')) {
+				if (useAssetVersion) {
+					transfer.startAssetVersionTranscodeTask({
+						apiFetch,
+						assetVersionIds: [assetVersionId],
+						title: `Transcoding: ${opts.rowName}`,
+						detail: 'Generating HLS…',
+						intervalMs: 1500,
+						jobKind: 'hls',
+						context: {
+							source: 'upload',
+							groupId: opts.groupId,
+							destDir: opts.destDir,
+							file: opts.destFileAbs,
+						},
+					});
+				} else {
+					transfer.startTranscodeTask({
+						apiFetch,
+						fileIds: [fileId],
+						title: `Transcoding: ${opts.rowName}`,
+						detail: 'Generating HLS…',
+						intervalMs: 1500,
+						jobKind: 'hls',
+						context: {
+							source: 'upload',
+							groupId: opts.groupId,
+							destDir: opts.destDir,
+							file: opts.destFileAbs,
+						},
+					});
+				}
+			}
+
+			// Proxy (only if user asked)
+			if (opts.wantProxy && shouldTrack('proxy_mp4')) {
+				if (useAssetVersion) {
+					transfer.startAssetVersionTranscodeTask({
+						apiFetch,
+						assetVersionIds: [assetVersionId],
+						title: `Transcoding: ${opts.rowName}`,
+						detail: 'Generating proxy…',
+						intervalMs: 1500,
+						jobKind: 'proxy_mp4',
+						context: {
+							source: 'upload',
+							groupId: opts.groupId,
+							destDir: opts.destDir,
+							file: opts.destFileAbs,
+						},
+					});
+				} else {
+					transfer.startTranscodeTask({
+						apiFetch,
+						fileIds: [fileId],
+						title: `Transcoding: ${opts.rowName}`,
+						detail: 'Generating proxy…',
+						intervalMs: 1500,
+						jobKind: 'proxy_mp4',
+						context: {
+							source: 'upload',
+							groupId: opts.groupId,
+							destDir: opts.destDir,
+							file: opts.destFileAbs,
+						},
+					});
+				}
+			}
 		} finally {
 			window.electron?.ipcRenderer.removeListener(chan, handler);
 		}
 	};
 
-	window.electron?.ipcRenderer.on(chan, handler);
-
-	// return an unsubscribe for cancel/route leave
-	return () => window.electron?.ipcRenderer.removeListener(chan, handler);
+	window.electron?.ipcRenderer.on(chan, handler)
+	return () => window.electron?.ipcRenderer.removeListener(chan, handler)
 }
+
 
 /** ── Step 1: local files ───────────────────────────────── */
 const selected = ref<LocalFile[]>([])
@@ -578,7 +682,10 @@ function updateRowProgress(row: UploadRow, p?: number, speed?: string, eta?: str
 	rafState.set(row.localKey, prev);
 }
 
-const rafState = new Map<string, { p?: number; speed?: string; eta?: string; scheduled?: number }>();
+const rafState = new Map<
+	string,
+	{ p?: number; speed?: string | null; eta?: string | null; scheduled?: number }
+>()
 
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
@@ -591,11 +698,23 @@ async function startUploads() {
 		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
 
+		const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
+
+		// Build a stable per-row absolute destination path for grouping + display
+		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
+		const destFileAbs = joinPath(destDirAbs, row.name)
+
 		const taskId = transfer.createUploadTask({
 			title: `Uploading: ${row.name}`,
-			detail: `${row.dest}`,
+			detail: destDirAbs,
 			cancel: () => {
 				if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
+			},
+			context: {
+				source: 'upload',
+				groupId,
+				destDir: destDirAbs,
+				file: destFileAbs, 
 			},
 		})
 		row.dockTaskId = taskId
@@ -641,8 +760,12 @@ async function startUploads() {
 			uploadId: id,
 			rowName: row.name,
 			wantProxy: transcodeProxyAfterUpload.value,
-		});
-		row.ingestUnsub = stopIngestListener;
+			groupId,
+			destDir: destDirAbs,
+			destFileAbs,
+		})
+		row.ingestUnsub = stopIngestListener
+
 		// Ensure we clean up no matter what
 		const cleanup = () => {
 			try { stopIngestListener?.(); } catch { }

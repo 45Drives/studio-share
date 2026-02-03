@@ -456,6 +456,46 @@ watch(
     { deep: true }
 )
 
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
+    const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
+    const t = data?.transcodes;
+
+    if (!Array.isArray(t)) return map;
+
+    for (const rec of t as any[]) {
+        const vId = Number(rec?.assetVersionId);
+        if (!Number.isFinite(vId) || vId <= 0) continue;
+
+        map[vId] = {
+            queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
+            skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
+        };
+    }
+    return map;
+}
+
+function filterVersionIdsByJobKind(
+    versionIds: number[],
+    jobInfo: Record<number, { queuedKinds: string[]; skippedKinds: string[] }>,
+    kind: string
+) {
+    const queued: number[] = []
+    const skipped: number[] = []
+
+    for (const vId of versionIds) {
+        const rec = jobInfo[vId]
+        if (rec?.queuedKinds?.includes(kind)) queued.push(vId)
+        else if (rec?.skippedKinds?.includes(kind)) skipped.push(vId)
+        else {
+            // Unknown: server didn't tell us. Treat as queued to preserve existing behavior.
+            queued.push(vId)
+        }
+    }
+
+    return { queued, skipped }
+}
+
+
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 // const maxDownloads = ref(5)
@@ -471,7 +511,7 @@ const downloadUrl = ref('')
 const transcodeProxy = ref(false)
 
 // Always on for share links
-const adaptiveHls = computed(() => true)
+const adaptiveHls = computed(() => !!transcodeProxy.value)
 
 // Map units → seconds
 const UNIT_TO_SECONDS = {
@@ -654,35 +694,76 @@ async function generateLink() {
 
         if (transcodeProxy.value || adaptiveHls.value) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
-            const ctx = {
-                linkUrl: data.viewUrl,
-                linkTitle: linkTitle.value || undefined,
-                files: files.value.slice(),
-            }
 
             if (versionIds.length) {
+                const jobInfo = extractJobInfoByVersion(data);
+
+                const proxySplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'proxy_mp4');
+                const hlsSplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'hls');
+
+                const groupId = `link:${data.viewUrl}`;
+                const fileForTask = files.value.length === 1 ? files.value[0] : undefined;
+
+                // Proxy: only track versions that were actually queued
                 if (transcodeProxy.value) {
-                    transfer.startAssetVersionTranscodeTask({
-                        apiFetch,
-                        assetVersionIds: versionIds,
-                        title: "Generating proxy files",
-                        detail: `Tracking ${versionIds.length} asset version(s)`,
-                        intervalMs: 1500,
-                        jobKind: "proxy_mp4",
-                        context: ctx, 
-                    });
+                    if (proxySplit.queued.length) {
+                        transfer.startAssetVersionTranscodeTask({
+                            apiFetch,
+                            assetVersionIds: proxySplit.queued,
+                            title: 'Generating proxy files',
+                            detail: `Tracking ${proxySplit.queued.length} asset version(s)`,
+                            intervalMs: 1500,
+                            jobKind: 'proxy_mp4',
+                            context: {
+                                source: 'link',
+                                groupId,
+                                linkUrl: data.viewUrl,
+                                linkTitle: linkTitle.value || undefined,
+                                file: fileForTask,
+                                files: files.value.slice(),
+                            },
+                        });
+                    } else if (proxySplit.skipped.length) {
+                        pushNotification(
+                            new Notification(
+                                'Proxy Already Available',
+                                `Proxy generation was skipped for ${proxySplit.skipped.length} item(s) (already exists).`,
+                                'info',
+                                6000
+                            )
+                        );
+                    }
                 }
 
+                // HLS: only track versions that were actually queued
                 if (adaptiveHls.value) {
-                    transfer.startAssetVersionTranscodeTask({
-                        apiFetch,
-                        assetVersionIds: versionIds,
-                        title: "Generating adaptive stream",
-                        detail: `Tracking ${versionIds.length} asset version(s)`,
-                        intervalMs: 1500,
-                        jobKind: "hls",
-                        context: ctx, 
-                    });
+                    if (hlsSplit.queued.length) {
+                        transfer.startAssetVersionTranscodeTask({
+                            apiFetch,
+                            assetVersionIds: hlsSplit.queued,
+                            title: 'Generating adaptive stream',
+                            detail: `Tracking ${hlsSplit.queued.length} asset version(s)`,
+                            intervalMs: 1500,
+                            jobKind: 'hls',
+                            context: {
+                                source: 'link',
+                                groupId,
+                                linkUrl: data.viewUrl,
+                                linkTitle: linkTitle.value || undefined,
+                                file: fileForTask,
+                                files: files.value.slice(),
+                            },
+                        });
+                    } else if (hlsSplit.skipped.length) {
+                        pushNotification(
+                            new Notification(
+                                'Stream Already Available',
+                                `Adaptive stream generation was skipped for ${hlsSplit.skipped.length} item(s) (already exists).`,
+                                'info',
+                                6000
+                            )
+                        );
+                    }
                 }
             } else {
                 // fallback (only if server didn't return transcodes for some reason)

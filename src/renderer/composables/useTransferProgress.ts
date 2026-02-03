@@ -1,5 +1,5 @@
 // src/renderer/composables/useTransferProgress.ts
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import type { ProgressItem, VersionProgressItem } from './transcodeProgress'
 import { startProgressPolling } from './transcodeProgress'
 
@@ -7,11 +7,14 @@ type UploadStatus = 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
 type TranscodeStatus = 'queued' | 'running' | 'done' | 'failed' | 'unknown'
 
 export type TransferContext = {
+    source: 'link' | 'upload'
+    groupId?: string          // stable id shared by upload+transcode for same action
     linkUrl?: string
     linkTitle?: string
-    files?: string[]
+    destDir?: string          // for uploads
+    file?: string             // single file for this specific task (preferred for grouping)
+    files?: string[]          // optional; avoid using this for per-file grouping
 }
-
 export type TransferTask =
     | {
         taskId: string
@@ -77,30 +80,31 @@ function upsertTask(task: TransferTask) {
     else _state.tasks[idx] = task
 }
 
+function isActiveTask(t: TransferTask) {
+    if (t.kind === 'upload') return t.status === 'uploading' || t.status === 'queued'
+    return t.status === 'queued' || t.status === 'running' || t.status === 'unknown'
+}
+
+function isFinishedTask(t: TransferTask) {
+    if (t.kind === 'upload') return t.status === 'done' || t.status === 'canceled' || t.status === 'error'
+    return t.status === 'done' || t.status === 'failed'
+}
+
 function removeTask(taskId: string) {
     _state.tasks = _state.tasks.filter(t => t.taskId !== taskId)
 }
 
 function clearFinished() {
-    _state.tasks = _state.tasks.filter(t => {
-        if (t.kind === 'upload') return !(t.status === 'done' || t.status === 'canceled' || t.status === 'error')
-        return !(t.status === 'done' || t.status === 'failed')
-    })
+    _state.tasks = _state.tasks.filter(t => !isFinishedTask(t))
 }
 
 export function useTransferProgress() {
     const hasActive = computed(() =>
-        _state.tasks.some(t => {
-            if (t.kind === 'upload') return t.status === 'uploading' || t.status === 'queued'
-            return t.status === 'queued' || t.status === 'running' || t.status === 'unknown'
-        })
+        _state.tasks.some(t => isActiveTask(t))
     )
 
     const activeCount = computed(() =>
-        _state.tasks.filter(t => {
-            if (t.kind === 'upload') return t.status === 'uploading' || t.status === 'queued'
-            return t.status === 'queued' || t.status === 'running' || t.status === 'unknown'
-        }).length
+        _state.tasks.filter(t => isActiveTask(t)).length
     )
 
     // Auto-open dock when transfers start
@@ -114,12 +118,6 @@ export function useTransferProgress() {
                 _state.minimized = true  // open but minimized
                 // _state.minimized = false // open expanded
             }
-        }
-    )
-
-    watch(
-        () => hasActive.value,
-        (active) => {
             if (!active) {
                 _state.minimized = true
                 _state.open = false
@@ -135,13 +133,19 @@ export function useTransferProgress() {
     function setOpen(v: boolean) {
         _state.open = v
     }
-    function createUploadTask(opts: { title: string; detail?: string; cancel?: () => void }) {
+
+    function createUploadTask(opts: {
+        title: string
+        detail?: string
+        cancel?: () => void
+        context?: TransferContext
+    }) {
         const taskId = makeId('upl')
         const t: TransferTask = {
             taskId,
             kind: 'upload',
             title: opts.title,
-            detail: opts.detail?.trim(), // trim here
+            detail: opts.detail?.trim(),
             status: 'queued',
             progress: 0,
             speed: null,
@@ -149,12 +153,16 @@ export function useTransferProgress() {
             error: null,
             startedAt: now(),
             cancel: opts.cancel,
+            context: opts.context,
         }
         upsertTask(t)
         return taskId
     }
 
-    function updateUpload(taskId: string, patch: Partial<Extract<TransferTask, { kind: 'upload' }>>) {
+    function updateUpload(
+        taskId: string,
+        patch: Partial<Extract<TransferTask, { kind: 'upload' }>>
+    ) {
         const t = _state.tasks.find(x => x.taskId === taskId && x.kind === 'upload') as
             | Extract<TransferTask, { kind: 'upload' }>
             | undefined
@@ -243,7 +251,7 @@ export function useTransferProgress() {
 
             for (const j of jobs) {
                 const st = String(j?.status || '').toLowerCase()
-                if (st === 'failed' || st === 'error') failed++
+                if (st === 'failed' || st === 'error' || st === 'missing_output') failed++
                 else if (st === 'running') running++
                 else if (st === 'queued') queued++
                 else if (st === 'done') done++
@@ -267,6 +275,75 @@ export function useTransferProgress() {
 
         return { status, progress, counts: { failed, running, queued, done } }
     }
+    
+
+    function startTranscodeTaskBase<TItem>(opts: {
+        apiFetch: (path: string, init?: any) => Promise<any>
+        ids: number[]
+        title: string
+        detail?: string
+        intervalMs?: number
+        jobKind?: 'proxy_mp4' | 'hls' | 'any'
+        context?: TransferContext
+        mode: 'file' | 'version'
+        summarizeItems: (items: TItem[], jobKind: 'proxy_mp4' | 'hls' | 'any') => { status: TranscodeStatus; progress: number }
+        initialItems: TItem[]
+    }) {
+        const taskId = makeId(opts.mode === 'version' ? 'trnV' : 'trn')
+        const t: TransferTask = {
+            taskId,
+            kind: 'transcode',
+            title: opts.title,
+            detail: opts.detail,
+            status: 'queued',
+            progress: 0,
+            error: null,
+            ...(opts.mode === 'version' ? { assetVersionIds: opts.ids.slice() } : { fileIds: opts.ids.slice() }),
+            items: opts.initialItems,
+            startedAt: now(),
+            stop: undefined,
+            jobKind: opts.jobKind ?? 'any',
+            context: opts.context,
+        }
+        upsertTask(t)
+
+        const stop = startProgressPolling({
+            apiFetch: opts.apiFetch,
+            ...(opts.mode === 'version'
+                ? { assetVersionIds: () => opts.ids }
+                : { fileIds: () => opts.ids }),
+            intervalMs: opts.intervalMs ?? 1500,
+            onUpdate: (items) => {
+                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+                    | Extract<TransferTask, { kind: 'transcode' }>
+                    | undefined
+                if (!cur) return
+
+                const castItems = (items || []) as TItem[]
+                cur.items = castItems as any
+
+                const s = opts.summarizeItems(castItems, cur.jobKind ?? 'any')
+                cur.status = s.status
+                cur.progress = s.progress
+
+                if (s.status === 'done' || s.status === 'failed') {
+                    cur.completedAt = now()
+                    try { cur.stop?.() } catch { }
+                }
+            },
+            onError: (e) => {
+                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+                    | Extract<TransferTask, { kind: 'transcode' }>
+                    | undefined
+                if (!cur) return
+                cur.status = 'unknown'
+                cur.error = (e as any)?.message || String(e)
+            },
+        })
+
+        ; (t as any).stop = stop
+        return taskId
+    }
 
     function startAssetVersionTranscodeTask(opts: {
         apiFetch: (path: string, init?: any) => Promise<any>
@@ -275,60 +352,20 @@ export function useTransferProgress() {
         detail?: string
         intervalMs?: number
         jobKind?: 'proxy_mp4' | 'hls' | 'any'
-        context?: TransferContext // ADD
+        context?: TransferContext
     }) {
-        const taskId = makeId('trnV')
-        const t: TransferTask = {
-            taskId,
-            kind: 'transcode',
+        return startTranscodeTaskBase<VersionProgressItem>({
+            apiFetch: opts.apiFetch,
+            ids: opts.assetVersionIds,
             title: opts.title,
             detail: opts.detail,
-            status: 'queued',
-            progress: 0,
-            error: null,
-            assetVersionIds: opts.assetVersionIds.slice(),
-            items: [] as VersionProgressItem[],
-            startedAt: now(),
-            stop: undefined,
-            jobKind: opts.jobKind ?? 'any',
-            context: opts.context, // ADD
-        }
-        upsertTask(t)
-
-        const stop = startProgressPolling({
-            apiFetch: opts.apiFetch,
-            assetVersionIds: () => opts.assetVersionIds,
-            intervalMs: opts.intervalMs ?? 1500,
-            onUpdate: (items) => {
-                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
-                    | Extract<TransferTask, { kind: 'transcode' }>
-                    | undefined
-                if (!cur) return
-
-                const vItems = (items || []) as VersionProgressItem[]
-                cur.items = vItems
-
-                const s = summarizeVersions(vItems, cur.jobKind ?? 'any')
-                cur.status = s.status
-                cur.progress = s.progress
-
-                if (s.status === 'done' || s.status === 'failed') {
-                    cur.completedAt = now()
-                    try { cur.stop?.() } catch { }
-                }
-            },
-            onError: (e) => {
-                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
-                    | Extract<TransferTask, { kind: 'transcode' }>
-                    | undefined
-                if (!cur) return
-                cur.status = 'unknown'
-                cur.error = (e as any)?.message || String(e)
-            },
+            intervalMs: opts.intervalMs,
+            jobKind: opts.jobKind,
+            context: opts.context,
+            mode: 'version',
+            summarizeItems: (items, jobKind) => summarizeVersions(items, jobKind),
+            initialItems: [] as VersionProgressItem[],
         })
-
-            ; (t as any).stop = stop
-        return taskId
     }
 
     function startTranscodeTask(opts: {
@@ -337,57 +374,21 @@ export function useTransferProgress() {
         title: string
         detail?: string
         intervalMs?: number
+        jobKind?: 'proxy_mp4' | 'hls' | 'any'
+        context?: TransferContext
     }) {
-        const taskId = makeId('trn')
-        const t: TransferTask = {
-            taskId,
-            kind: 'transcode',
+        return startTranscodeTaskBase<ProgressItem>({
+            apiFetch: opts.apiFetch,
+            ids: opts.fileIds,
             title: opts.title,
             detail: opts.detail,
-            status: 'queued',
-            progress: 0,
-            error: null,
-            fileIds: opts.fileIds.slice(),
-            items: [],
-            startedAt: now(),
-            stop: undefined,
-        }
-        upsertTask(t)
-
-        const stop = startProgressPolling({
-            apiFetch: opts.apiFetch,
-            fileIds: () => opts.fileIds,
-            intervalMs: opts.intervalMs ?? 1500,
-            onUpdate: (items) => {
-                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
-                    | Extract<TransferTask, { kind: 'transcode' }>
-                    | undefined
-                if (!cur) return
-
-                const fItems = (items || []) as ProgressItem[]
-                cur.items = fItems
-
-                const s = summarize(fItems)
-                cur.status = s.status
-                cur.progress = s.progress
-
-                if (s.status === 'done' || s.status === 'failed') {
-                    cur.completedAt = now()
-                    try { cur.stop?.() } catch { }
-                }
-            },
-            onError: (e) => {
-                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
-                    | Extract<TransferTask, { kind: 'transcode' }>
-                    | undefined
-                if (!cur) return
-                cur.status = 'unknown'
-                cur.error = (e as any)?.message || String(e)
-            },
+            intervalMs: opts.intervalMs,
+            jobKind: opts.jobKind,
+            context: opts.context,
+            mode: 'file',
+            summarizeItems: (items) => summarize(items),
+            initialItems: [] as ProgressItem[],
         })
-
-            ; (t as any).stop = stop
-        return taskId
     }
 
     return {

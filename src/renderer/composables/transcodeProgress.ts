@@ -33,7 +33,7 @@ function summarizeJobs(jobs: ProgressJob[]) {
         if (st === 'queued') queued++
         else if (st === 'running') running++
         else if (st === 'done') done++
-        else if (st === 'failed' || st === 'error') failed++
+        else if (st === 'failed' || st === 'error' || st === 'missing_output') failed++
     }
 
     return { queued, running, done, failed }
