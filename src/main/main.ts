@@ -1481,6 +1481,31 @@ ipcMain.handle('dialog:pickFiles', async () => {
   return allowed;
 });
 
+ipcMain.handle('dialog:pickWatermark', async () => {
+  jl('debug', 'dialog.pickWatermark.open');
+
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
+    ],
+  });
+  if (canceled || !filePaths.length) return null;
+
+  const p = filePaths[0];
+  if (!isOwnedByCurrentUser(p)) {
+    jl('warn', 'dialog.pickWatermark.denied', { path: p });
+    return null;
+  }
+
+  const st = fs.statSync(p);
+  return {
+    path: p,
+    name: path.basename(p),
+    size: st.size,
+  };
+});
+
 ipcMain.handle('dialog:pickFolder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openDirectory'],
@@ -1543,6 +1568,10 @@ export type RsyncStartOpts = {
   shareRoot?: string
   knownHostsPath?: string;
   transcodeProxy?: boolean
+  proxyQualities?: string[]
+  watermark?: boolean
+  watermarkFileName?: string
+  watermarkProxyQualities?: string[]
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -1673,13 +1702,36 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
       })
 
       const wantsProxy = (opts as any).transcodeProxy === true
+      const proxyQualities = Array.isArray((opts as any).proxyQualities)
+        ? (opts as any).proxyQualities.filter((q: any) => typeof q === 'string' && q.length)
+        : []
+      const wantsWatermark =
+        (opts as any).watermark === true &&
+        typeof (opts as any).watermarkFileName === 'string' &&
+        (opts as any).watermarkFileName.length > 0
+      const isVideo = (() => {
+        const ext = path.extname(fileName || '').toLowerCase().replace('.', '');
+        const videoExts = new Set([
+          'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
+          'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+        ]);
+        return videoExts.has(ext);
+      })();
 
       const url =
         `${base}/api/ingest/register` +
         `?dest=${encodeURIComponent(destRel)}` +
         `&name=${encodeURIComponent(fileName)}` +
         `&uploader=${encodeURIComponent(os.userInfo().username)}` +
-        `&hls=1` + (wantsProxy ? `&proxy=1` : ``)
+        `&hls=1` +
+        (wantsProxy ? `&proxy=1` : ``) +
+        (proxyQualities.length ? `&proxyQualities=${encodeURIComponent(proxyQualities.join(','))}` : ``) +
+        (wantsWatermark && isVideo
+          ? `&watermark=1&watermarkFile=${encodeURIComponent(String((opts as any).watermarkFileName))}` +
+            (Array.isArray((opts as any).watermarkProxyQualities) && (opts as any).watermarkProxyQualities.length
+              ? `&watermarkProxyQualities=${encodeURIComponent((opts as any).watermarkProxyQualities.join(','))}`
+              : ``)
+          : ``)
       try {
         const r = await fetch(url, { method: 'POST' })
         const text = await r.text()

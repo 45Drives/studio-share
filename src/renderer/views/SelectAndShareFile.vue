@@ -611,6 +611,8 @@ function extractDbFileIdsFromMagicLinkResponse(data: any): number[] {
     const t = data?.transcodes;
     if (Array.isArray(t)) {
         for (const rec of t as MagicLinkTranscode[]) push(rec?.fileId);
+    } else if (t && typeof t === "object") {
+        for (const k of Object.keys(t)) push((t as any)[k]?.fileId);
     }
 
     // single-file response shape

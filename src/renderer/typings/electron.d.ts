@@ -25,6 +25,16 @@ export type RsyncOpts = {
   bwlimitKb?: number
   /** extra rsync flags */
   extraArgs?: string[]
+  /** request proxy transcode after ingest */
+  transcodeProxy?: boolean
+  /** requested proxy qualities (e.g. ['720p','1080p','original']) */
+  proxyQualities?: string[]
+  /** request watermark for video files */
+  watermark?: boolean
+  /** watermark image filename already present in destDir */
+  watermarkFileName?: string
+  /** qualities that should receive watermark (defaults to proxyQualities) */
+  watermarkProxyQualities?: string[]
 }
 export type LinkType = 'upload' | 'download' | 'collection'
 export type Status = 'active' | 'expired' | 'disabled'
@@ -91,6 +101,7 @@ export interface ElectronApi {
   // local picks
   pickFiles: () => Promise<Array<{ path: string; name: string; size: number }>>
   pickFolder: () => Promise<Array<{ path: string; name: string; size: number }>>
+  pickWatermark: () => Promise<{ path: string; name: string; size: number } | null>
 
   /** -------- rsync over SSH (recommended path) -------- */
   rsyncStart: (

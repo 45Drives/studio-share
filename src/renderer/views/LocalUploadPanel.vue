@@ -212,27 +212,83 @@
 
 						<!-- Center -->
 						<div class="justify-self-center">
-							<div v-if="step === 3"
-								class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-								<label class="font-semibold whitespace-nowrap">
-									Generate Proxy Files:
-								</label>
+							<div v-if="step === 3" class="grid gap-2">
+								<div class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap">
+										Generate Proxy Files:
+									</label>
 
-								<Switch v-model="transcodeProxyAfterUpload" :class="[
-									transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
-									'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-								]">
-									<span class="sr-only">Toggle proxy file generation</span>
-									<span aria-hidden="true" :class="[
-										transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-0',
-										'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-									]" />
-								</Switch>
+									<Switch v-model="transcodeProxyAfterUpload" :class="[
+										transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
+										'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+									]">
+										<span class="sr-only">Toggle proxy file generation</span>
+										<span aria-hidden="true" :class="[
+											transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-0',
+											'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+										]" />
+									</Switch>
 
-								<!-- fixed width so text changes don't move anything -->
-								<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
-									{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files only' }}
-								</span>
+									<!-- fixed width so text changes don't move anything -->
+									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+										{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files only' }}
+									</span>
+								</div>
+
+								<div v-if="transcodeProxyAfterUpload" class="grid grid-cols-[auto_1fr] items-start gap-3">
+									<label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
+									<div class="flex flex-col gap-2">
+										<label class="inline-flex items-center gap-2 text-sm">
+											<input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
+											<span>720p</span>
+										</label>
+										<label class="inline-flex items-center gap-2 text-sm">
+											<input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
+											<span>1080p</span>
+										</label>
+										<label class="inline-flex items-center gap-2 text-sm">
+											<input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
+											<span>Original</span>
+										</label>
+										<div class="text-xs text-slate-400">
+											These versions take extra space and are used for shared links instead of the original file.
+										</div>
+									</div>
+								</div>
+
+								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap">
+										Watermark Videos:
+									</label>
+
+									<Switch v-model="watermarkAfterUpload" :class="[
+										watermarkAfterUpload ? 'bg-secondary' : 'bg-well',
+										'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+									]">
+										<span class="sr-only">Toggle video watermarking</span>
+										<span aria-hidden="true" :class="[
+											watermarkAfterUpload ? 'translate-x-5' : 'translate-x-0',
+											'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+										]" />
+									</Switch>
+
+									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+										{{ watermarkAfterUpload ? 'Apply watermark to videos' : 'No watermark' }}
+									</span>
+								</div>
+
+								<div v-if="hasVideoSelected && watermarkAfterUpload" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3">
+									<span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
+									<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
+									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+										{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
+									</span>
+									<button v-if="watermarkFile" class="btn btn-secondary" @click="clearWatermark">Clear</button>
+								</div>
+
+								<div v-if="hasVideoSelected && watermarkAfterUpload && !watermarkFile" class="text-xs text-amber-300">
+									Select a watermark image to continue.
+								</div>
 							</div>
 						</div>
 
@@ -295,6 +351,8 @@ const nextDisabled = computed(() => {
 	if (step.value === 1) return selected.value.length === 0;
 	if (step.value === 2) return !canNext.value;
 	// step 3: disable while actively uploading (until done), otherwise allow Start/Finish
+	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
+	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
 	return isUploading.value && !allDone.value;
 });
 
@@ -474,10 +532,34 @@ function pickFiles() { window.electron.pickFiles().then(addToSelection) }
 function pickFolder() { window.electron.pickFolder().then(addToSelection) }
 function removeSelected(file: LocalFile) { selected.value = selected.value.filter(f => f.path !== file.path) }
 function clearSelected() { selected.value = [] }
+function pickWatermark() {
+	window.electron.pickWatermark().then(f => {
+		if (f) watermarkFile.value = f;
+	});
+}
+function clearWatermark() { watermarkFile.value = null }
 
 const totalSelectedBytes = computed(() =>
 	selected.value.reduce((sum, f) => sum + (f.size || 0), 0)
 )
+const videoExts = new Set([
+	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
+	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+])
+const hasVideoSelected = computed(() =>
+	selected.value.some(f => {
+		const ext = String(f.name || '').toLowerCase().split('.').pop() || '';
+		return videoExts.has(ext);
+	})
+)
+
+watch(selected, () => {
+	if (!hasVideoSelected.value) {
+		watermarkAfterUpload.value = false
+		watermarkFile.value = null
+	}
+}, { deep: true })
+
 function formatSize(size: number) {
 	const u = ['B', 'KB', 'MB', 'GB', 'TB']
 	let i = 0; let v = size
@@ -539,7 +621,21 @@ function hasAlreadyUploaded(path: string, dest: string) {
 
 /** ── Step 3: upload & progress ─────────────────────────── */
 const transcodeProxyAfterUpload = ref(false)
+const proxyQualities = ref<string[]>([])
+const watermarkAfterUpload = ref(false)
+const watermarkFile = ref<LocalFile | null>(null)
 const adaptiveHls = ref(false);
+
+watch(transcodeProxyAfterUpload, (v) => {
+	if (v && proxyQualities.value.length === 0) {
+		proxyQualities.value = ['720p']
+	}
+	if (!v) {
+		proxyQualities.value = []
+		watermarkAfterUpload.value = false
+		watermarkFile.value = null
+	}
+})
 
 function finish() {
 	// Reset the wizard (or route away)
@@ -689,6 +785,48 @@ const rafState = new Map<
 
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
+	let startedAny = false
+
+	if (watermarkAfterUpload.value) {
+		isUploading.value = true
+		if (!watermarkFile.value) {
+			pushNotification(
+				new Notification(
+					'Watermark Image Required',
+					'Please choose a watermark image before starting the upload.',
+					'warning',
+					8000
+				)
+			)
+			isUploading.value = false
+			return
+		}
+
+		const destDirAbs = uploads.value[0]?.dest || normalizedDest.value
+		const { done } = await window.electron.rsyncStart(
+			{
+				host: ssh?.server,
+				user: ssh?.username,
+				src: watermarkFile.value.path,
+				destDir: destDirAbs,
+				port: serverPort,
+				keyPath: privateKeyPath,
+			}
+		)
+		const res = await done
+		if (!res?.ok) {
+			pushNotification(
+				new Notification(
+					'Watermark Upload Failed',
+					res?.error || 'Unable to upload the watermark image.',
+					'error',
+					8000
+				)
+			)
+			isUploading.value = false
+			return
+		}
+	}
 
 	for (const row of uploads.value) {
 		// Ignore rows that are not queued or already uploaded
@@ -697,6 +835,7 @@ async function startUploads() {
 		row.status = 'uploading';
 		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
+		startedAny = true
 
 		const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 
@@ -728,6 +867,10 @@ async function startUploads() {
 				port: serverPort,
 				keyPath: privateKeyPath,
 				transcodeProxy: transcodeProxyAfterUpload.value,
+				proxyQualities: proxyQualities.value.slice(),
+				watermark: watermarkAfterUpload.value,
+				watermarkFileName: watermarkFile.value?.name,
+				watermarkProxyQualities: watermarkAfterUpload.value ? proxyQualities.value.slice() : undefined,
 			},
 			p => {
 				let pct: number | undefined =
@@ -813,6 +956,10 @@ async function startUploads() {
 				);
 			}
 		});
+	}
+
+	if (!startedAny) {
+		isUploading.value = false
 	}
 }
 
