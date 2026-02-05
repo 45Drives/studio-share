@@ -415,101 +415,155 @@ function waitForIngestAndStartTranscode(opts: {
 }) {
 	const chan = `upload:ingest:${opts.uploadId}`
 
-	const handler = (_e: any, payload: any) => {
+	const startTranscodeFromPayload = (payload: any) => {
+		const fileId = Number(payload.fileId);
+		const assetVersionId = Number(payload.assetVersionId);
+
+		if (!Number.isFinite(fileId) || fileId <= 0) return;
+
+		const jobInfo = extractJobInfoByVersion(payload);
+		const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
+
+		const shouldTrack = (kind: string) => {
+			// If we don't have job info, preserve old behavior and track.
+			if (!rec) return true;
+
+			if (rec.queuedKinds?.includes(kind)) return true;
+			if (rec.skippedKinds?.includes(kind)) return false;
+
+			// Unknown: be permissive
+			return true;
+		};
+
+		// Prefer assetVersion polling when available
+		const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
+
+		// HLS (you said always)
+		if (shouldTrack('hls')) {
+			if (useAssetVersion) {
+				transfer.startAssetVersionTranscodeTask({
+					apiFetch,
+					assetVersionIds: [assetVersionId],
+					title: `Transcoding: ${opts.rowName}`,
+					detail: 'Generating HLS…',
+					intervalMs: 1500,
+					jobKind: 'hls',
+					context: {
+						source: 'upload',
+						groupId: opts.groupId,
+						destDir: opts.destDir,
+						file: opts.destFileAbs,
+					},
+				});
+			} else {
+				transfer.startTranscodeTask({
+					apiFetch,
+					fileIds: [fileId],
+					title: `Transcoding: ${opts.rowName}`,
+					detail: 'Generating HLS…',
+					intervalMs: 1500,
+					jobKind: 'hls',
+					context: {
+						source: 'upload',
+						groupId: opts.groupId,
+						destDir: opts.destDir,
+						file: opts.destFileAbs,
+					},
+				});
+			}
+		}
+
+		// Proxy (only if user asked)
+		if (opts.wantProxy && shouldTrack('proxy_mp4')) {
+			if (useAssetVersion) {
+				transfer.startAssetVersionTranscodeTask({
+					apiFetch,
+					assetVersionIds: [assetVersionId],
+					title: `Transcoding: ${opts.rowName}`,
+					detail: 'Generating proxy…',
+					intervalMs: 1500,
+					jobKind: 'proxy_mp4',
+					context: {
+						source: 'upload',
+						groupId: opts.groupId,
+						destDir: opts.destDir,
+						file: opts.destFileAbs,
+					},
+				});
+			} else {
+				transfer.startTranscodeTask({
+					apiFetch,
+					fileIds: [fileId],
+					title: `Transcoding: ${opts.rowName}`,
+					detail: 'Generating proxy…',
+					intervalMs: 1500,
+					jobKind: 'proxy_mp4',
+					context: {
+						source: 'upload',
+						groupId: opts.groupId,
+						destDir: opts.destDir,
+						file: opts.destFileAbs,
+					},
+				});
+			}
+		}
+	};
+
+	const handler = async (_e: any, payload: any) => {
 		try {
-			if (!payload?.ok) return;
+			if (!payload?.ok) {
+				if (payload?.error === 'outputs_exist') {
+					const msg = 'Proxy outputs already exist for this file. Overwrite them?';
+					const proceed = window.confirm(msg);
+					if (proceed) {
+						const params = new URLSearchParams();
+						if (payload?.destRel) params.set('dest', String(payload.destRel));
+						if (payload?.name) params.set('name', String(payload.name));
+						params.set('hls', '1');
+						if (opts.wantProxy) params.set('proxy', '1');
+						if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 
-			const fileId = Number(payload.fileId);
-			const assetVersionId = Number(payload.assetVersionId);
+						if (watermarkAfterUpload.value) {
+							params.set('watermark', '1');
+							if (watermarkFile.value?.name) {
+								params.set('watermarkFile', watermarkFile.value.name);
+							}
+							if (proxyQualities.value.length) {
+								params.set('watermarkProxyQualities', proxyQualities.value.join(','));
+							}
+						}
 
-			if (!Number.isFinite(fileId) || fileId <= 0) return;
+						params.set('overwrite', '1');
 
-			const jobInfo = extractJobInfoByVersion(payload);
-			const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
+						const data = await apiFetch(`/api/ingest/register?${params.toString()}`, {
+							method: 'POST',
+						});
 
-			const shouldTrack = (kind: string) => {
-				// If we don't have job info, preserve old behavior and track.
-				if (!rec) return true;
-
-				if (rec.queuedKinds?.includes(kind)) return true;
-				if (rec.skippedKinds?.includes(kind)) return false;
-
-				// Unknown: be permissive
-				return true;
-			};
-
-			// Prefer assetVersion polling when available
-			const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
-
-			// HLS (you said always)
-			if (shouldTrack('hls')) {
-				if (useAssetVersion) {
-					transfer.startAssetVersionTranscodeTask({
-						apiFetch,
-						assetVersionIds: [assetVersionId],
-						title: `Transcoding: ${opts.rowName}`,
-						detail: 'Generating HLS…',
-						intervalMs: 1500,
-						jobKind: 'hls',
-						context: {
-							source: 'upload',
-							groupId: opts.groupId,
-							destDir: opts.destDir,
-							file: opts.destFileAbs,
-						},
-					});
+						startTranscodeFromPayload(data);
+					} else {
+						pushNotification(
+							new Notification(
+								'Overwrite Canceled',
+								'Existing proxy outputs were kept.',
+								'info',
+								6000
+							)
+						);
+					}
 				} else {
-					transfer.startTranscodeTask({
-						apiFetch,
-						fileIds: [fileId],
-						title: `Transcoding: ${opts.rowName}`,
-						detail: 'Generating HLS…',
-						intervalMs: 1500,
-						jobKind: 'hls',
-						context: {
-							source: 'upload',
-							groupId: opts.groupId,
-							destDir: opts.destDir,
-							file: opts.destFileAbs,
-						},
-					});
+					pushNotification(
+						new Notification(
+							'Ingest Failed',
+							payload?.error || 'Ingest failed.',
+							'error',
+							8000
+						)
+					);
 				}
+				return;
 			}
 
-			// Proxy (only if user asked)
-			if (opts.wantProxy && shouldTrack('proxy_mp4')) {
-				if (useAssetVersion) {
-					transfer.startAssetVersionTranscodeTask({
-						apiFetch,
-						assetVersionIds: [assetVersionId],
-						title: `Transcoding: ${opts.rowName}`,
-						detail: 'Generating proxy…',
-						intervalMs: 1500,
-						jobKind: 'proxy_mp4',
-						context: {
-							source: 'upload',
-							groupId: opts.groupId,
-							destDir: opts.destDir,
-							file: opts.destFileAbs,
-						},
-					});
-				} else {
-					transfer.startTranscodeTask({
-						apiFetch,
-						fileIds: [fileId],
-						title: `Transcoding: ${opts.rowName}`,
-						detail: 'Generating proxy…',
-						intervalMs: 1500,
-						jobKind: 'proxy_mp4',
-						context: {
-							source: 'upload',
-							groupId: opts.groupId,
-							destDir: opts.destDir,
-							file: opts.destFileAbs,
-						},
-					});
-				}
-			}
+			startTranscodeFromPayload(payload);
 		} finally {
 			window.electron?.ipcRenderer.removeListener(chan, handler);
 		}

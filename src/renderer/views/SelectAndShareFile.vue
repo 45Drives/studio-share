@@ -144,6 +144,57 @@
                                                 {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
                                             </span>
                                         </div>
+                                        <div v-if="transcodeProxy" class="grid grid-cols-[auto_1fr] items-start gap-3 mb-3">
+                                            <label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
+                                            <div class="flex flex-col gap-2">
+                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                    <input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
+                                                    <span>720p</span>
+                                                </label>
+                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                    <input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
+                                                    <span>1080p</span>
+                                                </label>
+                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                    <input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
+                                                    <span>Original</span>
+                                                </label>
+                                                <div class="text-xs text-slate-400">
+                                                    These versions take extra space and are used for shared links instead of the original file.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div v-if="hasVideoSelected && transcodeProxy" class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3 mb-2">
+                                            <label class="font-semibold whitespace-nowrap">
+                                                Watermark Videos:
+                                            </label>
+
+                                            <Switch v-model="watermarkEnabled" :class="[
+                                                watermarkEnabled ? 'bg-secondary' : 'bg-well',
+                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                            ]">
+                                                <span class="sr-only">Toggle video watermarking</span>
+                                                <span aria-hidden="true" :class="[
+                                                    watermarkEnabled ? 'translate-x-5' : 'translate-x-0',
+                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                ]" />
+                                            </Switch>
+
+                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+                                                {{ watermarkEnabled ? 'Apply watermark to videos' : 'No watermark' }}
+                                            </span>
+                                        </div>
+                                        <div v-if="hasVideoSelected && watermarkEnabled" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 mb-2">
+                                            <span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
+                                            <button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
+                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+                                                {{ watermarkFile ? watermarkFile.name : 'No image selected' }}
+                                            </span>
+                                            <button v-if="watermarkFile" class="btn btn-secondary" @click="clearWatermark">Clear</button>
+                                        </div>
+                                        <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile" class="text-xs text-amber-300 mb-2">
+                                            Select a watermark image to continue.
+                                        </div>
                                         <div class="flex flex-wrap items-center gap-3 min-w-0">
                                             <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
                                                 Link Access:
@@ -291,7 +342,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, inject } from 'vue'
 import { useApi } from '../composables/useApi'
 import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
@@ -305,10 +356,13 @@ import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { useResilientNav } from '../composables/useResilientNav';
 import { useTransferProgress } from '../composables/useTransferProgress'
+import { connectionMetaInjectionKey } from '../keys/injection-keys';
 
 const { to } = useResilientNav()
 useHeader('Select Files to Share');
 const transfer = useTransferProgress()
+const connectionMeta = inject(connectionMetaInjectionKey)!
+const ssh = connectionMeta.value.ssh
 
 const { apiFetch } = useApi()
 // ================== Project selection state ==================
@@ -342,6 +396,11 @@ function resetAll() {
     downloadUrl.value = ''
     error.value = null
     autoRegenerate.value = false
+    transcodeProxy.value = false
+    proxyQualities.value = []
+    watermarkEnabled.value = false
+    watermarkFile.value = null
+    overwriteExisting.value = false
     if (regenTimer) {
         clearTimeout(regenTimer)
         regenTimer = null
@@ -509,9 +568,79 @@ const viewUrl = ref('')
 const downloadUrl = ref('')
 
 const transcodeProxy = ref(false)
+const proxyQualities = ref<string[]>([])
+const watermarkEnabled = ref(false)
+type LocalFile = { path: string; name: string; size: number }
+const watermarkFile = ref<LocalFile | null>(null)
+const overwriteExisting = ref(false)
 
-// Always on for share links
-const adaptiveHls = computed(() => !!transcodeProxy.value)
+// HLS is generated server-side; no client flag needed
+
+const videoExts = new Set([
+    'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
+    'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+])
+const hasVideoSelected = computed(() =>
+    files.value.some(f => {
+        const ext = String(f || '').toLowerCase().split('.').pop() || ''
+        return videoExts.has(ext)
+    })
+)
+
+watch(transcodeProxy, (v) => {
+    if (v && proxyQualities.value.length === 0) {
+        proxyQualities.value = ['720p']
+    }
+    if (!v) {
+        proxyQualities.value = []
+        watermarkEnabled.value = false
+        watermarkFile.value = null
+        overwriteExisting.value = false
+    }
+})
+
+watch(files, () => {
+    if (!hasVideoSelected.value) {
+        watermarkEnabled.value = false
+        watermarkFile.value = null
+    }
+}, { deep: true })
+
+function pickWatermark() {
+    window.electron.pickWatermark().then(f => {
+        if (f) watermarkFile.value = f
+    })
+}
+function clearWatermark() { watermarkFile.value = null }
+
+function dirOfServerPath(p: string) {
+    const clean = String(p || '').replace(/\\/g, '/').replace(/\/+$/, '')
+    if (!clean) return '/'
+    const idx = clean.lastIndexOf('/')
+    if (idx <= 0) return '/'
+    return clean.slice(0, idx)
+}
+
+async function uploadWatermarkToDirs(dirs: string[]) {
+    if (!watermarkFile.value) return { ok: false, error: 'no watermark file' }
+    const host = ssh?.server
+    const user = ssh?.username
+    if (!host || !user) return { ok: false, error: 'missing ssh connection info' }
+
+    for (const destDir of dirs) {
+        const { done } = await window.electron.rsyncStart({
+            host,
+            user,
+            src: watermarkFile.value.path,
+            destDir,
+            port: 22,
+            keyPath: undefined,
+        })
+        const res = await done
+        if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
+    }
+    return { ok: true }
+}
 
 // Map units → seconds
 const UNIT_TO_SECONDS = {
@@ -547,7 +676,9 @@ const canGenerate = computed(() =>
     Number.isFinite(expiresValue.value) &&
     expiresValue.value >= 0 && // 0 = never, >=1 = normal
     (!protectWithPassword.value || !!password.value) &&
-    commentAccessSatisfied.value
+    commentAccessSatisfied.value &&
+    (!transcodeProxy.value || proxyQualities.value.length > 0) &&
+    (!watermarkEnabled.value || !!watermarkFile.value)
 );
 
 function invalidateLink() {
@@ -640,6 +771,20 @@ async function generateLink() {
         return
     }
 
+    if (watermarkEnabled.value) {
+        if (!watermarkFile.value) {
+            pushNotification(
+                new Notification(
+                    'Watermark Image Required',
+                    'Please choose a watermark image before creating a link.',
+                    'warning',
+                    8000
+                )
+            )
+            return
+        }
+    }
+
     if (protectWithPassword.value && !password.value) {
         pushNotification(
             new Notification(
@@ -683,18 +828,79 @@ async function generateLink() {
     }
 
     body.generateReviewProxy = !!transcodeProxy.value
-    body.adaptiveHls = !!adaptiveHls.value
+    if (transcodeProxy.value) {
+        body.proxyQualities = proxyQualities.value.slice()
+        body.overwrite = !!overwriteExisting.value
+    }
+    if (watermarkEnabled.value && watermarkFile.value?.name) {
+        body.watermark = true
+        body.watermarkFile = watermarkFile.value.name
+        body.watermarkProxyQualities = proxyQualities.value.slice()
+    }
 
     try {
-        const data = await apiFetch('/api/magic-link', {
-            method: 'POST',
-            body: JSON.stringify(body),
-        })
+        if (watermarkEnabled.value && watermarkFile.value) {
+            const dirs = Array.from(new Set(files.value.map(dirOfServerPath)))
+            const up = await uploadWatermarkToDirs(dirs)
+            if (!up.ok) {
+                pushNotification(
+                    new Notification(
+                        'Watermark Upload Failed',
+                        up.error || 'Unable to upload the watermark image.',
+                        'error',
+                        8000
+                    )
+                )
+                return
+            }
+        }
+
+        console.log('[magic-link] request body', JSON.stringify(body))
+        let data: any
+        try {
+            data = await apiFetch('/api/magic-link', {
+                method: 'POST',
+                body: JSON.stringify(body),
+            })
+        } catch (e: any) {
+            if (e?.status === 409) {
+                let payload: any = null
+                try { payload = JSON.parse(e?.message) } catch { }
+
+                if (payload?.error === 'outputs_exist') {
+                    const proceed = window.confirm('Proxy outputs already exist for one or more files. Overwrite them?')
+                    if (proceed) {
+                        overwriteExisting.value = true
+                        body.overwrite = true
+                        console.log('[magic-link] retry with overwrite', JSON.stringify(body))
+                        data = await apiFetch('/api/magic-link', {
+                            method: 'POST',
+                            body: JSON.stringify(body),
+                        })
+                    } else {
+                        pushNotification(
+                            new Notification(
+                                'Overwrite Canceled',
+                                'Existing proxy outputs were kept.',
+                                'info',
+                                6000
+                            )
+                        );
+                        return
+                    }
+                } else {
+                    throw e
+                }
+            } else {
+                throw e
+            }
+        }
 
         viewUrl.value = data.viewUrl
         downloadUrl.value = data.downloadUrl
 
-        if (transcodeProxy.value || adaptiveHls.value) {
+        const wantsHls = true
+        if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
 
             if (versionIds.length) {
@@ -738,7 +944,7 @@ async function generateLink() {
                 }
 
                 // HLS: only track versions that were actually queued
-                if (adaptiveHls.value) {
+                if (wantsHls) {
                     if (hlsSplit.queued.length) {
                         transfer.startAssetVersionTranscodeTask({
                             apiFetch,
@@ -766,6 +972,17 @@ async function generateLink() {
                             )
                         );
                     }
+                }
+
+                if (!overwriteExisting.value && (proxySplit.skipped.length || hlsSplit.skipped.length)) {
+                    pushNotification(
+                        new Notification(
+                            'Existing Outputs Detected',
+                            'Some proxy outputs already exist and were kept.',
+                            'info',
+                            7000
+                        )
+                    );
                 }
             } else {
                 // fallback (only if server didn't return transcodes for some reason)

@@ -1768,7 +1768,15 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
             });
           }
         } else {
-          event.sender.send(`upload:ingest:${id}`, { ok: false, error: j?.error || 'ingest not ok' });
+          event.sender.send(`upload:ingest:${id}`, {
+            ok: false,
+            error: j?.error || 'ingest not ok',
+            status: r.status,
+            destRel,
+            name: fileName,
+            existing: j?.existing || null,
+            assetVersionId: j?.assetVersionId || j?.asset_version_id || null,
+          });
         }
       } catch (e: any) {
         jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url })
