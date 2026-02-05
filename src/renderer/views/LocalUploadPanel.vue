@@ -218,9 +218,12 @@
 									Generate Proxy Files:
 								</label>
 
-								<Switch v-model="transcodeProxyAfterUpload" :class="[
+								<Switch v-model="transcodeProxyAfterUpload" :disabled="!canTranscodeSelected"
+									:title="!canTranscodeSelected ? 'Proxy generation is available for video files only.' : ''"
+									:class="[
 									transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
-									'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+									!canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+									'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
 								]">
 									<span class="sr-only">Toggle proxy file generation</span>
 									<span aria-hidden="true" :class="[
@@ -230,8 +233,14 @@
 								</Switch>
 
 								<!-- fixed width so text changes don't move anything -->
-								<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
-									{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files only' }}
+								<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+									:title="!canTranscodeSelected ? 'Proxy generation is available for video files only.' : ''">
+									<template v-if="canTranscodeSelected">
+										{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files only' }}
+									</template>
+									<template v-else>
+										Proxy generation is available for video files only.
+									</template>
 								</span>
 							</div>
 						</div>
@@ -351,6 +360,7 @@ function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
 	wantProxy: boolean
+	allowVideoTranscode: boolean
 	groupId: string
 	destDir: string
 	destFileAbs: string
@@ -383,8 +393,8 @@ function waitForIngestAndStartTranscode(opts: {
 			// Prefer assetVersion polling when available
 			const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
 
-			// HLS (you said always)
-			if (shouldTrack('hls')) {
+			// HLS (video only)
+			if (opts.allowVideoTranscode && shouldTrack('hls')) {
 				if (useAssetVersion) {
 					transfer.startAssetVersionTranscodeTask({
 						apiFetch,
@@ -419,7 +429,7 @@ function waitForIngestAndStartTranscode(opts: {
 			}
 
 			// Proxy (only if user asked)
-			if (opts.wantProxy && shouldTrack('proxy_mp4')) {
+			if (opts.allowVideoTranscode && opts.wantProxy && shouldTrack('proxy_mp4')) {
 				if (useAssetVersion) {
 					transfer.startAssetVersionTranscodeTask({
 						apiFetch,
@@ -508,6 +518,19 @@ function formatDuration(ms: number): string {
 
 	return `${hours} hour${hours === 1 ? '' : 's'} ${remMinutes} minute${remMinutes === 1 ? '' : 's'}`;
 }
+
+const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|webm|m4v|wmv)$/i
+function isVideoLocalFile(f: LocalFile) {
+	return VIDEO_EXT_RE.test(f.name || f.path)
+}
+
+const canTranscodeSelected = computed(() =>
+	selected.value.length > 0 && selected.value.every(isVideoLocalFile)
+)
+
+watch(canTranscodeSelected, (ok) => {
+	if (!ok) transcodeProxyAfterUpload.value = false
+})
 
 
 // Step 2: destination
@@ -703,6 +726,7 @@ async function startUploads() {
 		// Build a stable per-row absolute destination path for grouping + display
 		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
 		const destFileAbs = joinPath(destDirAbs, row.name)
+		const allowVideoTranscode = VIDEO_EXT_RE.test(row.name || row.path)
 
 		const taskId = transfer.createUploadTask({
 			title: `Uploading: ${row.name}`,
@@ -727,7 +751,7 @@ async function startUploads() {
 				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
-				transcodeProxy: transcodeProxyAfterUpload.value,
+				transcodeProxy: transcodeProxyAfterUpload.value && allowVideoTranscode,
 			},
 			p => {
 				let pct: number | undefined =
@@ -760,6 +784,7 @@ async function startUploads() {
 			uploadId: id,
 			rowName: row.name,
 			wantProxy: transcodeProxyAfterUpload.value,
+			allowVideoTranscode,
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,

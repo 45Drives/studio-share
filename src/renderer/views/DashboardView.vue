@@ -10,14 +10,11 @@
 				</div>
 
 				<div class="ml-auto">
-					<button @click="goToSettings">
+					<button @click="goToSettings" title="Settings">
 						<Cog6ToothIcon class="w-8 h-8 text-muted hover:text-primary" />
 					</button>
 				</div>
 			</div>
-
-
-
 		</template>
 		<div>
 			<ManageLinks/>
@@ -28,8 +25,8 @@
 				<button @click="leaveServer" class="btn-danger text-default px-6 py-3 rounded-lg w-40 h-16">
 					Log Out
 				</button>
-				<!-- <button @click="viewLogs" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button>
-				<button @click="viewSettings" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button> -->
+				<!-- <button @click="viewLogs" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">View Logs</button> -->
+				<!-- <button @click="goToSettings" class="btn-primary text-white px-6 py-3 rounded-lg w-40 h-16">Settings</button> -->
 			</div>
 		</template>
 	</CardContainer>

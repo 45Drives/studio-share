@@ -180,6 +180,75 @@
           </div>
         </section>
 
+        <!-- Versions manager -->
+        <section class="w-full">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-semibold">Versions</h4>
+            <div class="flex items-center gap-2">
+              <label class="text-xs opacity-70 flex items-center gap-1">
+                <input type="checkbox" v-model="restoreBackup" />
+                Backup on restore
+              </label>
+              <select v-model="selectedVersionFileId" class="px-2 py-1 border border-default rounded bg-default text-default">
+                <option v-for="f in versionFileChoices" :key="f.id" :value="f.id">
+                  {{ f.name }}
+                </option>
+              </select>
+              <button class="btn btn-secondary" @click="refreshVersions" :disabled="versionsLoading || !selectedVersionFileId">
+                {{ versionsLoading ? 'Refreshing…' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="versionFileChoices.length === 0" class="text-sm opacity-70">
+            No version-managed files for this link.
+          </div>
+          <div v-else>
+            <div v-if="versionsError" class="p-2 mb-2 rounded bg-red-900/30 border border-red-800 text-default">
+              {{ versionsError }}
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-default">
+              <table class="min-w-full text-sm border-separate border-spacing-0">
+                <thead>
+                  <tr class="bg-default text-gray-300">
+                    <th class="text-left px-3 py-2 border border-default">Version</th>
+                    <th class="text-left px-3 py-2 border border-default">Created</th>
+                    <th class="text-left px-3 py-2 border border-default">Snapshot</th>
+                    <th class="text-right px-3 py-2 border border-default">Size</th>
+                    <th class="text-right px-3 py-2 border border-default">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="versionsLoading">
+                    <td colspan="5" class="px-3 py-4 border border-default text-center">Loading…</td>
+                  </tr>
+                  <tr v-else-if="versions.length === 0">
+                    <td colspan="5" class="px-3 py-4 border border-default text-center">No versions found.</td>
+                  </tr>
+                  <tr v-else v-for="v in versions" :key="v.asset_version_id" class="border-t border-default">
+                    <td class="px-3 py-2 border border-default">v{{ v.version_index }}</td>
+                    <td class="px-3 py-2 border border-default">{{ v.created_at ? new Date(v.created_at).toLocaleString() : '—' }}</td>
+                    <td class="px-3 py-2 border border-default">{{ snapshotName(v.snapshot_rel) }}</td>
+                    <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(v.snapshot_size_bytes) }}</td>
+                    <td class="px-3 py-2 border border-default text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button class="btn btn-primary px-2 py-1 text-xs" @click="restoreVersion(v)">
+                          Restore
+                        </button>
+                        <button class="btn btn-danger px-2 py-1 text-xs" :disabled="versions.length <= 1"
+                          @click="deleteVersion(v)">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- Comment access (unchanged) -->
         <section v-if="link?.type?.toUpperCase() != 'UPLOAD'" class="w-full">
           <div class="flex items-center justify-between mb-2">
@@ -280,6 +349,22 @@ const files = ref<any[]>([])
 const access = ref<AccessRow[]>([])
 const accessLoading = ref(false)
 const accessModalOpen = ref(false)
+const versionsLoading = ref(false)
+const versionsError = ref<string | null>(null)
+const versions = ref<any[]>([])
+const selectedVersionFileId = ref<number | null>(null)
+const restoreBackup = ref(true)
+let suppressVersionWatch = false
+
+const versionFileById = computed(() => {
+  const map = new Map<number, any>()
+  for (const f of files.value) {
+    const id = toNumericFileId(f?.id)
+    if (!id) continue
+    map.set(id, f)
+  }
+  return map
+})
 
 const editMode = ref(false)
 const saving = ref(false)
@@ -295,6 +380,15 @@ const draftUploadDir = ref('')
 const originalUploadDir = ref('')
 
 const isDownloadish = computed(() => props.link?.type === 'download' || props.link?.type === 'collection')
+const versionFileChoices = computed(() => {
+  return files.value
+    .map((f: any) => {
+      const id = toNumericFileId(f?.id)
+      if (!id) return null
+      return { id, name: f?.name || f?.relPath || `File ${id}` }
+    })
+    .filter(Boolean) as Array<{ id: number; name: string }>
+})
 
 const currentUploadDir = computed(() => {
   const it = props.link
@@ -395,6 +489,100 @@ function fmtBytes(n?: number) {
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${u[i]}`
 }
 
+function snapshotName(rel?: string | null) {
+  if (!rel) return '—'
+  const parts = String(rel).split('/')
+  return parts[parts.length - 1] || rel
+}
+
+function toNumericFileId(v: any) {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function selectDefaultVersionFile() {
+  const choices = versionFileChoices.value
+  if (!choices.length) {
+    selectedVersionFileId.value = null
+    versions.value = []
+    return
+  }
+  if (!choices.some(c => c.id === selectedVersionFileId.value)) {
+    selectedVersionFileId.value = choices[0].id
+  }
+}
+
+async function loadVersions(fileId: number) {
+  if (!fileId) return
+  versionsLoading.value = true
+  versionsError.value = null
+  try {
+    const resp = await props.apiFetch(`/api/files/${fileId}/versions`)
+    versions.value = Array.isArray(resp?.versions) ? resp.versions : []
+  } catch (e: any) {
+    versionsError.value = e?.message || e?.error || String(e)
+    versions.value = []
+  } finally {
+    versionsLoading.value = false
+  }
+}
+
+async function refreshVersions() {
+  if (!selectedVersionFileId.value) return
+  await loadVersions(selectedVersionFileId.value)
+}
+
+async function restoreVersion(v: any) {
+  if (!selectedVersionFileId.value) return
+  const fileId = selectedVersionFileId.value
+  const f = versionFileById.value.get(fileId)
+  const livePath = f?.relPath || f?.name || `file ${fileId}`
+  const backupDir = `.studio/backups/${fileId}/`
+  const confirmLines = [
+    `Restore version v${v?.version_index}?`,
+    '',
+    `Live file to overwrite: ${livePath}`,
+    restoreBackup.value
+      ? `Backup will be created under: ${backupDir} (timestamped filename)`
+      : 'Backup will NOT be created.',
+    '',
+    'Proceed?'
+  ]
+  const ok = confirm(confirmLines.join('\n'))
+  if (!ok) return
+
+  try {
+    const resp = await props.apiFetch(`/api/files/${selectedVersionFileId.value}/versions/${v.asset_version_id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ backup: restoreBackup.value }),
+    })
+    await refreshVersions()
+    const backupNote = resp?.backup_rel ? ` Backup: ${resp.backup_rel}` : ''
+    pushNotification(new Notification('Version Restored', `Restored v${v?.version_index}.${backupNote}`, 'success', 8000))
+  } catch (e: any) {
+    const msg = e?.message || e?.error || String(e)
+    pushNotification(new Notification('Restore Failed', msg, 'error', 8000))
+  }
+}
+
+async function deleteVersion(v: any) {
+  if (!selectedVersionFileId.value) return
+  if (versions.value.length <= 1) return
+  const ok = confirm(`Delete version v${v?.version_index}? This cannot be undone.`)
+  if (!ok) return
+
+  try {
+    await props.apiFetch(`/api/files/${selectedVersionFileId.value}/versions/${v.asset_version_id}`, {
+      method: 'DELETE',
+    })
+    await refreshVersions()
+    pushNotification(new Notification('Version Deleted', `Deleted v${v?.version_index}.`, 'success', 6000))
+  } catch (e: any) {
+    const msg = e?.message || e?.error || String(e)
+    pushNotification(new Notification('Delete Failed', msg, 'error', 8000))
+  }
+}
+
 async function fetchDetailsFor() {
   if (!props.link) return
   detailsLoading.value = true
@@ -421,6 +609,11 @@ async function fetchDetailsFor() {
     } else {
       access.value = []
     }
+
+    suppressVersionWatch = true
+    selectDefaultVersionFile()
+    suppressVersionWatch = false
+    if (selectedVersionFileId.value) await loadVersions(selectedVersionFileId.value)
   } finally {
     detailsLoading.value = false
   }
@@ -734,6 +927,14 @@ watch(
       fetchDetailsFor()
       loadAccess()
     }
+  }
+)
+
+watch(
+  () => selectedVersionFileId.value,
+  (id) => {
+    if (suppressVersionWatch || !id) return
+    loadVersions(id)
   }
 )
 </script>

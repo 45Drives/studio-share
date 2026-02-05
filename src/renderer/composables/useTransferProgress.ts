@@ -277,7 +277,7 @@ export function useTransferProgress() {
     }
     
 
-    function startTranscodeTaskBase<TItem>(opts: {
+    function startTranscodeTaskBase<TItem extends ProgressItem | VersionProgressItem>(opts: {
         apiFetch: (path: string, init?: any) => Promise<any>
         ids: number[]
         title: string

@@ -124,15 +124,48 @@
                                     </template>
 
                                     <template #access>
-                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
-                                            <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
-                                                Generate Proxy Files:
+                                       <!--  <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="watermark-switch">
+                                                Add Watermark:
                                             </label>
 
-                                            <Switch id="link-access-switch" v-model="transcodeProxy" :class="[
-                                                transcodeProxy ? 'bg-secondary' : 'bg-well',
-                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
+                                            <Switch id="watermark-switch" v-model="useWatermark"
+                                                :disabled="!canTranscodeSelected"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''" :class="[
+                                                    useWatermark ? 'bg-secondary' : 'bg-well',
+                                                    !canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
+                                                <span class="sr-only">Toggle proxy file generation</span>
+                                                <span aria-hidden="true" :class="[
+                                                    useWatermark ? 'translate-x-5' : 'translate-x-0',
+                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                ]" />
+                                            </Switch>
+
+                                            <span class="text-sm select-none truncate min-w-0 flex-1"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''">
+                                                <template v-if="canTranscodeSelected">
+                                                    {{ useWatermark ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                </template>
+                                                <template v-else>
+                                                    (Only for Videos)
+                                                </template>
+                                            </span>
+                                        </div> -->
+                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="transcode-switch">
+                                                Use Proxy Files:
+                                            </label>
+
+                                            <Switch id="transcode-switch" v-model="transcodeProxy"
+                                                :disabled="!canTranscodeSelected"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''"
+                                                :class="[
+                                                    transcodeProxy ? 'bg-secondary' : 'bg-well',
+                                                    !canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
                                                 <span class="sr-only">Toggle proxy file generation</span>
                                                 <span aria-hidden="true" :class="[
                                                     transcodeProxy ? 'translate-x-5' : 'translate-x-0',
@@ -140,8 +173,14 @@
                                                 ]" />
                                             </Switch>
 
-                                            <span class="text-sm select-none truncate min-w-0 flex-1">
-                                                {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                            <span class="text-sm select-none truncate min-w-0 flex-1"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''">
+                                                <template v-if="canTranscodeSelected">
+                                                    {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                </template>
+                                                <template v-else>
+                                                    (Only for Videos)
+                                                </template>
                                             </span>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-3 min-w-0">
@@ -346,6 +385,7 @@ function resetAll() {
         clearTimeout(regenTimer)
         regenTimer = null
     }
+    fileMimes.value = {}
 }
 
 function chooseProject(dirPath: string) {
@@ -432,7 +472,19 @@ watch(files, () => {
     // This catches adds/removes done outside the helpers (e.g., FileExplorer @add)
     invalidateLink()
     scheduleAutoRegen()
+    refreshFileMimes()
 }, { deep: true })
+
+
+const canTranscodeSelected = computed(() =>
+    files.value.length > 0 &&
+    files.value.every(p => isVideoByMimeOrExt(p, fileMimes.value[p]))
+)
+
+// const canTranscodeSelected = true;
+watch(canTranscodeSelected, (ok) => {
+    if (!ok) transcodeProxy.value = false
+})
 
 watch(showEntireTree, (v) => {
     if (v) {
@@ -512,6 +564,53 @@ const transcodeProxy = ref(false)
 
 // Always on for share links
 const adaptiveHls = computed(() => !!transcodeProxy.value)
+
+type FileMimeMap = Record<string, string | null>
+const fileMimes = ref<FileMimeMap>({})
+let mimeLoadSeq = 0
+
+const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|webm|m4v|wmv)$/i
+function isVideoByMimeOrExt(path: string, mime?: string | null) {
+    if (mime && /^video\//i.test(mime)) return true
+    // Fall back to extension if mime is missing or generic.
+    const generic =
+        !mime ||
+        /^application\/octet-stream$/i.test(mime) ||
+        /^application\/mp4$/i.test(mime)
+    return generic ? VIDEO_EXT_RE.test(path) : false
+}
+
+async function refreshFileMimes() {
+    const paths = files.value.slice()
+    const seq = ++mimeLoadSeq
+
+    const next: FileMimeMap = { ...fileMimes.value }
+    for (const k of Object.keys(next)) {
+        if (!paths.includes(k)) delete next[k]
+    }
+
+    if (!paths.length) {
+        fileMimes.value = next
+        return
+    }
+
+    try {
+        const data = await apiFetch('/api/mime', {
+            method: 'POST',
+            body: JSON.stringify({ paths })
+        })
+        const mimes = data?.mimes || {}
+        for (const p of paths) {
+            if (Object.prototype.hasOwnProperty.call(mimes, p)) next[p] = mimes[p] ?? null
+            else next[p] = next[p] ?? null
+        }
+    } catch {
+        for (const p of paths) next[p] = next[p] ?? null
+    }
+
+    if (seq === mimeLoadSeq) fileMimes.value = next
+}
+
 
 // Map units → seconds
 const UNIT_TO_SECONDS = {
@@ -680,8 +779,11 @@ async function generateLink() {
         })
     }
 
-    body.generateReviewProxy = !!transcodeProxy.value
-    body.adaptiveHls = !!adaptiveHls.value
+    // body.generateReviewProxy = canTranscodeSelected.value && !!transcodeProxy.value
+    // body.adaptiveHls = canTranscodeSelected.value && !!adaptiveHls.value
+
+    body.generateReviewProxy = canTranscodeSelected && !!transcodeProxy.value
+    body.adaptiveHls = canTranscodeSelected && !!adaptiveHls.value
 
     try {
         const data = await apiFetch('/api/magic-link', {

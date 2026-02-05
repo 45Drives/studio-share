@@ -69,14 +69,30 @@
 					</thead>
 
 					<tbody class="bg-accent">
-						<tr v-if="!loading && filteredRows.length === 0">
+						<tr v-if="loading">
+							<td colspan="8" class="p-0 border border-default">
+								<div class="w-full min-h-[140px] flex items-center justify-center">
+									<div
+										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
+										<span
+											class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
+										<div class="flex flex-col leading-tight">
+											<div class="text-sm font-semibold text-default">Loading links</div>
+											<div class="text-xs text-muted">Fetching latest data…</div>
+										</div>
+									</div>
+								</div>
+							</td>
+						</tr>
+
+						<tr v-else-if="filteredRows.length === 0">
 							<td colspan="8"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
 						</tr>
 
-						<tr v-for="it in filteredRows" :key="it.id"
+						<tr v-else v-for="it in filteredRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
 							<!-- Title -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
