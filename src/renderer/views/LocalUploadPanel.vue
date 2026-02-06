@@ -339,8 +339,8 @@ function joinPath(dir: string, name: string) {
 	return (d ? d : '/') + '/' + n
 }
 
-function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
-	const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> {
+	const map: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> = {};
 	const t = data?.transcodes;
 	if (!Array.isArray(t)) return map;
 
@@ -350,6 +350,7 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 
 		map[vId] = {
 			queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
+			activeKinds: Array.isArray(rec?.jobs?.activeKinds) ? rec.jobs.activeKinds : [],
 			skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
 		};
 	}
@@ -379,9 +380,19 @@ function waitForIngestAndStartTranscode(opts: {
 			const jobInfo = extractJobInfoByVersion(payload);
 			const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
 
+			// Prefer assetVersion polling when available
+			const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
+
 			const shouldTrack = (kind: string) => {
 				// If we don't have job info, preserve old behavior and track.
 				if (!rec) return true;
+
+				if (rec.activeKinds?.includes(kind)) {
+					if (useAssetVersion && transfer.hasActiveTranscode({ assetVersionIds: [assetVersionId], jobKind: kind === 'hls' ? 'hls' : 'proxy_mp4' })) {
+						return false;
+					}
+					return true;
+				}
 
 				if (rec.queuedKinds?.includes(kind)) return true;
 				if (rec.skippedKinds?.includes(kind)) return false;
@@ -389,9 +400,6 @@ function waitForIngestAndStartTranscode(opts: {
 				// Unknown: be permissive
 				return true;
 			};
-
-			// Prefer assetVersion polling when available
-			const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
 
 			// HLS (video only)
 			if (opts.allowVideoTranscode && shouldTrack('hls')) {

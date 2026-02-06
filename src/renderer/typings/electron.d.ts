@@ -41,10 +41,22 @@ export type LinkItem = {
   expiresAt: number | null
   isDisabled: boolean
   passwordRequired?: boolean
+  access_mode?: 'open' | 'restricted'
+  auth_mode?: 'none' | 'password'
+  allow_comments?: boolean
   createdIp?: string | null
   createdUa?: string | null
   owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }
   target?: { dirRel?: string; allowUpload?: boolean; files?: Array<{ id?: string; name?: string; size?: number; mime?: string }> }
+}
+export type Role = {
+  id: number
+  name: string
+  can_view: boolean
+  can_comment: boolean
+  can_download: boolean
+  can_upload: boolean
+  is_system?: boolean
 }
 export type AccessRow = {
   user_id: number
@@ -52,6 +64,18 @@ export type AccessRow = {
   name?: string
   user_email?: string
   display_color?: string | null
+  role_id?: number | null
+  role_name?: string | null
+  role?: {
+    id: number
+    name: string
+    permissions: {
+      view: boolean
+      comment: boolean
+      download: boolean
+      upload: boolean
+    }
+  } | null
   granted_at?: string | null
   is_deleted?: boolean
   is_disabled?: boolean
@@ -62,10 +86,26 @@ export type Commenter = {
   username?: string
   name?: string
   user_email?: string,
-    display_color?: string
+  display_color?: string
+  role_id?: number | null
+  role_name?: string | null
+  role?: Role | null
 
 }
 export type RsyncResult = { ok?: boolean; error?: string }
+export type ExistingUser = {
+  id?: string | number
+  username: string
+  name?: string
+  user_email?: string
+  display_color?: string
+  role_id?: number | null
+  role_name?: string | null
+  role?: Role | null
+  default_role_id?: number | null
+  default_role_name?: string | null
+  default_role?: Role | null
+}
 
 export interface ElectronApi {
   ipcRenderer: {
