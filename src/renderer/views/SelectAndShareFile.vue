@@ -320,6 +320,9 @@
                                 Generate magic link
                             </button>
                         </div>
+                        <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-300 mt-2">
+                            A transcode is already running for this selection. Please wait until it finishes, or select a different video to start another.
+                        </div>
 
                         <div v-if="viewUrl" class="p-3 border rounded flex flex-col items-center mt-1 min-w-0">
                             <code class="max-w-full break-all">{{ viewUrl }}</code>
@@ -678,8 +681,35 @@ const canGenerate = computed(() =>
     (!protectWithPassword.value || !!password.value) &&
     commentAccessSatisfied.value &&
     (!transcodeProxy.value || proxyQualities.value.length > 0) &&
-    (!watermarkEnabled.value || !!watermarkFile.value)
+    (!watermarkEnabled.value || !!watermarkFile.value) &&
+    !hasActiveTranscodeForSelection.value
 );
+
+function sameSelection(a: string[], b: string[]) {
+    if (a.length !== b.length) return false
+    const aset = new Set(a)
+    for (const v of b) if (!aset.has(v)) return false
+    return true
+}
+
+const hasActiveTranscodeForSelection = computed(() => {
+    const selected = files.value.slice()
+    if (!selected.length) return false
+
+    return transfer.state.tasks.some(t => {
+        if (t.kind !== 'transcode') return false
+        if (!['queued', 'running', 'unknown'].includes(t.status)) return false
+        if (t.context?.source !== 'link') return false
+
+        if (t.context?.file && selected.length === 1) {
+            return t.context.file === selected[0]
+        }
+        if (Array.isArray(t.context?.files)) {
+            return sameSelection(t.context.files, selected)
+        }
+        return false
+    })
+})
 
 function invalidateLink() {
     viewUrl.value = ''
@@ -898,6 +928,9 @@ async function generateLink() {
 
         viewUrl.value = data.viewUrl
         downloadUrl.value = data.downloadUrl
+
+        // Only apply overwrite for the retry; reset for subsequent requests
+        overwriteExisting.value = false
 
         const wantsHls = true
         if (transcodeProxy.value || wantsHls) {
