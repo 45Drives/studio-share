@@ -217,6 +217,11 @@
 									<label class="font-semibold whitespace-nowrap text-left">
 										Generate Proxy Files:
 									</label>
+							<div v-if="step === 3" class="grid gap-2">
+								<div class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap">
+										Generate Proxy Files:
+									</label>
 
 									<Switch v-model="transcodeProxyAfterUpload" :class="[
 										transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
@@ -363,6 +368,8 @@ const nextDisabled = computed(() => {
 	// step 3: disable while actively uploading (until done), otherwise allow Start/Finish
 	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
 	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
+	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
+	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
 	return isUploading.value && !allDone.value;
 });
 
@@ -398,8 +405,8 @@ function joinPath(dir: string, name: string) {
 	return (d ? d : '/') + '/' + n
 }
 
-function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
-	const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> {
+	const map: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> = {};
 	const t = data?.transcodes;
 	if (!Array.isArray(t)) return map;
 
@@ -409,6 +416,7 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 
 		map[vId] = {
 			queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
+			activeKinds: Array.isArray(rec?.jobs?.activeKinds) ? rec.jobs.activeKinds : [],
 			skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
 		};
 	}
@@ -419,6 +427,7 @@ function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
 	wantProxy: boolean
+	allowVideoTranscode: boolean
 	groupId: string
 	destDir: string
 	destFileAbs: string
@@ -602,10 +611,34 @@ function pickWatermark() {
 	});
 }
 function clearWatermark() { watermarkFile.value = null }
+function pickWatermark() {
+	window.electron.pickWatermark().then(f => {
+		if (f) watermarkFile.value = f;
+	});
+}
+function clearWatermark() { watermarkFile.value = null }
 
 const totalSelectedBytes = computed(() =>
 	selected.value.reduce((sum, f) => sum + (f.size || 0), 0)
 )
+const videoExts = new Set([
+	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
+	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+])
+const hasVideoSelected = computed(() =>
+	selected.value.some(f => {
+		const ext = String(f.name || '').toLowerCase().split('.').pop() || '';
+		return videoExts.has(ext);
+	})
+)
+
+watch(selected, () => {
+	if (!hasVideoSelected.value) {
+		watermarkAfterUpload.value = false
+		watermarkFile.value = null
+	}
+}, { deep: true })
+
 const videoExts = new Set([
 	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
 	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
@@ -655,6 +688,19 @@ function formatDuration(ms: number): string {
 	return `${hours} hour${hours === 1 ? '' : 's'} ${remMinutes} minute${remMinutes === 1 ? '' : 's'}`;
 }
 
+const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|webm|m4v|wmv)$/i
+function isVideoLocalFile(f: LocalFile) {
+	return VIDEO_EXT_RE.test(f.name || f.path)
+}
+
+const canTranscodeSelected = computed(() =>
+	selected.value.length > 0 && selected.value.every(isVideoLocalFile)
+)
+
+watch(canTranscodeSelected, (ok) => {
+	if (!ok) transcodeProxyAfterUpload.value = false
+})
+
 
 // Step 2: destination
 const cwd = ref<string>('')                 // for the breadcrumb text the picker emits
@@ -688,7 +734,21 @@ const transcodeProxyAfterUpload = ref(false)
 const proxyQualities = ref<string[]>([])
 const watermarkAfterUpload = ref(false)
 const watermarkFile = ref<LocalFile | null>(null)
+const proxyQualities = ref<string[]>([])
+const watermarkAfterUpload = ref(false)
+const watermarkFile = ref<LocalFile | null>(null)
 const adaptiveHls = ref(false);
+
+watch(transcodeProxyAfterUpload, (v) => {
+	if (v && proxyQualities.value.length === 0) {
+		proxyQualities.value = ['720p']
+	}
+	if (!v) {
+		proxyQualities.value = []
+		watermarkAfterUpload.value = false
+		watermarkFile.value = null
+	}
+})
 
 watch(transcodeProxyAfterUpload, (v) => {
 	if (v && proxyQualities.value.length === 0) {
@@ -891,6 +951,48 @@ async function startUploads() {
 			return
 		}
 	}
+	let startedAny = false
+
+	if (watermarkAfterUpload.value) {
+		isUploading.value = true
+		if (!watermarkFile.value) {
+			pushNotification(
+				new Notification(
+					'Watermark Image Required',
+					'Please choose a watermark image before starting the upload.',
+					'warning',
+					8000
+				)
+			)
+			isUploading.value = false
+			return
+		}
+
+		const destDirAbs = uploads.value[0]?.dest || normalizedDest.value
+		const { done } = await window.electron.rsyncStart(
+			{
+				host: ssh?.server,
+				user: ssh?.username,
+				src: watermarkFile.value.path,
+				destDir: destDirAbs,
+				port: serverPort,
+				keyPath: privateKeyPath,
+			}
+		)
+		const res = await done
+		if (!res?.ok) {
+			pushNotification(
+				new Notification(
+					'Watermark Upload Failed',
+					res?.error || 'Unable to upload the watermark image.',
+					'error',
+					8000
+				)
+			)
+			isUploading.value = false
+			return
+		}
+	}
 
 	for (const row of uploads.value) {
 		// Ignore rows that are not queued or already uploaded
@@ -900,12 +1002,14 @@ async function startUploads() {
 		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
 		startedAny = true
+		startedAny = true
 
 		const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 
 		// Build a stable per-row absolute destination path for grouping + display
 		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
 		const destFileAbs = joinPath(destDirAbs, row.name)
+		const allowVideoTranscode = VIDEO_EXT_RE.test(row.name || row.path)
 
 		const taskId = transfer.createUploadTask({
 			title: `Uploading: ${row.name}`,
@@ -930,6 +1034,7 @@ async function startUploads() {
 				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
+<<<<<<< HEAD
 				transcodeProxy: transcodeProxyAfterUpload.value,
 				proxyQualities: proxyQualities.value.slice(),
 				watermark: watermarkAfterUpload.value,
@@ -967,6 +1072,7 @@ async function startUploads() {
 			uploadId: id,
 			rowName: row.name,
 			wantProxy: transcodeProxyAfterUpload.value,
+			allowVideoTranscode,
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,
@@ -1020,6 +1126,10 @@ async function startUploads() {
 				);
 			}
 		});
+	}
+
+	if (!startedAny) {
+		isUploading.value = false
 	}
 
 	if (!startedAny) {
@@ -1086,3 +1196,4 @@ function goBack() {
 	@apply px-4 py-2 border border-default;
 }
 </style>
+

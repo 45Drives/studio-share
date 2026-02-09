@@ -63,6 +63,38 @@
 								</div>
 							</template>
 
+							<template #commenters>
+								<div class="flex flex-col gap-3 min-w-0">
+									<div class="flex flex-wrap items-center gap-3 min-w-0">
+										<label class="font-semibold sm:whitespace-nowrap">Restrict Upload to Users</label>
+
+										<Switch id="restrict-upload-switch" v-model="restrictToUsers" :class="[
+											restrictToUsers ? 'bg-secondary' : 'bg-well',
+											'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+										]">
+											<span class="sr-only">Toggle user access</span>
+											<span aria-hidden="true" :class="[
+												restrictToUsers ? 'translate-x-5' : 'translate-x-0',
+												'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+											]" />
+										</Switch>
+									</div>
+
+									<div v-if="restrictToUsers" class="flex flex-col gap-2 min-w-0">
+										<button type="button" class="btn btn-primary" @click="openUserModal()">
+											Manage Users & Roles
+											<span v-if="accessCount"
+												class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+												{{ accessCount }}
+											</span>
+										</button>
+										<p class="text-xs opacity-70">
+											Users must have upload permission on their role.
+										</p>
+									</div>
+								</div>
+							</template>
+
 							<template #title>
 								<div class="flex flex-wrap items-center gap-3 min-w-0">
 									<label class="font-semibold sm:whitespace-nowrap">Link Title:</label>
@@ -196,7 +228,7 @@
 							</template>
 
 							<template #password>
-								<div class="flex flex-col gap-2 min-w-0">
+								<div v-if="!restrictToUsers" class="flex flex-col gap-2 min-w-0">
 									<div class="flex flex-wrap items-center gap-3 min-w-0">
 										<label class="font-semibold sm:whitespace-nowrap">Password Protected Link:</label>
 
@@ -243,6 +275,12 @@
 								</div>
 							</template>
 
+							<template #errorLeft>
+								<p v-if="!accessSatisfied" class="text-sm text-red-500">
+									At least one user is required when access is restricted.
+								</p>
+							</template>
+
 							<template #errorRight>
 								<p v-if="protectWithPassword && !password" class="text-sm text-red-500">
 									Password is required when protection is enabled.
@@ -250,6 +288,16 @@
 							</template>
 						</CommonLinkControls>
 					</div>
+
+					<AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :link="linkContext" roleHint="upload" :preselected="accessUsers.map(c => ({
+						id: c.id,
+						username: c.username || '',
+						name: c.name,
+						user_email: c.user_email,
+						display_color: c.display_color,
+						role_id: c.role_id ?? undefined,
+						role_name: c.role_name ?? undefined,
+					}))" @apply="onApplyUsers" />
 
 					<!-- ACTIONS -->
 					<template #footer>
@@ -261,11 +309,16 @@
 								</button>
 								<button
 									class="btn btn-secondary flex-1 min-w-[14rem]"
-									:disabled="!canGenerate"
+									:disabled="!canGenerate || loading"
 									@click="generateLink"
 									title="Create a magic link with the selected options"
 								>
-									Generate magic link
+									<span v-if="loading" class="inline-flex items-center gap-2">
+										<span
+											class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
+										Generating…
+									</span>
+									<span v-else>Generate magic link</span>
 								</button>
 							</div>
 
@@ -409,10 +462,20 @@ async function loadLinkDefaults() {
 		const isInternal = (s?.defaultLinkAccess === "internal");
 		defaultUsePublicBase.value = !isInternal;
 		usePublicBase.value = defaultUsePublicBase.value;
+		defaultRestrictToUsers.value =
+			typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false;
+		defaultUseProxyFiles.value =
+			typeof s?.defaultUseProxyFiles === 'boolean' ? s.defaultUseProxyFiles : false;
+		restrictToUsers.value = defaultRestrictToUsers.value;
+		transcodeProxy.value = defaultUseProxyFiles.value;
 	} catch {
 		// Keep current default if settings can't be loaded
 		defaultUsePublicBase.value = true;
 		usePublicBase.value = true;
+		defaultRestrictToUsers.value = false;
+		defaultUseProxyFiles.value = false;
+		restrictToUsers.value = defaultRestrictToUsers.value;
+		transcodeProxy.value = defaultUseProxyFiles.value;
 	}
 }
 
@@ -583,6 +646,7 @@ function resetAll() {
 	result.value = null
 	error.value = null
 	usePublicBase.value = defaultUsePublicBase.value
+	transcodeProxy.value = defaultUseProxyFiles.value
 }
 
 async function copyLink() {
@@ -607,5 +671,61 @@ function openInBrowser() {
 
 function goBack() {
 	to('dashboard')
+}
+
+watch(restrictToUsers, (v) => {
+	if (v) {
+		protectWithPassword.value = false
+		password.value = ''
+	}
+})
+
+watch(
+	accessUsers,
+	(arr) => {
+		if (arr.length > 0) restrictToUsers.value = true
+	},
+	{ deep: true }
+)
+
+function openUserModal() {
+	userModalOpen.value = true
+}
+
+function makeKey(name?: string, user_email?: string, username?: string) {
+	const u = (username ?? '').trim().toLowerCase()
+	const e = (user_email ?? '').trim().toLowerCase()
+	const n = (name ?? '').trim().toLowerCase()
+	return (u || n) + '|' + e
+}
+
+function onApplyUsers(users: any[]) {
+	const next = users.map(u => {
+		const username = (u.username || '').trim()
+		const name = (u.name || username).trim()
+		const user_email = u.user_email?.trim() || undefined
+		const display_color = u.display_color
+		const key = makeKey(name, user_email, username)
+		return {
+			key,
+			id: u.id,
+			username,
+			name,
+			user_email,
+			display_color,
+			role_id: u.role_id ?? null,
+			role_name: u.role_name ?? null,
+		}
+	})
+
+	const seen = new Set<string>()
+	const dedup: typeof next = []
+	for (const c of next) {
+		if (seen.has(c.key)) continue
+		seen.add(c.key)
+		dedup.push(c)
+	}
+
+	accessUsers.value = dedup
 }
 </script>

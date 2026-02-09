@@ -160,6 +160,27 @@
                                     and keep port 443 (or your forwarded port).
                                 </div>
                             </div>
+
+                            <div class="border-t border-default pt-4 mt-4">
+                                <div class="text-base font-semibold">Default Link Options</div>
+                                <div class="space-y-3 mt-2 text-sm">
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="defaultRestrictAccess" :disabled="busy" />
+                                        <span>Restrict access to users</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="defaultAllowComments" :disabled="busy" />
+                                        <span>Allow comments on open links</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="defaultUseProxyFiles" :disabled="busy" />
+                                        <span>Generate proxy files by default</span>
+                                    </label>
+                                    <div class="text-xs opacity-70">
+                                        These defaults are applied when creating new links and can be changed per link.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                     </div>
@@ -213,6 +234,9 @@ const emit = defineEmits<{
         externalHttpsPort: number;
         defaultLinkAccess: "external" | "internal";
         externalMode: "auto" | "custom";
+        defaultRestrictAccess: boolean;
+        defaultAllowComments: boolean;
+        defaultUseProxyFiles: boolean;
     }): void;
 }>();
 
@@ -240,6 +264,10 @@ const externalBase = ref<string>("");
 const internalBase = ref<string>("");
 
 const externalHttpsPort = ref<number>(443);
+
+const defaultRestrictAccess = ref(false);
+const defaultAllowComments = ref(true);
+const defaultUseProxyFiles = ref(false);
 
 // Read-only server-reported effective base (when auto)
 const externalBaseEffective = ref<string | null>(null);
@@ -372,6 +400,13 @@ async function reload() {
 
         // For UI editing, externalBase is the CUSTOM base (only meaningful when mode=custom)
         externalBase.value = data.externalBaseCustom ?? "";
+
+        defaultRestrictAccess.value =
+            typeof data.defaultRestrictAccess === "boolean" ? data.defaultRestrictAccess : false;
+        defaultAllowComments.value =
+            typeof data.defaultAllowComments === "boolean" ? data.defaultAllowComments : true;
+        defaultUseProxyFiles.value =
+            typeof data.defaultUseProxyFiles === "boolean" ? data.defaultUseProxyFiles : false;
     } catch (e: any) {
         loadError.value = e?.message ? `Failed to load settings: ${e.message}` : "Failed to load settings.";
     } finally {
@@ -399,6 +434,9 @@ async function save() {
             externalBaseCustom: externalAuto.value ? null : (externalBase.value || "").trim(),
 
             internalBase: internalAuto.value ? "auto" : (internalBase.value || "").trim(),
+            defaultRestrictAccess: !!defaultRestrictAccess.value,
+            defaultAllowComments: !!defaultAllowComments.value,
+            defaultUseProxyFiles: !!defaultUseProxyFiles.value,
         };
 
         await apiFetch("/api/settings", {
@@ -424,6 +462,9 @@ async function save() {
             externalHttpsPort: externalHttpsPort.value,
             defaultLinkAccess: defaultLinkAccess.value,
             externalMode: externalAuto.value ? "auto" : "custom",
+            defaultRestrictAccess: !!defaultRestrictAccess.value,
+            defaultAllowComments: !!defaultAllowComments.value,
+            defaultUseProxyFiles: !!defaultUseProxyFiles.value,
         });
         emit("close")
     } catch (e: any) {

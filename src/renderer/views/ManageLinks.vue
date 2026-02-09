@@ -30,7 +30,7 @@
 				{{ error }}
 			</div>
 			<tr v-if="loading">
-				<td colspan="8" class="px-2 py-6 text-center text-default border border-default align-middle">
+				<td colspan="9" class="px-2 py-6 text-center text-default border border-default align-middle">
 					<div class="flex items-center justify-center gap-2">
 						<span
 							class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
@@ -46,14 +46,15 @@
 				:class="{ '': !isMac }">
 				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
 					<colgroup>
-						<col class="w-[28%]" /> <!-- Title -->
+						<col class="w-[22%]" /> <!-- Title -->
 						<col class="w-[8%]" /> <!-- Type -->
 						<col class="w-[18%]" /> <!-- Short Link -->
 						<col class="w-[12%]" /> <!-- Expires -->
 						<col class="w-[6%]" /> <!-- Status -->
-						<col class="w-[6%]" /> <!-- Password -->
+						<col class="w-[8%]" /> <!-- Access -->
+						<col class="w-[4%]" /> <!-- Password -->
 						<col class="w-[10%]" /> <!-- Created -->
-						<col class=" " /> <!-- Actions -->
+						<col class="w-[12%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
@@ -62,6 +63,7 @@
 							<th class="text-left p-2 font-semibold border border-default">Link</th>
 							<th class="text-left p-2 font-semibold border border-default">Expires</th>
 							<th class="text-left p-2 font-semibold border border-default">Status</th>
+							<th class="text-left p-2 font-semibold border border-default">Access</th>
 							<th class="text-left p-2 font-semibold border border-default">Password</th>
 							<th class="text-left p-2 font-semibold border border-default">Created</th>
 							<th class="text-left p-2 font-semibold border border-default">Actions</th>
@@ -69,14 +71,30 @@
 					</thead>
 
 					<tbody class="bg-accent">
-						<tr v-if="!loading && filteredRows.length === 0">
-							<td colspan="8"
+						<tr v-if="loading">
+							<td colspan="9" class="p-0 border border-default">
+								<div class="w-full min-h-[140px] flex items-center justify-center">
+									<div
+										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
+										<span
+											class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
+										<div class="flex flex-col leading-tight">
+											<div class="text-sm font-semibold text-default">Loading links</div>
+											<div class="text-xs text-muted">Fetching latest data…</div>
+										</div>
+									</div>
+								</div>
+							</td>
+						</tr>
+
+						<tr v-else-if="filteredRows.length === 0">
+							<td colspan="9"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
 						</tr>
 
-						<tr v-for="it in filteredRows" :key="it.id"
+						<tr v-else v-for="it in filteredRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
 							<!-- Title -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
@@ -166,6 +184,17 @@
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="statusChipClass(statusOf(it))">{{ statusOf(it).toUpperCase() }}</span>
+							</td>
+
+							<!-- Access -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span
+									class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="accessChipClass(it)"
+									:title="accessDetail(it)"
+								>
+									{{ accessLabel(it) }}
+								</span>
 							</td>
 
 							<!-- Password -->
@@ -335,6 +364,30 @@ function statusChipClass(s: Status) {
 		: s === 'expired'
 			? 'text-amber-500'
 			: 'text-gray-500'
+}
+
+function isRestricted(it: LinkItem) {
+	return it.access_mode === 'restricted'
+}
+
+function hasOpenPassword(it: LinkItem) {
+	return it.auth_mode === 'password' || !!it.passwordRequired
+}
+
+function accessLabel(it: LinkItem) {
+	if (isRestricted(it)) return 'Restricted'
+	return hasOpenPassword(it) ? 'Open + Password' : 'Open'
+}
+
+function accessDetail(it: LinkItem) {
+	if (isRestricted(it)) return 'Users only'
+	const comments = it.allow_comments ? 'Comments: on' : 'Comments: off'
+	return hasOpenPassword(it) ? `Open link • ${comments} • Password required` : `Open link • ${comments}`
+}
+
+function accessChipClass(it: LinkItem) {
+	if (isRestricted(it)) return 'text-rose-400'
+	return hasOpenPassword(it) ? 'text-amber-400' : 'text-emerald-400'
 }
 
 const nowMs = ref(Date.now())
