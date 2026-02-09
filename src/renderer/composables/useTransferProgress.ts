@@ -90,6 +90,68 @@ function isFinishedTask(t: TransferTask) {
     return t.status === 'done' || t.status === 'failed'
 }
 
+function jobKindMatches(taskKind?: 'proxy_mp4' | 'hls' | 'any', want?: 'proxy_mp4' | 'hls' | 'any') {
+    if (!want || want === 'any') return true
+    if (!taskKind || taskKind === 'any') return true
+    return taskKind === want
+}
+
+function taskHasFile(t: Extract<TransferTask, { kind: 'transcode' }>, file: string) {
+    const ctx = t.context
+    if (!ctx) return false
+    if (ctx.file && ctx.file === file) return true
+    if (Array.isArray(ctx.files) && ctx.files.includes(file)) return true
+    return false
+}
+
+function hasActiveTranscode(opts: {
+    assetVersionIds?: number[]
+    file?: string
+    jobKind?: 'proxy_mp4' | 'hls' | 'any'
+}) {
+    const ids = Array.from(new Set((opts.assetVersionIds || [])
+        .map(n => Number(n))
+        .filter(n => Number.isFinite(n) && n > 0)))
+
+    const file = (opts.file || '').trim()
+
+    if (!ids.length && !file) return false
+
+    return _state.tasks.some(t => {
+        if (t.kind !== 'transcode') return false
+        if (!isActiveTask(t)) return false
+        if (!jobKindMatches(t.jobKind, opts.jobKind)) return false
+
+        if (ids.length) {
+            const taskIds = t.assetVersionIds || []
+            return ids.some(id => taskIds.includes(id))
+        }
+
+        return file ? taskHasFile(t, file) : false
+    })
+}
+
+function hasActiveTranscodeForFile(file: string, jobKind?: 'proxy_mp4' | 'hls' | 'any') {
+    if (!file) return false
+    return hasActiveTranscode({ file, jobKind })
+}
+
+function splitActiveTranscodeAssetVersions(assetVersionIds: number[], jobKind?: 'proxy_mp4' | 'hls' | 'any') {
+    const ids = Array.from(new Set((assetVersionIds || [])
+        .map(n => Number(n))
+        .filter(n => Number.isFinite(n) && n > 0)))
+
+    const active: number[] = []
+    const inactive: number[] = []
+
+    for (const id of ids) {
+        if (hasActiveTranscode({ assetVersionIds: [id], jobKind })) active.push(id)
+        else inactive.push(id)
+    }
+
+    return { active, inactive }
+}
+
 function removeTask(taskId: string) {
     _state.tasks = _state.tasks.filter(t => t.taskId !== taskId)
 }
@@ -277,7 +339,7 @@ export function useTransferProgress() {
     }
     
 
-    function startTranscodeTaskBase<TItem>(opts: {
+    function startTranscodeTaskBase<TItem extends ProgressItem | VersionProgressItem>(opts: {
         apiFetch: (path: string, init?: any) => Promise<any>
         ids: number[]
         title: string
@@ -399,6 +461,10 @@ export function useTransferProgress() {
         setOpen,
         removeTask,
         clearFinished,
+
+        hasActiveTranscode,
+        hasActiveTranscodeForFile,
+        splitActiveTranscodeAssetVersions,
 
         createUploadTask,
         updateUpload,

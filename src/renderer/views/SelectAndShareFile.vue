@@ -124,15 +124,48 @@
                                     </template>
 
                                     <template #access>
-                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
-                                            <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
-                                                Generate Proxy Files:
+                                       <!--  <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="watermark-switch">
+                                                Add Watermark:
                                             </label>
 
-                                            <Switch id="link-access-switch" v-model="transcodeProxy" :class="[
-                                                transcodeProxy ? 'bg-secondary' : 'bg-well',
-                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
+                                            <Switch id="watermark-switch" v-model="useWatermark"
+                                                :disabled="!canTranscodeSelected"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''" :class="[
+                                                    useWatermark ? 'bg-secondary' : 'bg-well',
+                                                    !canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
+                                                <span class="sr-only">Toggle proxy file generation</span>
+                                                <span aria-hidden="true" :class="[
+                                                    useWatermark ? 'translate-x-5' : 'translate-x-0',
+                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                ]" />
+                                            </Switch>
+
+                                            <span class="text-sm select-none truncate min-w-0 flex-1"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''">
+                                                <template v-if="canTranscodeSelected">
+                                                    {{ useWatermark ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                </template>
+                                                <template v-else>
+                                                    (Only for Videos)
+                                                </template>
+                                            </span>
+                                        </div> -->
+                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
+                                            <label class="font-semibold sm:whitespace-nowrap" for="transcode-switch">
+                                                Use Proxy Files:
+                                            </label>
+
+                                            <Switch id="transcode-switch" v-model="transcodeProxy"
+                                                :disabled="!canTranscodeSelected"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''"
+                                                :class="[
+                                                    transcodeProxy ? 'bg-secondary' : 'bg-well',
+                                                    !canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
                                                 <span class="sr-only">Toggle proxy file generation</span>
                                                 <span aria-hidden="true" :class="[
                                                     transcodeProxy ? 'translate-x-5' : 'translate-x-0',
@@ -140,8 +173,14 @@
                                                 ]" />
                                             </Switch>
 
-                                            <span class="text-sm select-none truncate min-w-0 flex-1">
-                                                {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                            <span class="text-sm select-none truncate min-w-0 flex-1"
+                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''">
+                                                <template v-if="canTranscodeSelected">
+                                                    {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                </template>
+                                                <template v-else>
+                                                    (Only for Videos)
+                                                </template>
                                             </span>
                                         </div>
                                         <div v-if="transcodeProxy" class="grid grid-cols-[auto_1fr] items-start gap-3 mb-3">
@@ -223,7 +262,7 @@
                                     </template>
 
                                     <template #password>
-                                        <div class="flex flex-col gap-2 min-w-0">
+                                        <div v-if="!restrictToUsers" class="flex flex-col gap-2 min-w-0">
                                             <div class="flex flex-wrap items-center gap-3 min-w-0">
                                                 <label class="font-semibold sm:whitespace-nowrap">Password Protected Link:</label>
 
@@ -258,36 +297,55 @@
                                     </template>
 
                                     <template #commenters>
-                                        <div class="flex flex-col gap-2 min-w-0">
+                                        <div class="flex flex-col gap-3 min-w-0">
                                             <div class="flex flex-wrap items-center gap-3 min-w-0">
-                                                <label class="font-semibold sm:whitespace-nowrap">Allow Users to Comment</label>
+                                                <label class="font-semibold sm:whitespace-nowrap">Restrict Access to Users</label>
 
-                                                <Switch id="allow-comments-switch" v-model="noCommentAccess" :class="[
-                                                    !noCommentAccess ? 'bg-secondary' : 'bg-well',
+                                                <Switch id="restrict-access-switch" v-model="restrictToUsers" :class="[
+                                                    restrictToUsers ? 'bg-secondary' : 'bg-well',
                                                     'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                                 ]">
-                                                    <span class="sr-only">Toggle comments</span>
+                                                    <span class="sr-only">Toggle user access</span>
                                                     <span aria-hidden="true" :class="[
-                                                        !noCommentAccess ? 'translate-x-5' : 'translate-x-0',
+                                                        restrictToUsers ? 'translate-x-5' : 'translate-x-0',
                                                         'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
                                                     ]" />
                                                 </Switch>
                                             </div>
 
-                                            <button type="button" class="btn btn-primary" :class="noCommentAccess ? 'disabled' : ''"
-                                                @click="openUserModal()">
-                                                {{ !noCommentAccess ? 'Manage Commenting Users' : 'No Comments' }}
-                                                <span v-if="commentCount"
-                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
-                                                    {{ commentCount }}
-                                                </span>
-                                            </button>
+                                            <div v-if="restrictToUsers" class="flex flex-col gap-2 min-w-0">
+                                                <button type="button" class="btn btn-primary" @click="openUserModal()">
+                                                    Manage Users & Roles
+                                                    <span v-if="accessCount"
+                                                        class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                                        {{ accessCount }}
+                                                    </span>
+                                                </button>
+                                                <p class="text-xs opacity-70">
+                                                    Commenting and download permissions are controlled by roles.
+                                                </p>
+                                            </div>
+
+                                            <div v-else class="flex flex-wrap items-center gap-3 min-w-0">
+                                                <label class="font-semibold sm:whitespace-nowrap">Allow Comments</label>
+
+                                                <Switch id="allow-comments-switch" v-model="allowOpenComments" :class="[
+                                                    allowOpenComments ? 'bg-secondary' : 'bg-well',
+                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                ]">
+                                                    <span class="sr-only">Toggle comments</span>
+                                                    <span aria-hidden="true" :class="[
+                                                        allowOpenComments ? 'translate-x-5' : 'translate-x-0',
+                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                    ]" />
+                                                </Switch>
+                                            </div>
                                         </div>
                                     </template>
 
                                     <template #errorLeft>
-                                        <p v-if="!commentAccessSatisfied" class="text-sm text-red-500">
-                                            At least one commenting user is required when comments are allowed.
+                                        <p v-if="!accessSatisfied" class="text-sm text-red-500">
+                                            At least one user is required when access is restricted.
                                         </p>
                                     </template>
 
@@ -299,12 +357,14 @@
                                 </CommonLinkControls>
                             </div>
 
-                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :preselected="commenters.map(c => ({
+                            <AddUsersModal v-model="userModalOpen" :apiFetch="apiFetch" :link="linkContext" roleHint="view" :preselected="accessUsers.map(c => ({
                                 id: c.id,
                                 username: c.username || '',
                                 name: c.name,
                                 user_email: c.user_email,
-                                display_color: c.display_color
+                                display_color: c.display_color,
+                                role_id: c.role_id ?? undefined,
+                                role_name: c.role_name ?? undefined,
                             }))" @apply="onApplyUsers" />
                         </div>
                     </template>
@@ -315,9 +375,14 @@
                             <button class="btn btn-secondary" :disabled="loading" @click="resetAll">
                                 Reset
                             </button>
-                            <button class="btn btn-secondary flex-1 min-w-[14rem]" :disabled="!canGenerate"
+                            <button class="btn btn-secondary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
                                 @click="generateLink" title="Create a magic link with the selected options">
-                                Generate magic link
+                                <span v-if="loading" class="inline-flex items-center gap-2">
+                                    <span
+                                        class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
+                                    Generating…
+                                </span>
+                                <span v-else>Generate magic link</span>
                             </button>
                         </div>
 
@@ -365,6 +430,7 @@ const connectionMeta = inject(connectionMetaInjectionKey)!
 const ssh = connectionMeta.value.ssh
 
 const { apiFetch } = useApi()
+const linkContext = { type: 'download' as const }
 // ================== Project selection state ==================
 const projectSelected = ref(false)
 const showEntireTree = ref(false)
@@ -372,10 +438,14 @@ const projectBase = ref<string>('')
 const {
     detecting, detectError, projectRoots, browseMode, loadProjectChoices,
 } = useProjectChoices(showEntireTree)
-const commenters = ref<Commenter[]>([])
-const noCommentAccess = ref(false)
-const commentCount = computed(() => commenters.value.length)
-const commentAccessSatisfied = computed(() => noCommentAccess.value || commentCount.value > 0)
+const accessUsers = ref<Commenter[]>([])
+const restrictToUsers = ref(false)
+const allowOpenComments = ref(true)
+const defaultRestrictToUsers = ref(false)
+const defaultAllowOpenComments = ref(true)
+const defaultUseProxyFiles = ref(false)
+const accessCount = computed(() => accessUsers.value.length)
+const accessSatisfied = computed(() => !restrictToUsers.value || accessCount.value > 0)
 const linkTitle = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -387,8 +457,9 @@ function resetAll() {
     expiresUnit.value = 'days'
     usePublicBase.value = defaultUsePublicBase.value
     linkTitle.value = ''
-    commenters.value = []
-    noCommentAccess.value = false
+    accessUsers.value = []
+    restrictToUsers.value = defaultRestrictToUsers.value
+    allowOpenComments.value = defaultAllowOpenComments.value
     password.value = ''
     protectWithPassword.value = false
     showPassword.value = false
@@ -405,6 +476,7 @@ function resetAll() {
         clearTimeout(regenTimer)
         regenTimer = null
     }
+    fileMimes.value = {}
 }
 
 function chooseProject(dirPath: string) {
@@ -444,10 +516,27 @@ async function loadLinkDefaults() {
         const isInternal = (s?.defaultLinkAccess === "internal");
         defaultUsePublicBase.value = !isInternal;
         usePublicBase.value = defaultUsePublicBase.value;
+
+        defaultRestrictToUsers.value =
+            typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false;
+        defaultAllowOpenComments.value =
+            typeof s?.defaultAllowComments === 'boolean' ? s.defaultAllowComments : true;
+        defaultUseProxyFiles.value =
+            typeof s?.defaultUseProxyFiles === 'boolean' ? s.defaultUseProxyFiles : false;
+
+        restrictToUsers.value = defaultRestrictToUsers.value;
+        allowOpenComments.value = defaultAllowOpenComments.value;
+        transcodeProxy.value = defaultUseProxyFiles.value;
     } catch {
         // Keep current default if settings can't be loaded
         defaultUsePublicBase.value = true;
         usePublicBase.value = true;
+        defaultRestrictToUsers.value = false;
+        defaultAllowOpenComments.value = true;
+        defaultUseProxyFiles.value = false;
+        restrictToUsers.value = defaultRestrictToUsers.value;
+        allowOpenComments.value = defaultAllowOpenComments.value;
+        transcodeProxy.value = defaultUseProxyFiles.value;
     }
 }
 
@@ -491,7 +580,19 @@ watch(files, () => {
     // This catches adds/removes done outside the helpers (e.g., FileExplorer @add)
     invalidateLink()
     scheduleAutoRegen()
+    refreshFileMimes()
 }, { deep: true })
+
+
+const canTranscodeSelected = computed(() =>
+    files.value.length > 0 &&
+    files.value.every(p => isVideoByMimeOrExt(p, fileMimes.value[p]))
+)
+
+// const canTranscodeSelected = true;
+watch(canTranscodeSelected, (ok) => {
+    if (!ok) transcodeProxy.value = false
+})
 
 watch(showEntireTree, (v) => {
     if (v) {
@@ -507,16 +608,22 @@ watch(showEntireTree, (v) => {
         loadProjectChoices();
     }
 });
+watch(restrictToUsers, (v) => {
+    if (v) {
+        protectWithPassword.value = false
+        password.value = ''
+    }
+});
 watch(
-    commenters,
+    accessUsers,
     (arr) => {
-        if (arr.length > 0) noCommentAccess.value = false
+        if (arr.length > 0) restrictToUsers.value = true
     },
     { deep: true }
 )
 
-function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
-    const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> {
+    const map: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> = {};
     const t = data?.transcodes;
 
     if (!Array.isArray(t)) return map;
@@ -527,6 +634,7 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 
         map[vId] = {
             queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
+            activeKinds: Array.isArray(rec?.jobs?.activeKinds) ? rec.jobs.activeKinds : [],
             skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
         };
     }
@@ -535,15 +643,17 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 
 function filterVersionIdsByJobKind(
     versionIds: number[],
-    jobInfo: Record<number, { queuedKinds: string[]; skippedKinds: string[] }>,
+    jobInfo: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }>,
     kind: string
 ) {
     const queued: number[] = []
+    const active: number[] = []
     const skipped: number[] = []
 
     for (const vId of versionIds) {
         const rec = jobInfo[vId]
-        if (rec?.queuedKinds?.includes(kind)) queued.push(vId)
+        if (rec?.activeKinds?.includes(kind)) active.push(vId)
+        else if (rec?.queuedKinds?.includes(kind)) queued.push(vId)
         else if (rec?.skippedKinds?.includes(kind)) skipped.push(vId)
         else {
             // Unknown: server didn't tell us. Treat as queued to preserve existing behavior.
@@ -551,7 +661,7 @@ function filterVersionIdsByJobKind(
         }
     }
 
-    return { queued, skipped }
+    return { queued, active, skipped }
 }
 
 
@@ -816,13 +926,23 @@ async function generateLink() {
         body.password = password.value
     }
 
-    if (!noCommentAccess.value && commenters.value.length) {
-        (body as any).commenters = commenters.value.map(c => {
+    body.access_mode = restrictToUsers.value ? 'restricted' : 'open'
+    body.auth_mode = restrictToUsers.value
+        ? 'password'
+        : (protectWithPassword.value ? 'password' : 'none')
+    if (!restrictToUsers.value) {
+        body.allow_comments = !!allowOpenComments.value
+    }
+
+    if (restrictToUsers.value && accessUsers.value.length) {
+        (body as any).users = accessUsers.value.map(c => {
             const out: any = {}
             if (c.id != null) out.userId = c.id
             if (c.username) out.username = c.username
             if (c.user_email) out.user_email = c.user_email
             if (c.name) out.name = c.name
+            if (c.role_id != null) out.roleId = c.role_id
+            if (c.role_name) out.roleName = c.role_name
             return out
         })
     }
@@ -913,13 +1033,17 @@ async function generateLink() {
                 const fileForTask = files.value.length === 1 ? files.value[0] : undefined;
 
                 // Proxy: only track versions that were actually queued
-                if (transcodeProxy.value) {
-                    if (proxySplit.queued.length) {
+                if (requestProxy) {
+                    const proxyCandidates = [...proxySplit.queued, ...proxySplit.active]
+                    const proxyActiveSplit = transfer.splitActiveTranscodeAssetVersions(proxyCandidates, 'proxy_mp4')
+                    const proxyToTrack = proxyActiveSplit.inactive
+
+                    if (proxyToTrack.length) {
                         transfer.startAssetVersionTranscodeTask({
                             apiFetch,
-                            assetVersionIds: proxySplit.queued,
+                            assetVersionIds: proxyToTrack,
                             title: 'Generating proxy files',
-                            detail: `Tracking ${proxySplit.queued.length} asset version(s)`,
+                            detail: `Tracking ${proxyToTrack.length} asset version(s)`,
                             intervalMs: 1500,
                             jobKind: 'proxy_mp4',
                             context: {
@@ -931,6 +1055,22 @@ async function generateLink() {
                                 files: files.value.slice(),
                             },
                         });
+                    }
+
+                    const proxyInProgressIds = Array.from(new Set([
+                        ...proxySplit.active,
+                        ...proxyActiveSplit.active,
+                    ]))
+
+                    if (proxyInProgressIds.length) {
+                        pushNotification(
+                            new Notification(
+                                'Proxy Already In Progress',
+                                `Proxy generation is already in progress for ${proxyInProgressIds.length} item(s).`,
+                                'info',
+                                6000
+                            )
+                        )
                     } else if (proxySplit.skipped.length) {
                         pushNotification(
                             new Notification(
@@ -948,9 +1088,9 @@ async function generateLink() {
                     if (hlsSplit.queued.length) {
                         transfer.startAssetVersionTranscodeTask({
                             apiFetch,
-                            assetVersionIds: hlsSplit.queued,
+                            assetVersionIds: hlsToTrack,
                             title: 'Generating adaptive stream',
-                            detail: `Tracking ${hlsSplit.queued.length} asset version(s)`,
+                            detail: `Tracking ${hlsToTrack.length} asset version(s)`,
                             intervalMs: 1500,
                             jobKind: 'hls',
                             context: {
@@ -962,6 +1102,22 @@ async function generateLink() {
                                 files: files.value.slice(),
                             },
                         });
+                    }
+
+                    const hlsInProgressIds = Array.from(new Set([
+                        ...hlsSplit.active,
+                        ...hlsActiveSplit.active,
+                    ]))
+
+                    if (hlsInProgressIds.length) {
+                        pushNotification(
+                            new Notification(
+                                'Stream Already In Progress',
+                                `Adaptive stream generation is already in progress for ${hlsInProgressIds.length} item(s).`,
+                                'info',
+                                6000
+                            )
+                        )
                     } else if (hlsSplit.skipped.length) {
                         pushNotification(
                             new Notification(
@@ -1104,7 +1260,16 @@ function onApplyUsers(
         const user_email = u.user_email?.trim() || undefined
         const display_color = u.display_color
         const key = makeKey(name, user_email, username)
-        return { key, id: u.id, username, name, user_email, display_color }
+        return {
+            key,
+            id: u.id,
+            username,
+            name,
+            user_email,
+            display_color,
+            role_id: u.role_id ?? null,
+            role_name: u.role_name ?? null,
+        }
     })
 
     // Dedupe by key just in case
@@ -1117,7 +1282,7 @@ function onApplyUsers(
     }
 
     // REPLACE (not merge): reflect exactly what's selected in the modal
-    commenters.value = dedup
+    accessUsers.value = dedup
 
     invalidateLink()
     scheduleAutoRegen()
