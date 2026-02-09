@@ -61,7 +61,7 @@ export type ElectronApi = {
   // local picks
   pickFiles: () => Promise<Array<{ path: string; name: string; size: number }>>
   pickFolder: () => Promise<Array<{ path: string; name: string; size: number }>>
-  pickWatermark: () => Promise<{ path: string; name: string; size: number } | null>
+  pickWatermark: () => Promise<{ path: string; name: string; size: number; dataUrl?: string | null } | null>
 
   // New: rsync over SSH
   rsyncStart: (

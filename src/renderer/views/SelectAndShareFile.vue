@@ -195,6 +195,15 @@
                                         <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile" class="text-xs text-amber-300 mb-2">
                                             Select a watermark image to continue.
                                         </div>
+                                        <div v-if="hasVideoSelected && watermarkEnabled && watermarkFile?.dataUrl" class="mb-2">
+                                            <div class="text-xs text-slate-400 mb-1">Preview (approximate)</div>
+                                            <div class="relative aspect-video w-full max-w-sm rounded-md border border-default bg-default/60 overflow-hidden">
+                                                <div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
+                                                <img :src="watermarkFile.dataUrl" alt="Watermark preview"
+                                                    class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+                                            </div>
+                                            <div class="text-[11px] text-slate-400 mt-1">Size and position may vary by source video.</div>
+                                        </div>
                                         <div class="flex flex-wrap items-center gap-3 min-w-0">
                                             <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
                                                 Link Access:
@@ -573,7 +582,7 @@ const downloadUrl = ref('')
 const transcodeProxy = ref(false)
 const proxyQualities = ref<string[]>([])
 const watermarkEnabled = ref(false)
-type LocalFile = { path: string; name: string; size: number }
+type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 const watermarkFile = ref<LocalFile | null>(null)
 const overwriteExisting = ref(false)
 

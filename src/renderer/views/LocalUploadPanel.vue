@@ -213,8 +213,8 @@
 						<!-- Center -->
 						<div class="justify-self-center">
 							<div v-if="step === 3" class="grid gap-2">
-								<div class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-									<label class="font-semibold whitespace-nowrap">
+								<div class="grid grid-cols-[auto_auto_minmax(12rem,12rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap text-left">
 										Generate Proxy Files:
 									</label>
 
@@ -235,29 +235,30 @@
 									</span>
 								</div>
 
-								<div v-if="transcodeProxyAfterUpload" class="grid grid-cols-[auto_1fr] items-start gap-3">
-									<label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
-									<div class="flex flex-col gap-2">
+								<div v-if="transcodeProxyAfterUpload" class="grid mt-4 grid-cols-[minmax(12rem,12rem)_1fr] items-start gap-3">
+									<label class="font-semibold whitespace-nowrap pt-1 text-left">Proxy Qualities:</label>
+									<div class="">
 										<label class="inline-flex items-center gap-2 text-sm">
 											<input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
 											<span>720p</span>
 										</label>
-										<label class="inline-flex items-center gap-2 text-sm">
-											<input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
+										<label class="inline-flex items-center gap-2 text-sm " >
+											<input type="checkbox" class="checkbox ml-2" value="1080p" v-model="proxyQualities" />
 											<span>1080p</span>
 										</label>
 										<label class="inline-flex items-center gap-2 text-sm">
-											<input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
+											<input type="checkbox" class="checkbox ml-2" value="original" v-model="proxyQualities" />
 											<span>Original</span>
 										</label>
 										<div class="text-xs text-slate-400">
 											These versions take extra space and are used for shared links instead of the original file.
 										</div>
 									</div>
+									<div></div>
 								</div>
 
-								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-									<label class="font-semibold whitespace-nowrap">
+								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="grid mt-4 grid-cols-[auto_auto_minmax(12rem,12rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap text-left">
 										Watermark Videos:
 									</label>
 
@@ -277,8 +278,8 @@
 									</span>
 								</div>
 
-								<div v-if="hasVideoSelected && watermarkAfterUpload" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3">
-									<span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
+								<div v-if="hasVideoSelected && watermarkAfterUpload" class="grid mt-4 grid-cols-[auto_auto_1fr_auto] items-center gap-3">
+									<span class=" font-semibold whitespace-nowrap">Watermark Image:</span>
 									<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
 									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
 										{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
@@ -288,6 +289,15 @@
 
 								<div v-if="hasVideoSelected && watermarkAfterUpload && !watermarkFile" class="text-xs text-amber-300">
 									Select a watermark image to continue.
+								</div>
+								<div v-if="hasVideoSelected && watermarkAfterUpload && watermarkFile?.dataUrl" class="mt-2">
+									<div class="text-xs text-slate-400 mb-1 text-center">Preview (approximate)</div>
+									<div class="relative aspect-video w-full max-w-sm rounded-md border border-default bg-default/60 overflow-hidden mx-auto">
+										<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
+										<img :src="watermarkFile.dataUrl" alt="Watermark preview"
+											class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+									</div>
+									<div class="text-xs text-slate-400 mt-1 text-center">Size and position may vary by source video.</div>
 								</div>
 							</div>
 						</div>
@@ -329,7 +339,7 @@ const { to } = useResilientNav()
 useHeader('Upload Files')
 const transfer = useTransferProgress()
 
-type LocalFile = { path: string; name: string; size: number }
+type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 
 const connectionMeta = inject(connectionMetaInjectionKey)!;
 const ssh = connectionMeta.value.ssh
