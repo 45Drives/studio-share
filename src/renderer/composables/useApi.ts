@@ -19,6 +19,11 @@ const DEFAULT_TIMEOUT = 12_000
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+function shouldLogApiInfo(method?: string) {
+    const m = String(method || 'GET').toUpperCase() as HttpMethod
+    return !['GET', 'HEAD', 'OPTIONS'].includes(m)
+}
+
 function shouldRetry(method?: string, err?: any) {
     const m = String(method || 'GET').toUpperCase() as HttpMethod
     if (!['GET', 'HEAD', 'OPTIONS'].includes(m)) return false
@@ -75,9 +80,13 @@ export function useApi() {
             const timer = setTimeout(() => ctrl.abort(new DOMException('Timeout', 'AbortError')), timeoutMs)
 
             try {
-                window.appLog?.info('api.request', { url, method, attempt })
+                if (shouldLogApiInfo(method)) {
+                    window.appLog?.info('api.request', { url, method, attempt })
+                }
                 const res = await fetch(url, { ...init, method, headers, signal: ctrl.signal })
-                window.appLog?.info('api.response', { url, status: res.status })
+                if (shouldLogApiInfo(method)) {
+                    window.appLog?.info('api.response', { url, status: res.status })
+                }
 
                 if (res.status === 401) {
                     // If caller wants to handle auth failure itself (polling), don't global-logout

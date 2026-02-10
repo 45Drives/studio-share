@@ -2,142 +2,224 @@
   <div v-if="modelValue" class="fixed inset-0 z-50 flex items-center justify-center">
     <div class="absolute inset-0 bg-black/50" @click="close()"></div>
 
-    <div class="relative w-full max-w-3xl bg-accent rounded-lg shadow-xl p-4">
+    <div class="relative w-[96vw] max-w-2xl bg-accent rounded-lg shadow-xl p-4 flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Give comment access</h3>
+        <h3 class="text-lg font-semibold">{{ linkMode ? 'Manage link access' : 'Manage users' }}</h3>
 
-        <button class="btn btn-secondary" @click="close()">Close</button>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-secondary" @click="openRoles()">Manage roles</button>
+          <button class="btn btn-secondary" @click="close()">Close</button>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Existing users -->
-        <div class="border rounded p-3 bg-accent/60">
-          <div class="flex items-center justify-between mb-2">
-            <div class="font-semibold text-sm">Select existing users</div>
-            <input type="text" v-model.trim="userSearch"
-              class="input-textlike border rounded px-2 py-1 text-sm"
-              placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
-          </div>
+      <div class="flex-1 overflow-auto pr-1 min-h-0">
+        <div class="grid grid-cols-1 gap-4">
+          <!-- Existing users -->
+          <div class="border rounded p-3 bg-accent/60">
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-semibold text-sm">{{ linkMode ? 'Select existing users' : 'Existing users' }}</div>
+              <input type="text" v-model.trim="userSearch"
+                class="input-textlike border rounded px-2 py-1 text-sm"
+                placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
+            </div>
 
-          <div class="max-h-64 overflow-auto border rounded">
-            <div v-for="u in users" :key="u.id ?? u.username"
-              class="flex items-center justify-between px-3 py-2 border-b border-default text-sm">
-              <label class="flex items-center gap-2 cursor-pointer" @click.stop>
-                <input type="checkbox" :value="userKey(u)" v-model="selectedKeys" />
-                <span class="inline-block h-3 w-3 rounded-full"
-                  :style="{ backgroundColor: u.display_color || '#999' }"></span>
-                <div class="flex flex-col">
-                  <span class="font-medium">{{ u.name || u.username }}</span>
-                  <span class="opacity-70">
-                    @{{ u.username }}
-                    <span v-if="u.user_email">• {{ u.user_email }}</span>
-                  </span>
+            <div class="max-h-[45vh] overflow-auto border rounded">
+              <div v-for="u in users" :key="u.id ?? u.username"
+                class="flex items-center justify-between px-3 py-2 border-b border-default text-sm">
+                <label v-if="linkMode" class="flex items-center gap-2 cursor-pointer" @click.stop>
+                  <input type="checkbox" :value="userKey(u)" v-model="selectedKeys" />
+                  <span class="inline-block h-3 w-3 rounded-full"
+                    :style="{ backgroundColor: u.display_color || '#999' }"></span>
+                  <div class="flex flex-col">
+                    <span class="font-medium">{{ u.name || u.username }}</span>
+                    <span class="opacity-70">
+                      @{{ u.username }}
+                      <span v-if="u.user_email">• {{ u.user_email }}</span>
+                    </span>
+                  </div>
+                </label>
+                <div v-else class="flex items-center gap-2">
+                  <span class="inline-block h-3 w-3 rounded-full"
+                    :style="{ backgroundColor: u.display_color || '#999' }"></span>
+                  <div class="flex flex-col">
+                    <span class="font-medium">{{ u.name || u.username }}</span>
+                    <span class="opacity-70">
+                      @{{ u.username }}
+                      <span v-if="u.user_email">• {{ u.user_email }}</span>
+                    </span>
+                  </div>
                 </div>
-              </label>
 
-              <!-- Actions -->
-              <div class="flex items-center gap-2">
-                <button class="px-2 py-1 text-xs border rounded hover:opacity-80" @click.stop="startEdit(u)"
-                  title="Edit user">
-                  <FontAwesomeIcon :icon="faEdit" />
-                </button>
-                <button class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
-                  @click.stop="deleteUser(u)" title="Delete user">
-                  <FontAwesomeIcon :icon="faTrash" />
-                </button>
+                <!-- Actions -->
+                <div class="flex items-center gap-2">
+                  <select
+                    v-if="linkMode"
+                    v-model.number="roleByKey[userKey(u)]"
+                    :disabled="!selectedKeys.includes(userKey(u)) || rolesLoading || !roles.length"
+                    class="input-textlike border rounded px-2 py-1 text-xs min-w-[140px]"
+                    title="Role for this link"
+                  >
+                    <option v-if="rolesLoading" disabled value="">Loading roles…</option>
+                    <option v-else-if="!roles.length" disabled value="">No roles</option>
+                    <option v-else v-for="r in roles" :key="r.id" :value="r.id">
+                      {{ r.name }}
+                    </option>
+                  </select>
+                  <button class="px-2 py-1 text-xs border rounded hover:opacity-80" @click.stop="startEdit(u)"
+                    title="Edit user">
+                    <FontAwesomeIcon :icon="faEdit" />
+                  </button>
+                  <button class="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-600/10"
+                    @click.stop="deleteUser(u)" title="Delete user">
+                    <FontAwesomeIcon :icon="faTrash" />
+                  </button>
+                </div>
               </div>
+              <div v-if="!users.length" class="px-3 py-2 text-sm opacity-70">No users.</div>
             </div>
-            <div v-if="!users.length" class="px-3 py-2 text-sm opacity-70">No users.</div>
+
+            <div v-if="linkMode" class="flex gap-2 mt-2">
+              <button class="btn btn-secondary" @click="selectAll()" :disabled="!users.length">Select all</button>
+              <button class="btn btn-secondary" @click="clearSelected()" :disabled="!selectedKeys.length">
+                Clear
+              </button>
+            </div>
           </div>
 
-          <div class="flex gap-2 mt-2">
-            <button class="btn btn-secondary" @click="selectAll()" :disabled="!users.length">Select all</button>
-            <button class="btn btn-secondary" @click="clearSelected()" :disabled="!selectedKeys.length">
-              Clear
-            </button>
-          </div>
-        </div>
-
-        <!-- Create new user -->
-
-        <div>
-          <button v-if="!showCreate"
-            class="px-3 py-2 rounded bg-[#5E56C5] text-white hover:bg-[#4d46a8] focus:outline-none focus:ring-2 focus:ring-[#5E56C5]/40 active:bg-[#433e97] transition"
-            @click="openCreate()">Create new user</button>
-          <button v-else
-            class="px-3 py-2 rounded bg-[#E74C3C] text-white hover:bg-[#c0392b] focus:outline-none focus:ring-2 focus:ring-[#E74C3C]/40 active:bg-[#a93226] transition"
-            @click="closeCreate()">
-            Close create form
-          </button>
-        </div>
-        <div v-if="showCreate" class="border rounded p-3 bg-accent/60">
-          <div class="font-semibold text-sm mb-2">Create new user</div>
+          <!-- Create new user -->
           <div class="flex flex-col gap-2">
-            <div class="text-xs opacity-70 mb-1">A temporary PIN is required. Share it securely with the user.</div>
-            <div>
-              <label class="text-xs opacity-80">Name <span class="text-red-500">*</span></label>
-              <input type="text" v-model.trim="newUser.name"
-                class="input-textlike border rounded px-3 py-2 w-full" placeholder="Jane Doe" />
+            <div class="mr-auto">
+              <button v-if="!showCreate"
+                class="btn btn-primary"
+                @click="openCreate()">Create new user</button>
+              <button v-else
+                class="btn btn-danger"
+                @click="closeCreate()">
+                Close create form
+              </button>
             </div>
-            <div>
-              <label class="text-xs opacity-80">Username <span class="text-red-500">*</span></label>
-              <input type="text" v-model.trim="newUser.username"
-                class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane" />
-            </div>
-            <div>
-              <label class="text-xs opacity-80">Email (optional)</label>
-              <input type="email" v-model.trim="newUser.user_email"
-                class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane@example.com" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label class="text-xs opacity-80">Temporary PIN <span class="text-red-500">*</span></label>
-                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPin"
-                  :class="['input-textlike border rounded px-3 py-2 w-full', (pinFormatInvalid ? 'border-red-500' : '')]"
-                  placeholder="4–8 digits" aria-invalid="true"
-                  v-bind="pinFormatInvalid ? { 'aria-describedby': 'pin-format-error' } : {}" />
-                <p v-if="pinFormatInvalid" id="pin-format-error" class="mt-1 text-xs text-red-500">PIN must be 4–8
-                  digits.</p>
-              </div>
-              <div>
-                <label class="text-xs opacity-80">Confirm PIN <span class="text-red-500">*</span></label>
-                <input type="password" inputmode="numeric" pattern="\d*" v-model.trim="tempPinConfirm"
-                  :class="['input-textlike border rounded px-3 py-2 w-full', (pinMismatch ? 'border-red-500' : '')]"
-                  placeholder="Re-enter PIN" aria-invalid="true"
-                  v-bind="pinMismatch ? { 'aria-describedby': 'pin-mismatch-error' } : {}" />
-                <p v-if="pinMismatch" id="pin-mismatch-error" class="mt-1 text-xs text-red-500">PINs do not match.</p>
-              </div>
-            </div>
-            <div>
-              <label class="text-xs opacity-80">Comment color</label>
-              <div class="flex items-center gap-2">
-                <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 border rounded"
-                  title="Pick a color" />
-                <input type="text" v-model.trim="newUser.display_color"
-                  class="input-textlike border rounded px-3 py-2 w-full" placeholder="#aabbcc" />
-              </div>
-              <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
-            </div>
+            <div v-if="showCreate" class="border rounded p-3 bg-accent/60">
+              <div class="font-semibold text-sm mb-2">Create new user</div>
+              <div class="flex flex-col gap-2">
+                <div class="text-xs opacity-70 mb-1">A temporary password is required. Share it securely with the user.</div>
+                <div class="grid grid-cols-2 gap-2 text-left">
+                  <div>
+                    <label class="text-xs opacity-80">Name <span class="text-red-500">*</span></label>
+                    <input type="text" v-model.trim="newUser.name" tabindex="1"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="Jane Doe" />
+                  </div>
+                  <div>
+                    <label class="text-xs opacity-80">Username <span class="text-red-500">*</span></label>
+                    <input type="text" v-model.trim="newUser.username" tabindex="2"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane" />
+                  </div>
+                  <div>
+                    <div class="relative">
+                      <label class="text-xs opacity-80 pr-28 inline-block">
+                        Temporary Password <span class="text-red-500">*</span>
+                      </label>
+                      <button type="button"
+                        class="absolute right-0 top-0 text-xs underline opacity-80 hover:opacity-100 mt-1.5"
+                        @click="generateTempPassword">
+                        Generate password
+                      </button>
+                    </div>
+                    <div class="relative">
+                      <input :type="showTempPassword ? 'text' : 'password'"
+                        v-model.trim="tempPassword" tabindex="3"
+                        :class="['input-textlike border rounded px-3 py-2 w-full pr-12', (passwordFormatInvalid ? 'border-red-500' : '')]"
+                        placeholder="4–64 characters" aria-invalid="true"
+                        v-bind="passwordFormatInvalid ? { 'aria-describedby': 'password-format-error' } : {}" />
+                      <button type="button"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-xs border rounded px-2 py-1"
+                        @click="showTempPassword = !showTempPassword" :aria-pressed="showTempPassword ? 'true' : 'false'">
+                        {{ showTempPassword ? 'Hide' : 'Show' }}
+                      </button>
+                    </div>
+                    <p v-if="passwordFormatInvalid" id="password-format-error" class="mt-1 text-xs text-red-500">
+                      Password must be 4–64 characters.
+                    </p>
+                  </div>
+                   <div>
+                    <label class="text-xs opacity-80">Confirm Password <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                      <input :type="showTempPasswordConfirm ? 'text' : 'password'"
+                        v-model.trim="tempPasswordConfirm" tabindex="4"
+                        :class="['input-textlike border rounded px-3 py-2 w-full pr-12', (passwordMismatch ? 'border-red-500' : '')]"
+                        placeholder="Re-enter password" aria-invalid="true"
+                        v-bind="passwordMismatch ? { 'aria-describedby': 'password-mismatch-error' } : {}" />
+                      <button type="button"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-xs border rounded px-2 py-1"
+                        @click="showTempPasswordConfirm = !showTempPasswordConfirm" :aria-pressed="showTempPasswordConfirm ? 'true' : 'false'">
+                        {{ showTempPasswordConfirm ? 'Hide' : 'Show' }}
+                      </button>
+                    </div>
+                    <p v-if="passwordMismatch" id="password-mismatch-error" class="mt-1 text-xs text-red-500">Passwords do not match.</p>
+                  </div>
+                     <div>
+                    <label class="text-xs opacity-80">Email (optional)</label>
+                    <input type="email" v-model.trim="newUser.user_email" tabindex="5"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane@example.com" />
+                  </div>
+                  <div>
+                    <label class="text-xs opacity-80">Default role (new links)</label>
+                    <select v-model="newUserDefaultRoleId" :disabled="rolesLoading || !roles.length" tabindex="7"
+                      class="input-textlike border rounded px-3 py-2 w-full">
+                      <option :value="null">None</option>
+                      <option v-if="rolesLoading" disabled value="">Loading roles…</option>
+                      <option v-else-if="!roles.length" disabled value="">No roles</option>
+                      <option v-else v-for="r in roles" :key="r.id" :value="r.id">
+                        {{ r.name }}
+                      </option>
+                    </select>
+                  </div>
+                  <div v-if="linkMode" class="col-span-2">
+                    <label class="text-xs opacity-80">Role for this link</label>
+                    <select v-model.number="newUserRoleId" :disabled="rolesLoading || !roles.length" tabindex="6"
+                      class="input-textlike border rounded px-3 py-2 w-full">
+                      <option v-if="rolesLoading" disabled value="">Loading roles…</option>
+                      <option v-else-if="!roles.length" disabled value="">No roles</option>
+                      <option v-else v-for="r in roles" :key="r.id" :value="r.id">
+                        {{ r.name }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+             
+                <div class="col-span-2 text-left">
+                  <label class="text-xs opacity-80">Comment color</label>
+                  <div class="flex items-center gap-2">
+                    <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 border rounded"
+                      title="Pick a color" />
+                    <input type="text" v-model.trim="newUser.display_color" tabindex="8"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="#aabbcc" />
+                  </div>
+                  <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
+                </div>
 
-            <div class="flex gap-2 mt-2">
-              <button class="btn btn-primary" @click="createUser()" :disabled="!canSubmit">Create & Select</button>
-              <button class="btn btn-secondary" @click="resetNewUser()">Reset</button>
-            </div>
+                <div class="flex flex-row w-full justify-between mt-2">
 
-            <div v-if="error" class="text-sm text-red-500">{{ error }}</div>
+                  <button class="btn btn-secondary" @click="resetNewUser()">Reset</button>
+                  <button class="btn btn-primary" @click="createUser()" tabindex="9" :disabled="!canSubmit">Create & Select</button>
+                </div>
+
+
+                <div v-if="error" class="text-sm text-red-500">{{ error }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="flex justify-end gap-2 mt-4">
-        <button class="btn btn-secondary" @click="close()">Cancel</button>
-        <button class="btn btn-primary" @click="apply()">Add to link</button>
+        <button class="btn btn-secondary" @click="close()">{{ linkMode ? 'Cancel' : 'Close' }}</button>
+        <button v-if="linkMode" class="btn btn-success" @click="apply()">Add to link</button>
       </div>
     </div>
   </div>
 
   <!-- Edit modal -->
-  <div v-if="editing" class="fixed inset-0 z-[60] flex items-center justify-center">
+  <div v-if="editing" class="fixed inset-0 z-[60] flex items-center justify-center text-left">
     <div class="absolute inset-0 bg-black/50" @click="editing = null"></div>
     <div class="relative w-full max-w-md bg-accent rounded-lg shadow-xl p-4">
       <div class="flex items-center justify-between mb-3">
@@ -167,14 +249,28 @@
               class="input-textlike border rounded px-3 py-2 w-full" />
           </div>
         </div>
-        <button class="btn btn-secondary" @click="openReset(editing)" title="Reset PIN for this user">
-          Reset PIN
-        </button>
+        <div>
+          <label class="text-xs opacity-80">Default role (new links)</label>
+          <select v-model="editForm.default_role_id" :disabled="rolesLoading || !roles.length"
+            class="input-textlike border rounded px-3 py-2 w-full">
+            <option :value="null">None</option>
+            <option v-if="rolesLoading" disabled value="">Loading roles…</option>
+            <option v-else-if="!roles.length" disabled value="">No roles</option>
+            <option v-else v-for="r in roles" :key="r.id" :value="r.id">
+              {{ r.name }}
+            </option>
+          </select>
+        </div>
+        <div class="items-center text-center">
+          <button class="btn btn-primary" @click="openReset(editing)" title="Reset password for this user">
+            Reset Password
+          </button>
+        </div>
       </div>
 
       <div class="flex justify-end gap-2 mt-4">
         <button class="btn btn-secondary" @click="editing = null">Cancel</button>
-        <button class="btn btn-primary" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPin)">
+        <button class="btn btn-success" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPassword)">
           Save
         </button>
       </div>
@@ -185,20 +281,27 @@
     :danger="true" :busy="deleting" :error="deleteError" :clickOutsideCancels="true" confirmText="Delete"
     cancelText="Cancel" @confirm="performDelete" />
 
+  <ResetPasswordModal v-model="resetOpen" :user="userToReset" @confirm="onConfirmReset" />
+
+  <RolesModal v-model="rolesOpen" :apiFetch="apiFetch" @updated="fetchRoles" />
+
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
-export type ExistingUser = { id?: string | number; username: string; name?: string; user_email?: string; display_color?: string }
+import type { Role, LinkItem, ExistingUser } from '../../typings/electron'
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue'
-import ResetPinModal from './ResetPinModal.vue';
+import ResetPasswordModal from './ResetPasswordModal.vue';
+import RolesModal from './RolesModal.vue'
 
 const props = defineProps<{
   modelValue: boolean
   apiFetch: (url: string, opts?: any) => Promise<any>
   preselected?: ExistingUser[]
+  roleHint?: 'upload' | 'comment' | 'view'
+  link?: Partial<LinkItem> | null
 }>()
 
 const emit = defineEmits<{
@@ -211,10 +314,21 @@ const userSearch = ref('')
 const users = ref<ExistingUser[]>([])
 const selectedKeys = ref<string[]>([])
 
+const roles = ref<Role[]>([])
+const rolesLoading = ref(false)
+const rolesError = ref<string | null>(null)
+const rolesOpen = ref(false)
+const roleByKey = ref<Record<string, number>>({})
+const roleNameByKey = ref<Record<string, string>>({})
+const newUserRoleId = ref<number | null>(null)
+const newUserDefaultRoleId = ref<number | null>(null)
+
 const newUser = ref<ExistingUser>({ username: '', name: '', user_email: '', display_color: randomPastel() })
 const error = ref('')
-const tempPin = ref('')
-const tempPinConfirm = ref('')
+const tempPassword = ref('')
+const tempPasswordConfirm = ref('')
+const showTempPassword = ref(false)
+const showTempPasswordConfirm = ref(false)
 const showCreate = ref(false)
 const deleteOpen = ref(false)
 const deleting = ref(false)
@@ -222,49 +336,77 @@ const deleteError = ref<string | null>(null)
 const userToDelete = ref<ExistingUser | null>(null)
 const resetOpen = ref(false)
 const userToReset = ref<{ id?: number | string; username?: string; name?: string } | null>(null)
-const pendingResetPin = ref<string | null>(null)
+const pendingResetPassword = ref<string | null>(null)
 const pendingResetUserId = ref<number | string | null>(null)
 
 
 // Edit state
 const editing = ref<ExistingUser | null>(null)
-const editForm = ref<{ name: string; user_email: string; display_color: string }>({
+const editForm = ref<{ name: string; user_email: string; display_color: string; default_role_id: number | null }>({
   name: '',
   user_email: '',
   display_color: '#999999',
+  default_role_id: null,
 })
 
 const canSubmit = computed(() => {
   const u = (newUser.value.username || '').trim()
-  const p = tempPin.value.trim()
-  const c = tempPinConfirm.value.trim()
-  return !!u && /^\d{4,8}$/.test(p) && p === c
+  const p = tempPassword.value.trim()
+  const c = tempPasswordConfirm.value.trim()
+  return !!u && p.length >= 4 && p.length <= 64 && p === c
 })
-const pinMismatch = computed(() => {
-  const p = tempPin.value.trim()
-  const c = tempPinConfirm.value.trim()
+const passwordMismatch = computed(() => {
+  const p = tempPassword.value.trim()
+  const c = tempPasswordConfirm.value.trim()
   return p.length > 0 && c.length > 0 && p !== c
 })
-const pinFormatInvalid = computed(() => {
-  const p = tempPin.value.trim()
-  return p.length > 0 && !/^\d{4,8}$/.test(p)
+const passwordFormatInvalid = computed(() => {
+  const p = tempPassword.value.trim()
+  return p.length > 0 && (p.length < 4 || p.length > 64)
 })
 const hasProfileEdits = computed(() => {
   if (!editing.value) return false
   const nameChanged = editForm.value.name.trim() !== (editing.value.name || '')
   const emailChanged = (editForm.value.user_email.trim() || null) !== (editing.value.user_email ?? null)
   const colorChanged = (normalizeHex(editForm.value.display_color) || null) !== (editing.value.display_color || null)
-  return nameChanged || emailChanged || colorChanged
+  const defaultRoleChanged = (editForm.value.default_role_id ?? null) !== (getDefaultRoleId(editing.value) ?? null)
+  return nameChanged || emailChanged || colorChanged || defaultRoleChanged
 })
 
+const defaultRoleId = computed(() => {
+  if (!roles.value.length) return null
+  if (props.roleHint === 'upload') {
+    return roles.value.find(r => r.can_upload)?.id ?? roles.value[0].id
+  }
+  if (props.roleHint === 'comment') {
+    return roles.value.find(r => r.can_comment)?.id ?? roles.value[0].id
+  }
+  const viewer = roles.value.find(r => r.name?.toLowerCase() === 'viewer')
+  return viewer?.id ?? roles.value[0].id
+})
 
-watch([tempPin, tempPinConfirm], () => {
+const linkMode = computed(() => !!props.link || props.roleHint != null)
+
+watch([tempPassword, tempPasswordConfirm], () => {
   if (error.value) error.value = ''
 })
 
+function generateTempPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+  let out = ""
+  for (let i = 0; i < 8; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)]
+  }
+  tempPassword.value = out
+  tempPasswordConfirm.value = out
+}
+
 // lifecycle
 onMounted(() => {
-  if (props.modelValue) fetchUsers()
+  if (props.modelValue) {
+    fetchUsers()
+    fetchRoles()
+  }
 })
 
 watch(
@@ -276,9 +418,50 @@ watch(
       selectedKeys.value = (props.preselected || [])
         .map(p => userKey(p))
         .filter(Boolean)
+      roleByKey.value = {}
+      roleNameByKey.value = {}
+      for (const p of (props.preselected || [])) {
+        const k = userKey(p)
+        if (!k) continue
+        const rawRoleId = p.role_id ?? (p as any).roleId ?? p.role?.id
+        if (rawRoleId != null && Number.isFinite(Number(rawRoleId))) {
+          roleByKey.value[k] = Number(rawRoleId)
+        } else {
+          const rawRoleName = p.role_name ?? (p as any).roleName ?? p.role?.name
+          if (rawRoleName) roleNameByKey.value[k] = String(rawRoleName)
+        }
+      }
       fetchUsers()
+      fetchRoles()
     }
   }
+)
+
+watch(
+  newUserDefaultRoleId,
+  (newVal) => {
+    if (!linkMode.value) return
+
+    // If they pick a default role, force "Role for this link" to match.
+    // If they clear default (None), fall back to the computed modal default.
+    if (newVal == null) {
+      newUserRoleId.value = defaultRoleId.value
+      return
+    }
+
+    const n = Number(newVal)
+    newUserRoleId.value = Number.isFinite(n) ? n : defaultRoleId.value
+  }
+)
+
+
+watch(
+  selectedKeys,
+  (keys) => {
+    if (!linkMode.value) return
+    keys.forEach(k => ensureRoleForKey(k))
+  },
+  { deep: true }
 )
 
 // API helpers
@@ -290,12 +473,106 @@ async function fetchUsers() {
   try {
     const q = userSearch.value ? `?q=${encodeURIComponent(userSearch.value)}` : ''
     const data = await props.apiFetch(`/api/users${q}`, { method: 'GET' })
-    users.value = Array.isArray(data) ? data : []
+    const list = Array.isArray(data) ? data : []
+    users.value = list.map((u: any) => {
+      const out = { ...u }
+      if (out && out.id == null) {
+        const derivedId = out.user_id ?? out.userId
+        if (derivedId != null) out.id = derivedId
+      }
+      const rawDefaultRoleId =
+        out.default_role_id ?? out.defaultRoleId ?? out.default_role?.id
+      if (rawDefaultRoleId != null && Number.isFinite(Number(rawDefaultRoleId))) {
+        out.default_role_id = Number(rawDefaultRoleId)
+      }
+      const rawDefaultRoleName =
+        out.default_role_name ?? out.defaultRoleName ?? out.default_role?.name
+      if (rawDefaultRoleName != null) out.default_role_name = String(rawDefaultRoleName)
+      if (!out.default_role && out.defaultRole) out.default_role = out.defaultRole
+      return out
+    })
     // ensure selected keys still exist; keep them even if not in the current page
     selectedKeys.value = Array.from(new Set(selectedKeys.value))
+    selectedKeys.value.forEach(k => ensureRoleForKey(k))
   } catch {
     users.value = []
   }
+}
+
+async function fetchRoles() {
+  rolesLoading.value = true
+  rolesError.value = null
+  try {
+    const data = await props.apiFetch('/api/roles', { method: 'GET' })
+    const list = Array.isArray(data?.roles) ? data.roles : (Array.isArray(data) ? data : [])
+    roles.value = list as Role[]
+  } catch (e: any) {
+    roles.value = []
+    rolesError.value = e?.message || 'Failed to load roles.'
+  } finally {
+    rolesLoading.value = false
+    resolveRoleNames()
+    selectedKeys.value.forEach(k => ensureRoleForKey(k))
+    if (newUserRoleId.value == null) newUserRoleId.value = defaultRoleId.value
+  }
+}
+
+function resolveRoleNames() {
+  for (const [k, name] of Object.entries(roleNameByKey.value)) {
+    if (roleByKey.value[k]) continue
+    const hit = roles.value.find(r => r.name?.toLowerCase() === String(name).toLowerCase())
+    if (hit?.id) {
+      roleByKey.value[k] = hit.id
+    } else {
+      delete roleNameByKey.value[k]
+    }
+  }
+}
+
+function getDefaultRoleId(u?: ExistingUser | null) {
+  const raw = u?.default_role_id ?? (u as any)?.defaultRoleId ?? u?.default_role?.id
+  if (raw == null) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+function getDefaultRoleName(u?: ExistingUser | null) {
+  return (
+    u?.default_role_name ??
+    (u as any)?.defaultRoleName ??
+    u?.default_role?.name ??
+    null
+  )
+}
+
+function findUserByKey(key: string) {
+  if (!key) return null
+  const hit = users.value.find(u => userKey(u) === key)
+  if (hit) return hit
+  return (props.preselected || []).find(u => userKey(u) === key) || null
+}
+
+function ensureRoleForKey(key: string) {
+  if (!linkMode.value) return
+  if (!key) return
+  if (roleByKey.value[key] || roleNameByKey.value[key]) return
+  const u = findUserByKey(key)
+  const defaultId = getDefaultRoleId(u)
+  if (defaultId != null) {
+    roleByKey.value[key] = defaultId
+    return
+  }
+  const defaultName = getDefaultRoleName(u)
+  if (defaultName) {
+    roleNameByKey.value[key] = defaultName
+    resolveRoleNames()
+    if (roleByKey.value[key]) return
+  }
+  if (defaultRoleId.value) roleByKey.value[key] = defaultRoleId.value
+}
+
+function openRoles() {
+  rolesOpen.value = true
 }
 
 let t: any = null
@@ -312,24 +589,24 @@ async function createUser() {
     user_email: (newUser.value.user_email || '').trim() || undefined,
     display_color: normalizeHex(newUser.value.display_color) || randomPastel(),
   }
+  if (newUserDefaultRoleId.value != null) {
+    payload.default_role_id = Number(newUserDefaultRoleId.value)
+  }
   if (!payload.username) {
     error.value = 'Username is required.'
     return
   }
 
-  const pin = tempPin.value.trim()
-  const pin2 = tempPinConfirm.value.trim()
-  if (!/^\d{4,8}$/.test(pin)) {
-    error.value = 'Temporary PIN must be 4–8 digits.'
+  const password = tempPassword.value.trim()
+  const password2 = tempPasswordConfirm.value.trim()
+  if (password.length < 4 || password.length > 64) {
+    error.value = 'Temporary password must be 4–64 characters.'
     return
   }
-  if (pin !== pin2) {
-    error.value = 'PINs do not match.'
+  if (password !== password2) {
+    error.value = 'Passwords do not match.'
     return
   }
-
-  payload.pin = pin
-  payload.temporary_pin = pin
 
   try {
     const created = await props.apiFetch('/api/users', {
@@ -337,11 +614,11 @@ async function createUser() {
       body: JSON.stringify(payload),
     })
 
-    // set the PIN (best-effort)
+    // set the password (best-effort)
     try {
-      await props.apiFetch(`/api/users/${created.id}/pin`, {
+      await props.apiFetch(`/api/users/${created.id}/password`, {
         method: 'POST',
-        body: JSON.stringify({ new_pin: pin }),
+        body: JSON.stringify({ new_password: password }),
       })
     } catch { }
 
@@ -352,9 +629,23 @@ async function createUser() {
       user_email: created.user_email ?? payload.user_email,
       display_color: created.display_color ?? payload.display_color,
     }
+    if (payload.default_role_id != null) {
+      u.default_role_id = payload.default_role_id
+      const hit = roles.value.find(r => r.id === payload.default_role_id)
+      if (hit) u.default_role_name = hit.name
+    }
     const k = userKey(u)           // <- one canonical key
-    if (!selectedKeys.value.includes(k)) {
-      selectedKeys.value.push(k)   // <- push the same canonical key
+    if (linkMode.value) {
+      const roleId = newUserRoleId.value ?? defaultRoleId.value
+      if (roleId) {
+        u.role_id = roleId
+        const hit = roles.value.find(r => r.id === roleId)
+        if (hit) u.role_name = hit.name
+      }
+      if (!selectedKeys.value.includes(k)) {
+        selectedKeys.value.push(k)   // <- push the same canonical key
+      }
+      if (roleId) roleByKey.value[k] = roleId
     }
     await fetchUsers()
     resetNewUser()
@@ -370,6 +661,7 @@ function startEdit(u: ExistingUser) {
     name: u.name || '',
     user_email: u.user_email || '',
     display_color: normalizeHex(u.display_color) || '#999999',
+    default_role_id: getDefaultRoleId(u),
   }
 }
 
@@ -405,6 +697,12 @@ async function saveEdit() {
         payload.display_color = nextColor
       }
 
+      const currentDefaultRoleId = getDefaultRoleId(editing.value)
+      const nextDefaultRoleId = editForm.value.default_role_id ?? null
+      if ((currentDefaultRoleId ?? null) !== (nextDefaultRoleId ?? null)) {
+        payload.default_role_id = nextDefaultRoleId
+      }
+
       ops.push(
         props.apiFetch(`/api/users/${encodeURIComponent(String(idOrUsername))}`, {
           method: 'PATCH',
@@ -413,13 +711,13 @@ async function saveEdit() {
       )
     }
 
-    // Add reset-pin call if queued
-    if (pendingResetPin.value) {
+    // Add reset-password call if queued
+    if (pendingResetPassword.value) {
       const resetIdOrUsername = pendingResetUserId.value ?? idOrUsername
       ops.push(
-        props.apiFetch(`/api/users/${encodeURIComponent(String(resetIdOrUsername))}/reset-pin`, {
+        props.apiFetch(`/api/users/${encodeURIComponent(String(resetIdOrUsername))}/reset-password`, {
           method: 'POST',
-          body: JSON.stringify({ new_pin: pendingResetPin.value }),
+          body: JSON.stringify({ new_password: pendingResetPassword.value }),
         })
       )
     }
@@ -432,7 +730,7 @@ async function saveEdit() {
     await Promise.all(ops)
 
     // Clear pending reset + refresh
-    pendingResetPin.value = null
+    pendingResetPassword.value = null
     pendingResetUserId.value = null
 
     await fetchUsers()
@@ -483,15 +781,23 @@ function clearSelected() {
 
 function resetNewUser() {
   newUser.value = { username: '', name: '', user_email: '', display_color: randomPastel() }
-  tempPin.value = ''
-  tempPinConfirm.value = ''
+  tempPassword.value = ''
+  tempPasswordConfirm.value = ''
+  showTempPassword.value = false
+  showTempPasswordConfirm.value = false
   error.value = ''
+  newUserRoleId.value = defaultRoleId.value
+  newUserDefaultRoleId.value = null
 }
 
 function close() {
   emit('update:modelValue', false)
 }
 function apply() {
+  if (!linkMode.value) {
+    close()
+    return
+  }
   const byKey = (arr: ExistingUser[]) => {
     const m = new Map<string, ExistingUser>()
     arr.forEach(u => {
@@ -504,7 +810,15 @@ function apply() {
   const mapPre   = byKey(props.preselected || [])
   const chosen: ExistingUser[] = []
   for (const k of selectedKeys.value) {
-    chosen.push(mapUsers.get(k) || mapPre.get(k)!)
+    const base = mapUsers.get(k) || mapPre.get(k)!
+    const baseRoleId = base?.role_id ?? null
+    const roleId = roleByKey.value[k] ?? baseRoleId ?? defaultRoleId.value ?? null
+    const role = roleId ? roles.value.find(r => r.id === roleId) : null
+    chosen.push({
+      ...base,
+      role_id: roleId ?? base?.role_id ?? null,
+      role_name: role?.name ?? base?.role_name ?? null,
+    })
   }
     emit('apply', chosen)
   close()
@@ -559,11 +873,11 @@ function openReset(u: any) {
 }
 
 // handle confirmation (do your API call here)
-async function onConfirmReset(payload: { userId?: number | string; newPin: string }) {
+async function onConfirmReset(payload: { userId?: number | string; newPassword: string }) {
   const id = payload.userId ?? userToReset.value?.id
   if (!id) return
   pendingResetUserId.value = id
-  pendingResetPin.value = payload.newPin
+  pendingResetPassword.value = payload.newPassword
   resetOpen.value = false
 }
 

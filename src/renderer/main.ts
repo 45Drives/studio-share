@@ -32,7 +32,7 @@ import AppShell from '../app/AppShell.vue';
 import { router } from '../app/routes';
 import { enterNextDirective } from '@45drives/houston-common-ui';
 
-document.title = `45Studio Sharing Software v${__APP_VERSION__}`;
+document.title = `Flow by 45Studio v${__APP_VERSION__}`;
 
 const app = createApp(AppShell);
 const pinia = createPinia();

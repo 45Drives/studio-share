@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick } from "vue";
+import { ref, watch, onUnmounted, nextTick, computed } from "vue";
 import { XMarkIcon } from "@heroicons/vue/20/solid";
 // import { houstonPortrait } from "@/img";
 
@@ -49,6 +49,52 @@ interface CommanderPopupProps {
 const props = defineProps<CommanderPopupProps>();
 const emit = defineEmits(["close"]);
 const width = props.width || 700;
+
+const sanitizeHtml = (raw: string) => {
+    const doc = new DOMParser().parseFromString(String(raw ?? ""), "text/html");
+    const out = document.createElement("div");
+
+    const walk = (node: Node, parent: HTMLElement) => {
+        node.childNodes.forEach((child) => {
+            if (child.nodeType === Node.TEXT_NODE) {
+                parent.appendChild(document.createTextNode(child.textContent || ""));
+                return;
+            }
+            if (child.nodeType !== Node.ELEMENT_NODE) return;
+
+            const el = child as HTMLElement;
+            const tag = el.tagName.toLowerCase();
+
+            if (tag === "br") {
+                parent.appendChild(document.createElement("br"));
+                return;
+            }
+
+            if (tag === "a") {
+                const a = document.createElement("a");
+                const href = el.getAttribute("href") || "";
+                try {
+                    const url = new URL(href, window.location.origin);
+                    if (["http:", "https:"].includes(url.protocol)) {
+                        a.setAttribute("href", url.toString());
+                        a.setAttribute("rel", "noopener noreferrer");
+                        a.setAttribute("target", "_blank");
+                    }
+                } catch {}
+                a.textContent = el.textContent || "";
+                parent.appendChild(a);
+                return;
+            }
+
+            parent.appendChild(document.createTextNode(el.textContent || ""));
+        });
+    };
+
+    walk(doc.body, out);
+    return out.innerHTML;
+};
+
+const safeMessage = computed(() => sanitizeHtml(props.message));
 
 const displayedText = ref("");
 const isTyping = ref(false);
@@ -115,11 +161,11 @@ const handleClickOutside = (event: MouseEvent) => {
 };
 
 // Watch both `visible` and `message` changes
-watch([() => props.visible, () => props.message], async ([newVisible, newMessage]) => {
+watch([() => props.visible, () => props.message], async ([newVisible]) => {
     if (newVisible) {
         displayedText.value = ""; // Reset text before displaying
         await nextTick(); // Ensure DOM updates before typing starts
-        typeMessage(newMessage);
+        typeMessage(safeMessage.value);
 
         // Add click event listener after a short delay to prevent immediate closing
         setTimeout(() => document.addEventListener("click", handleClickOutside), 100);

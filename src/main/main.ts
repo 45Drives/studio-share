@@ -1,9 +1,66 @@
 function initLogging(resolvedLogDir: string) {
-  const dropNoisyMdns = format((info) => {
-    if (process.env.NODE_ENV !== 'development') {
-      if (info.event === 'mdns.upsert' && info.changed !== true) return false;
-      if (info.event === 'mdns.response') return false;
+  const getEventName = (info: any): string => {
+    if (typeof info?.event === 'string') return info.event;
+    if (typeof info?.message?.event === 'string') return info.message.event;
+    return '';
+  };
+
+  const getLevel = (info: any): string => {
+    if (typeof info?.level === 'string') return String(info.level).toLowerCase();
+    return 'info';
+  };
+  const getPayload = (info: any): Record<string, any> => {
+    const msg = info?.message;
+    if (msg && typeof msg === 'object') {
+      if (msg.data && typeof msg.data === 'object') return msg.data;
+      const clone = { ...msg };
+      delete (clone as any).event;
+      return clone;
     }
+    return {};
+  };
+
+  const noisyInfoEvents = new Set([
+    'mdns.client.created',
+    'mdns.upsert',
+    'mdns.response',
+    'window.created',
+    'renderer.ready',
+    'sse.attach.attempt',
+    'sse.attach.url',
+    'sse.open',
+    'sse.status',
+    'sse.detach',
+    'sse.reconnect.schedule',
+    'ipc.scan-network-fallback.start',
+    'ipc.scan-network-fallback.done',
+    'fallback.scan.start',
+    'fallback.scan.done',
+    'fallback.scan.port-open',
+    'fallback.scan.https-ok',
+    'ipc.probe-health.start',
+    'ipc.probe-health.ok',
+    'ipc.remote-check-broadcaster.start',
+    'ipc.remote-check-broadcaster.ok',
+    'ssh.ensureKeyPair.exists',
+    'ensure-ssh-ready.agent.try',
+    'ensure-ssh-ready.agent.fail',
+    'preflight',
+    'login.resolveApiBase',
+  ]);
+
+  const dropNoisyEvents = format((info) => {
+    const event = getEventName(info);
+    const level = getLevel(info);
+    const payload = getPayload(info);
+    const url = String(payload?.url || '');
+
+    // Keep warning/error events by default for troubleshooting.
+    if (level === 'warn' || level === 'error') return info;
+    if (event && noisyInfoEvents.has(event)) return false;
+    if (event === 'rsync.out.stdout') return false; // transfer progress is too noisy for logfile/UI
+    if ((event === 'api.request' || event === 'api.response') && url.includes('/api/expand-paths')) return false;
+    if ((event === 'api.request' || event === 'api.response') && url.includes('/api/jobs/status')) return false;
     return info;
   });
 
@@ -54,7 +111,7 @@ function initLogging(resolvedLogDir: string) {
         level: 'info',
         format: format.combine(
           scrubFormat(),
-          dropNoisyMdns(),
+          dropNoisyEvents(),
           format.json()
         )
       })
@@ -171,6 +228,24 @@ function st(ip: string): SseState {
   return s;
 }
 
+const locks = new Map<string, Promise<void>>();
+
+async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = locks.get(key) || Promise.resolve();
+
+  let release!: () => void;
+  const next = new Promise<void>((r) => { release = r; });
+  locks.set(key, prev.then(() => next));
+
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (locks.get(key) === next) locks.delete(key);
+  }
+}
+
 function normalizeDestRel(destDir: string, shareRoot?: string): string {
   let d = String(destDir || '').trim();
   if (!d) return '';
@@ -224,7 +299,7 @@ async function getShareRootForHost(host: string, port = 9095): Promise<string | 
       return sr;
     }
 
-    jl('warn', 'wellknown.houston.missing-shareRoot', { host, port, keys: Object.keys(j || {}) });
+    jl('info', 'wellknown.houston.missing-shareRoot', { host, port, keys: Object.keys(j || {}) });
     return undefined;
   } catch (e: any) {
     jl('warn', 'wellknown.houston.fail', { host, port, error: e?.message || String(e) });
@@ -261,7 +336,7 @@ async function tryAttach(ip: string) {
   }
 
   s.inFlight = true;
-  jl('info', 'sse.attach.attempt', { ip });
+  jl('debug', 'sse.attach.attempt', { ip });
 
   // Preflight to avoid EventSource 404 floods
   const pf = await preflightSetupStatus(ip);
@@ -295,7 +370,7 @@ async function tryAttach(ip: string) {
   try {
     es = new (EventSource as any)(url) as ESLike;
   } catch (e: any) {
-    s.lastErr = e?.message || String(e);
+    s.lastErr = normalizeErrorText(e);
     jl('warn', 'sse.construct.error', { ip, error: s.lastErr });
 
     s.backoffMs = Math.min(s.backoffMs * 2, 30000);
@@ -310,7 +385,7 @@ async function tryAttach(ip: string) {
     s.backoffMs = 2000;      // reset backoff on healthy traffic
     s.inFlight = false;
     setupStreams.set(ip, es!);
-    jl('info', 'sse.open', { ip, url });
+    jl('debug', 'sse.open', { ip, url });
   };
 
   es.addEventListener('status', (ev: ESMessageEvent) => {
@@ -334,8 +409,12 @@ async function tryAttach(ip: string) {
 
     // We cannot reliably get HTTP status from EventSource errors.
     // We rely on preflight to catch 404s before we open.
-    s.lastErr = err && (err.message || String(err));
-    jl('warn', 'sse.error', { ip, error: s.lastErr });
+    s.lastErr = normalizeErrorText(err) || 'EventSource connection error';
+    jl('warn', 'sse.error', {
+      ip,
+      error: s.lastErr,
+      errorType: err?.type || err?.name || err?.constructor?.name || undefined,
+    });
 
     s.backoffMs = Math.min(s.backoffMs * 2, 30000);
     s.nextAt = Date.now() + s.backoffMs;
@@ -403,24 +482,26 @@ async function connectForPreflight(host: string, username: string, password: str
     } catch { trial.dispose(); }
   }
 
-  // Try password → plant key → reconnect with key
-  const planted = await connectWithPassword({ host, username, password, port });
-  try { planted.dispose(); } catch { }
+  return await withLock('client-ssh-keys', async () => {
+    // Try password → plant key → reconnect with key
+    const planted = await connectWithPassword({ host, username, password, port });
+    try { planted.dispose(); } catch { }
 
-  const keyDir = getKeyDir();
-  const priv = path.join(keyDir, 'id_ed25519');
-  await ensureKeyPair(priv, `${priv}.pub`);
-  try {
-    return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined, port });
-  } catch (e: any) {
-    const m = String(e?.message || e);
-    if (/unsupported key format/i.test(m)) {
-      await regeneratePemKeyPair(priv);
+    const keyDir = getKeyDir();
+    const priv = path.join(keyDir, 'id_ed25519');
+    await ensureKeyPair(priv, `${priv}.pub`);
+    try {
       return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined, port });
+    } catch (e: any) {
+      const m = String(e?.message || e);
+      if (/unsupported key format/i.test(m)) {
+        await regeneratePemKeyPair(priv);
+        return await connectWithKey({ host, username, privateKey: priv, agent: agentSock || undefined, port });
+      }
+      throw e;
     }
-    throw e;
   }
-}
+)}
 
 function isOwnedByCurrentUser(filePath: string): boolean {
   try {
@@ -571,103 +652,106 @@ ipcMain.handle('probe-health', async (_e, { ip, port }) => {
 });
 
 ipcMain.handle('ensure-ssh-ready', async (_e, { host, username, password, sshPort }) => {
-  registerSensitiveToken(password);
-  const port = sshPort ?? 22;
-  const keyDir = getKeyDir();
-  const edPriv = path.join(keyDir, 'id_ed25519');
-  const edPub = `${edPriv}.pub`;
-  const rsaPriv = path.join(keyDir, 'id_rsa');
-  const rsaPub = `${rsaPriv}.pub`;
+  return await withLock('client-ssh-keys', async () => {
+    registerSensitiveToken(password);
+    const port = sshPort ?? 22;
+    const keyDir = getKeyDir();
+    const edPriv = path.join(keyDir, 'id_ed25519');
+    const edPub = `${edPriv}.pub`;
+    const rsaPriv = path.join(keyDir, 'id_rsa');
+    const rsaPub = `${rsaPriv}.pub`;
 
-  jl('info', 'ensure-ssh-ready.start', {
-    host, username, hasPassword: !!password, keyDir, port,
-  });
+    jl('info', 'ensure-ssh-ready.start', {
+      host, username, hasPassword: !!password, keyDir, port,
+    });
 
-  try {
-    // 0) ensure we have an ed25519 pair on disk
-    await ensureKeyPair(edPriv, edPub);
-
-    const agentSock = getAgentSocket();
-
-    // 1) Try agent first
-    if (agentSock) {
-      jl('info', 'ensure-ssh-ready.agent.try', { agentSock, port });
-      const trial = new NodeSSH();
-      try {
-        await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false, readyTimeout: 20_000 });
-        jl('info', 'ensure-ssh-ready.agent.ok', { host, username });
-
-        // Even if agent works, plant our app key idempotently so future non-agent ops work
-        if (password) {
-          await setupSshKey(host, username, password, edPub, undefined, port);
-          jl('info', 'ensure-ssh-ready.plant.after-agent', { pub: edPub });
-        }
-
-        try { trial.dispose(); } catch { }
-        return { ok: true, keyPath: edPriv, via: 'agent(+planted-ed25519)' };
-      } catch (e: any) {
-        jl('warn', 'ensure-ssh-ready.agent.fail', { error: e?.message || String(e) });
-        try { trial.dispose(); } catch { }
-      }
-    }
-
-    // 2) No agent or agent failed → plant ed25519 using password
-    if (!password) {
-      const msg = 'No SSH agent and no password provided for initial key install.';
-      jl('warn', 'ensure-ssh-ready.no-creds', { host, username });
-      return { ok: false, error: msg };
-    }
-
-    await setupSshKey(host, username, password, edPub, undefined, port);
-    jl('info', 'ensure-ssh-ready.plant.ed25519.ok', { pub: edPub });
-
-    // 3) Verify with ed25519 file key
-    const verify = new NodeSSH();
     try {
-      await verify.connect({
-        host, username,
-        privateKey: fs.readFileSync(edPriv, 'utf8'),
-        port,
-        tryKeyboard: false,
-        readyTimeout: 20_000,
-      });
-      jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'ed25519' });
-      try { verify.dispose(); } catch { }
-      return { ok: true, keyPath: edPriv, via: 'password+ed25519' };
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      jl('warn', 'ensure-ssh-ready.verify.ed25519.fail', { error: msg });
+      // 0) ensure we have an ed25519 pair on disk
+      await ensureKeyPair(edPriv, edPub);
 
-      // 4) Fallback once: generate RSA at the *RSA* filename
-      jl('info', 'ensure-ssh-ready.rsa.fallback.begin', { rsaPriv });
-      await regeneratePemKeyPair(rsaPriv);          // writes rsaPriv and rsaPriv.pub
-      await setupSshKey(host, username, password, rsaPub, undefined, port);
-      jl('info', 'ensure-ssh-ready.rsa.plant.ok', { pub: rsaPub });
+      const agentSock = getAgentSocket();
 
-      // Retry with RSA
+      // 1) Try agent first
+      if (agentSock) {
+        jl('info', 'ensure-ssh-ready.agent.try', { agentSock, port });
+        const trial = new NodeSSH();
+        try {
+          await trial.connect({ host, username, agent: agentSock, port, tryKeyboard: false, readyTimeout: 20_000 });
+          jl('info', 'ensure-ssh-ready.agent.ok', { host, username });
+
+          // Even if agent works, plant our app key idempotently so future non-agent ops work
+          if (password) {
+            await setupSshKey(host, username, password, edPub, undefined, port);
+            jl('info', 'ensure-ssh-ready.plant.after-agent', { pub: edPub });
+          }
+
+          try { trial.dispose(); } catch { }
+          return { ok: true, keyPath: edPriv, via: 'agent(+planted-ed25519)' };
+        } catch (e: any) {
+          // Agent auth failing is expected on many hosts; password fallback runs immediately after.
+          jl(password ? 'debug' : 'warn', 'ensure-ssh-ready.agent.fail', { error: e?.message || String(e) });
+          try { trial.dispose(); } catch { }
+        }
+      }
+
+      // 2) No agent or agent failed → plant ed25519 using password
+      if (!password) {
+        const msg = 'No SSH agent and no password provided for initial key install.';
+        jl('warn', 'ensure-ssh-ready.no-creds', { host, username });
+        return { ok: false, error: msg };
+      }
+
+      await setupSshKey(host, username, password, edPub, undefined, port);
+      jl('info', 'ensure-ssh-ready.plant.ed25519.ok', { pub: edPub });
+
+      // 3) Verify with ed25519 file key
+      const verify = new NodeSSH();
       try {
         await verify.connect({
           host, username,
-          privateKey: fs.readFileSync(rsaPriv, 'utf8'),
+          privateKey: fs.readFileSync(edPriv, 'utf8'),
           port,
           tryKeyboard: false,
           readyTimeout: 20_000,
         });
-        jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'rsa-4096-pem' });
+        jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'ed25519' });
         try { verify.dispose(); } catch { }
-        return { ok: true, keyPath: rsaPriv, via: 'password+rsa' };
-      } catch (e2: any) {
-        const msg2 = String(e2?.message || e2);
-        jl('error', 'ensure-ssh-ready.verify.rsa.fail', { error: msg2 });
-        try { verify.dispose(); } catch { }
-        return { ok: false, error: msg2 };
+        return { ok: true, keyPath: edPriv, via: 'password+ed25519' };
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        jl('warn', 'ensure-ssh-ready.verify.ed25519.fail', { error: msg });
+
+        // 4) Fallback once: generate RSA at the *RSA* filename
+        jl('info', 'ensure-ssh-ready.rsa.fallback.begin', { rsaPriv });
+        await regeneratePemKeyPair(rsaPriv);          // writes rsaPriv and rsaPriv.pub
+        await setupSshKey(host, username, password, rsaPub, undefined, port);
+        jl('info', 'ensure-ssh-ready.rsa.plant.ok', { pub: rsaPub });
+
+        // Retry with RSA
+        try {
+          await verify.connect({
+            host, username,
+            privateKey: fs.readFileSync(rsaPriv, 'utf8'),
+            port,
+            tryKeyboard: false,
+            readyTimeout: 20_000,
+          });
+          jl('info', 'ensure-ssh-ready.verify.ok', { algo: 'rsa-4096-pem' });
+          try { verify.dispose(); } catch { }
+          return { ok: true, keyPath: rsaPriv, via: 'password+rsa' };
+        } catch (e2: any) {
+          const msg2 = String(e2?.message || e2);
+          jl('error', 'ensure-ssh-ready.verify.rsa.fail', { error: msg2 });
+          try { verify.dispose(); } catch { }
+          return { ok: false, error: msg2 };
+        }
       }
+    } catch (err: any) {
+      const error = err?.message || String(err);
+      jl('warn', 'ensure-ssh-ready.failed', { host, username, error });
+      return { ok: false, error };
     }
-  } catch (err: any) {
-    const error = err?.message || String(err);
-    jl('warn', 'ensure-ssh-ready.failed', { host, username, error });
-    return { ok: false, error };
-  }
+  })
 });
 
 const idFile = path.join(app.getPath('userData'), 'client-id.txt');
@@ -684,23 +768,187 @@ ipcMain.on('renderer-ready', (e) => {
 
 ipcMain.handle('get-client-ident', async () => ({ installId }))
 
-function checkLogDir(): string {
-  // LINUX: /home/<username>/.config/45studio-filesharing-app/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
-  // MAC:   /Users/<username>/Library/Application Support/45studio-filesharing-app/logs
-  // WIN:   C:\Users\<username>\AppData\Roaming\45studio-filesharing-app\logs
+function checkLogDir(logSuccess = true): string {
+  // LINUX: /home/<username>/.config/flow-by-45studio/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
+  // MAC:   /Users/<username>/Library/Application Support/flow-by-45studio/logs
+  // WIN:   C:\Users\<username>\AppData\Roaming\flow-by-45studio\logs
   const baseLogDir = path.join(app.getPath('userData'), 'logs');
   try {
     if (!fs.existsSync(baseLogDir)) {
       fs.mkdirSync(baseLogDir, { recursive: true });
     }
     console.debug(` Log directory ensured: ${baseLogDir}`);
-    jl('info', 'logs.dir.ensure.ok', { dir: baseLogDir });
+    if (logSuccess) {
+      jl('info', 'logs.dir.ensure.ok', { dir: baseLogDir });
+    }
 
   } catch (e: any) {
     console.error(` Failed to create log directory (${baseLogDir}):`, e.message);
     jl('error', 'logs.dir.ensure.error', { dir: baseLogDir, error: e?.message || String(e) });
   }
   return baseLogDir;
+}
+
+function previewValue(value: any, maxLen = 240): string {
+  if (value === undefined || value === null) return '';
+  let str = '';
+  try {
+    if (typeof value === 'string') {
+      str = value;
+    } else {
+      const seen = new WeakSet<object>();
+      str = JSON.stringify(value, (_k, v) => {
+        if (typeof v === 'bigint') return String(v);
+        if (v && typeof v === 'object') {
+          if (seen.has(v as object)) return '[Circular]';
+          seen.add(v as object);
+        }
+        return v;
+      });
+    }
+  } catch {
+    if (value instanceof Error) str = value.stack || value.message || value.name;
+    else str = String(value);
+  }
+  return str.length > maxLen ? `${str.slice(0, maxLen)}...` : str;
+}
+
+function normalizeErrorText(input: any): string {
+  if (input === undefined || input === null) return '';
+  if (typeof input === 'string') {
+    const s = input.trim();
+    if (!s) return '';
+    if (/^\[object\s+[^\]]+\]$/i.test(s)) return '';
+    return s;
+  }
+  if (input instanceof Error) return input.stack || input.message || input.name || 'Error';
+
+  const candidates = [input?.message, input?.error, input?.reason, input?.statusText];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim();
+  }
+
+  const code = input?.code;
+  const status = input?.status;
+  const type = input?.type || input?.name || input?.constructor?.name;
+  if ((typeof code === 'string' && code) || Number.isFinite(Number(status))) {
+    const bits: string[] = [];
+    if (type) bits.push(String(type));
+    if (code) bits.push(`code=${String(code)}`);
+    if (Number.isFinite(Number(status))) bits.push(`status=${String(status)}`);
+    return bits.join(' ');
+  }
+
+  const serialized = previewValue(input, 220);
+  if (serialized && serialized !== '{}' && !/^\[object\b/i.test(serialized)) return serialized;
+  if (type) return `Unspecified ${String(type)} error`;
+  return 'Unspecified error';
+}
+
+function summarizeEvent(event: string, payload: Record<string, any> | undefined): string {
+  if (!payload || typeof payload !== 'object') return event || 'log.entry';
+
+  const method = payload.method ? String(payload.method).toUpperCase() : '';
+  const status = payload.status !== undefined ? String(payload.status) : '';
+  const url = payload.url ? String(payload.url) : '';
+  const error = normalizeErrorText(payload.error ?? payload.err ?? payload.reason);
+  const host = payload.host ? String(payload.host) : '';
+  const ip = payload.ip ? String(payload.ip) : '';
+
+  if (method && url) {
+    return `${method} ${url}${status ? ` -> ${status}` : ''}`;
+  }
+  if (error) return error;
+  if (host || ip) {
+    const target = host || ip;
+    return `${event} (${target})`;
+  }
+
+  const keys = Object.keys(payload).slice(0, 4);
+  if (keys.length) {
+    return keys.map((k) => `${k}=${previewValue(payload[k], 48)}`).join(' ');
+  }
+  return event || 'log.entry';
+}
+
+function parseLogLine(line: string, id: string) {
+  try {
+    const parsed = JSON.parse(line);
+    const level = String(parsed?.level || 'info').toLowerCase();
+    const timestamp = String(parsed?.timestamp || new Date().toISOString());
+    const message = parsed?.message;
+
+    let event = 'log.entry';
+    let payload: Record<string, any> | undefined;
+    let summary = '';
+    let details = '';
+
+    if (typeof message === 'string') {
+      summary = message;
+    } else if (message && typeof message === 'object') {
+      event = String(message.event || parsed?.event || 'log.entry');
+      if (message.data && typeof message.data === 'object') {
+        payload = message.data;
+      } else {
+        payload = { ...message };
+        delete (payload as any).event;
+      }
+
+      summary = summarizeEvent(event, payload);
+      if (payload && Object.keys(payload).length > 0) {
+        details = JSON.stringify(payload, null, 2);
+      }
+    } else {
+      event = String(parsed?.event || 'log.entry');
+      summary = event;
+    }
+
+    return {
+      id,
+      timestamp,
+      level,
+      event,
+      summary: summary || event,
+      details: details ? previewValue(details, 4000) : undefined,
+      data: payload,
+    };
+  } catch {
+    return {
+      id,
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      event: 'log.parse.error',
+      summary: previewValue(line, 220),
+      details: undefined,
+      data: undefined,
+    };
+  }
+}
+
+function readClientLogs(limit = 600) {
+  const logDir = checkLogDir(false);
+  const files = fs.readdirSync(logDir)
+    .filter((name) => name.startsWith('45studio-share-client-') && name.endsWith('.json'))
+    .sort();
+
+  if (!files.length) {
+    return { ok: true, entries: [], file: '', logDir };
+  }
+
+  const file = files[files.length - 1];
+  const fullPath = path.join(logDir, file);
+  const text = fs.readFileSync(fullPath, 'utf-8');
+  const lines = text.split(/\r?\n/).filter(Boolean);
+
+  const parsedLimit = Math.max(1, Math.min(Number(limit) || 600, 2000));
+  const working = lines.slice(-Math.min(lines.length, parsedLimit * 3));
+  const entries: Array<ReturnType<typeof parseLogLine>> = [];
+
+  for (let i = working.length - 1; i >= 0 && entries.length < parsedLimit; i -= 1) {
+    entries.push(parseLogLine(working[i], `${file}:${i}`));
+  }
+
+  return { ok: true, entries, file, logDir };
 }
 
 function isPortOpen(ip: string, port: number, timeout = 2000): Promise<boolean> {
@@ -770,6 +1018,20 @@ function createWindow() {
     }
   });
 
+  function safeSend(channel: string, payload?: any) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const wc = mainWindow.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    try {
+      wc.send(channel, payload);
+    } catch (e: any) {
+      jl('debug', 'renderer.send.skipped', {
+        channel,
+        error: e?.message || String(e),
+      });
+    }
+  }
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url); // Opens in the user's default browser
@@ -796,7 +1058,7 @@ function createWindow() {
         const portOpen = await isPortOpen(candidateIp, 9090);
         if (!portOpen) return null;
         console.debug("port open at 9090 ", candidateIp);
-        jl('info', 'fallback.scan.start', { subnet, localIP: ip });
+        jl('debug', 'fallback.scan.port-open', { ip: candidateIp });
 
         try {
           const res = await fetch(`https://${candidateIp}:9090/`, {
@@ -842,7 +1104,7 @@ function createWindow() {
 
     if (fallbackServers.length) {
       discoveredServers = fallbackServers;
-      mainWindow.webContents.send('discovered-servers', discoveredServers);
+      safeSend('discovered-servers', discoveredServers);
     }
 
     return fallbackServers;
@@ -862,6 +1124,11 @@ function createWindow() {
 
 
   ipcMain.on('log:info', (_e, payload) => {
+    const evt = String(payload?.event || '');
+    const method = String(payload?.data?.method || '').toUpperCase();
+    if (['api.request', 'api.response'].includes(evt) && ['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      return;
+    }
     jsonLogger.info(payload);
     // log.info(payload.event, payload.data);
   });
@@ -918,6 +1185,20 @@ function createWindow() {
     const res = await doFallbackScan();
     jl('info', 'ipc.scan-network-fallback.done', { count: (res || []).length });
     return res;
+  });
+
+  ipcMain.handle('logs:read-client', async (_e, opts?: { limit?: number }) => {
+    try {
+      return readClientLogs(opts?.limit ?? 600);
+    } catch (e: any) {
+      return {
+        ok: false,
+        entries: [],
+        file: '',
+        logDir: path.join(app.getPath('userData'), 'logs'),
+        error: e?.message || String(e),
+      };
+    }
   });
 
 
@@ -1033,7 +1314,7 @@ function createWindow() {
           
           attachSetupSSE(ip);
 
-          mainWindow.webContents.send('discovered-servers', discoveredServers);
+          safeSend('discovered-servers', discoveredServers);
         jl('info', 'ipcrouter.addManualIP.result', { ip, reachable, httpsReachable });
 
         } else if (message.type === 'rescanServers') {
@@ -1043,7 +1324,7 @@ function createWindow() {
           for (const s of discoveredServers) detachSetupSSE(s.ip);
           // clear & notify
           discoveredServers = [];
-          mainWindow.webContents.send('discovered-servers', discoveredServers);
+          safeSend('discovered-servers', discoveredServers);
 
           // kick mDNS
           mDNSClient.query({ questions: [{ name: serviceType, type: 'PTR' }] });
@@ -1053,7 +1334,7 @@ function createWindow() {
             if (discoveredServers.length === 0) {
               const fallback = await doFallbackScan();
               if (fallback.length) {
-                mainWindow.webContents.send('discovered-servers', fallback);
+                safeSend('discovered-servers', fallback);
               }
             }
           }, TIMEOUT_DURATION);
@@ -1085,7 +1366,7 @@ function createWindow() {
     mainWindow.loadFile(join(app.getAppPath(), 'renderer', 'index.html'));
   }
 
-  mainWindow.webContents.send('client-ip', getLocalIP());
+  safeSend('client-ip', getLocalIP());
 
   // Set up mDNS for service discovery
   const mDNSClient = mdns();
@@ -1172,15 +1453,15 @@ function createWindow() {
       if (!existing) discoveredServers.push(s);
       else Object.assign(existing, s, { lastSeen: Date.now(), fallbackAdded: false });
 
-      mainWindow?.webContents.send('discovered-servers', discoveredServers);
-      mainWindow?.webContents.send('client-ip', getLocalIP());
+      safeSend('discovered-servers', discoveredServers);
+      safeSend('client-ip', getLocalIP());
     })();
 
     const existing = discoveredServers.find(x => x.ip === s.ip);
     if (!existing) discoveredServers.push(s);
     else Object.assign(existing, s, { lastSeen: Date.now(), fallbackAdded: false });
-    mainWindow?.webContents.send('discovered-servers', discoveredServers);
-    mainWindow?.webContents.send('client-ip', getLocalIP());
+    safeSend('discovered-servers', discoveredServers);
+    safeSend('client-ip', getLocalIP());
     attachSetupSSE(s.ip);   // initial status comes via SSE immediately
     const sig = mdnsSignature(txt, ip, displayName);
     const prev = mdnsLastSigByIp.get(ip);
@@ -1260,7 +1541,7 @@ function createWindow() {
     );
 
     // push the updated list back to the renderer
-    mainWindow.webContents.send('discovered-servers', discoveredServers)
+    safeSend('discovered-servers', discoveredServers)
     jl('debug', 'servers.cleanup.tick', {
       current: discoveredServers.length,
       stale: stale.length

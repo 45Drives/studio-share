@@ -4,55 +4,51 @@
   
       <div class="relative w-full max-w-md bg-accent rounded-lg shadow-xl p-4">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold">Reset PIN</h3>
+          <h3 class="text-lg font-semibold">Reset Password</h3>
           <button class="btn btn-secondary" @click="close">Close</button>
         </div>
   
-        <div class="space-y-3">
+        <div class="space-y-3 text-left">
           <p class="text-sm">
-            Enter a temporary PIN for
+            Enter a temporary password for
             <b>{{ user?.name || user?.username }}</b>. They’ll be required to change it on
             next login.
           </p>
   
-          <!-- New PIN -->
+          <!-- New Password -->
           <div>
-            <label class="text-xs opacity-80">Temporary PIN (4–8 digits)</label>
+            <label class="text-xs opacity-80">Temporary Password (4–64 chars)</label>
             <div class="relative">
               <input
-                :type="showResetPin ? 'text' : 'password'"
-                inputmode="numeric"
-                pattern="\\d*"
-                v-model.trim="resetPinInput"
+                :type="showResetPassword ? 'text' : 'password'"
+                v-model.trim="ResetPasswordInput"
                 class="input-textlike border rounded px-3 py-2 w-full pr-16"
-                placeholder="4–8 digits"
+                placeholder="4–64 characters"
                 autocomplete="off"
               />
               <button
                 type="button"
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-xs border rounded px-2 py-1"
-                @click="showResetPin = !showResetPin"
-                :aria-pressed="showResetPin ? 'true' : 'false'"
+                @click="showResetPassword = !showResetPassword"
+                :aria-pressed="showResetPassword ? 'true' : 'false'"
               >
-                <FontAwesomeIcon :icon="showResetPin ? faEyeSlash : faEye" />
+                <FontAwesomeIcon :icon="showResetPassword ? faEyeSlash : faEye" />
               </button>
             </div>
-            <p v-if="resetPinInvalid" class="text-xs text-red-500 mt-1">
-              PIN must be 4–8 digits.
+            <p v-if="ResetPasswordInvalid" class="text-xs text-red-500 mt-1">
+              Password must be 4–64 characters.
             </p>
           </div>
   
-          <!-- Confirm PIN -->
+          <!-- Confirm Password -->
           <div>
-            <label class="text-xs opacity-80">Confirm PIN</label>
+            <label class="text-xs opacity-80">Confirm Password</label>
             <div class="relative">
               <input
                 :type="showResetConfirm ? 'text' : 'password'"
-                inputmode="numeric"
-                pattern="\\d*"
-                v-model.trim="resetPinConfirm"
+                v-model.trim="ResetPasswordConfirm"
                 class="input-textlike border rounded px-3 py-2 w-full pr-16"
-                placeholder="Re-enter PIN"
+                placeholder="Re-enter password"
                 autocomplete="off"
               />
               <button
@@ -65,7 +61,7 @@
               </button>
             </div>
             <p v-if="resetMismatch" class="text-xs text-red-500 mt-1">
-              PINs do not match.
+              Passwords do not match.
             </p>
           </div>
   
@@ -76,10 +72,10 @@
           <button class="btn btn-secondary" @click="close">Cancel</button>
           <button
             class="btn btn-primary"
-            :disabled="resetPinInvalid || resetMismatch || !resetPinInput || !resetPinConfirm"
+            :disabled="ResetPasswordInvalid || resetMismatch || !ResetPasswordInput || !ResetPasswordConfirm"
             @click="confirm"
           >
-            Reset PIN
+            Reset Password
           </button>
         </div>
       </div>
@@ -87,7 +83,7 @@
 </template>
   
   <script setup lang="ts">
-  import { ref, computed, watch, defineProps, defineEmits } from 'vue'
+  import { ref, computed, watch } from 'vue'
   import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
   import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
   
@@ -100,29 +96,29 @@
   
   const emit = defineEmits<{
     (e: 'update:modelValue', v: boolean): void
-    (e: 'confirm', payload: { userId?: number | string; newPin: string }): void
+    (e: 'confirm', payload: { userId?: number | string; newPassword: string }): void
   }>()
   
-  const resetPinInput = ref('')
-  const resetPinConfirm = ref('')
-  const showResetPin = ref(false)
+  const ResetPasswordInput = ref('')
+  const ResetPasswordConfirm = ref('')
+  const showResetPassword = ref(false)
   const showResetConfirm = ref(false)
   const error = ref<string | null>(null)
   
-  const resetPinInvalid = computed(
-    () => resetPinInput.value !== '' && !/^\d{4,8}$/.test(resetPinInput.value)
+  const ResetPasswordInvalid = computed(
+    () => ResetPasswordInput.value !== '' && (ResetPasswordInput.value.length < 4 || ResetPasswordInput.value.length > 64)
   )
   const resetMismatch = computed(
-    () => resetPinInput.value !== '' && resetPinConfirm.value !== '' && resetPinInput.value !== resetPinConfirm.value
+    () => ResetPasswordInput.value !== '' && ResetPasswordConfirm.value !== '' && ResetPasswordInput.value !== ResetPasswordConfirm.value
   )
   
   watch(
     () => props.modelValue,
     (open) => {
       if (open) {
-        resetPinInput.value = ''
-        resetPinConfirm.value = ''
-        showResetPin.value = false
+        ResetPasswordInput.value = ''
+        ResetPasswordConfirm.value = ''
+        showResetPassword.value = false
         showResetConfirm.value = false
         error.value = null
       }
@@ -134,15 +130,15 @@
   }
   
   function confirm() {
-    if (!/^\d{4,8}$/.test(resetPinInput.value.trim())) {
-      error.value = 'PIN must be 4–8 digits.'
+    if (ResetPasswordInput.value.trim().length < 4 || ResetPasswordInput.value.trim().length > 64) {
+      error.value = 'Password must be 4–64 characters.'
       return
     }
-    if (resetPinInput.value.trim() !== resetPinConfirm.value.trim()) {
-      error.value = 'PINs do not match.'
+    if (ResetPasswordInput.value.trim() !== ResetPasswordConfirm.value.trim()) {
+      error.value = 'Passwords do not match.'
       return
     }
-    emit('confirm', { userId: props.user?.id, newPin: resetPinInput.value.trim() })
+    emit('confirm', { userId: props.user?.id, newPassword: ResetPasswordInput.value.trim() })
     close()
   }
   </script>
