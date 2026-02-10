@@ -1780,10 +1780,24 @@ ipcMain.handle('dialog:pickWatermark', async () => {
   }
 
   const st = fs.statSync(p);
+  let dataUrl: string | null = null;
+  try {
+    const ext = path.extname(p).toLowerCase().replace('.', '');
+    const mime =
+      ext === 'png' ? 'image/png' :
+      (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' :
+      ext === 'webp' ? 'image/webp' :
+      'application/octet-stream';
+    const buf = fs.readFileSync(p);
+    dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+  } catch {
+    dataUrl = null;
+  }
   return {
     path: p,
     name: path.basename(p),
     size: st.size,
+    dataUrl,
   };
 });
 

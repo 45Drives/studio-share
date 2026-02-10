@@ -213,13 +213,8 @@
 						<!-- Center -->
 						<div class="justify-self-center">
 							<div v-if="step === 3" class="grid gap-2">
-								<div class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-									<label class="font-semibold whitespace-nowrap">
-										Generate Proxy Files:
-									</label>
-							<div v-if="step === 3" class="grid gap-2">
-								<div class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-									<label class="font-semibold whitespace-nowrap">
+								<div class="grid grid-cols-[auto_auto_minmax(12rem,12rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap text-left">
 										Generate Proxy Files:
 									</label>
 
@@ -240,29 +235,30 @@
 									</span>
 								</div>
 
-								<div v-if="transcodeProxyAfterUpload" class="grid grid-cols-[auto_1fr] items-start gap-3">
-									<label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
-									<div class="flex flex-col gap-2">
+								<div v-if="transcodeProxyAfterUpload" class="grid mt-4 grid-cols-[minmax(12rem,12rem)_1fr] items-start gap-3">
+									<label class="font-semibold whitespace-nowrap pt-1 text-left">Proxy Qualities:</label>
+									<div class="">
 										<label class="inline-flex items-center gap-2 text-sm">
 											<input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
 											<span>720p</span>
 										</label>
-										<label class="inline-flex items-center gap-2 text-sm">
-											<input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
+										<label class="inline-flex items-center gap-2 text-sm " >
+											<input type="checkbox" class="checkbox ml-2" value="1080p" v-model="proxyQualities" />
 											<span>1080p</span>
 										</label>
 										<label class="inline-flex items-center gap-2 text-sm">
-											<input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
+											<input type="checkbox" class="checkbox ml-2" value="original" v-model="proxyQualities" />
 											<span>Original</span>
 										</label>
 										<div class="text-xs text-slate-400">
 											These versions take extra space and are used for shared links instead of the original file.
 										</div>
 									</div>
+									<div></div>
 								</div>
 
-								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3">
-									<label class="font-semibold whitespace-nowrap">
+								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="grid mt-4 grid-cols-[auto_auto_minmax(12rem,12rem)] items-center gap-3">
+									<label class="font-semibold whitespace-nowrap text-left">
 										Watermark Videos:
 									</label>
 
@@ -282,8 +278,8 @@
 									</span>
 								</div>
 
-								<div v-if="hasVideoSelected && watermarkAfterUpload" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3">
-									<span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
+								<div v-if="hasVideoSelected && watermarkAfterUpload" class="grid mt-4 grid-cols-[auto_auto_1fr_auto] items-center gap-3">
+									<span class=" font-semibold whitespace-nowrap">Watermark Image:</span>
 									<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
 									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
 										{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
@@ -293,6 +289,15 @@
 
 								<div v-if="hasVideoSelected && watermarkAfterUpload && !watermarkFile" class="text-xs text-amber-300">
 									Select a watermark image to continue.
+								</div>
+								<div v-if="hasVideoSelected && watermarkAfterUpload && watermarkFile?.dataUrl" class="mt-2">
+									<div class="text-xs text-slate-400 mb-1 text-center">Preview (approximate)</div>
+									<div class="relative aspect-video w-full max-w-sm rounded-md border border-default bg-default/60 overflow-hidden mx-auto">
+										<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
+										<img :src="watermarkFile.dataUrl" alt="Watermark preview"
+											class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+									</div>
+									<div class="text-xs text-slate-400 mt-1 text-center">Size and position may vary by source video.</div>
 								</div>
 							</div>
 						</div>
@@ -334,7 +339,7 @@ const { to } = useResilientNav()
 useHeader('Upload Files')
 const transfer = useTransferProgress()
 
-type LocalFile = { path: string; name: string; size: number }
+type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 
 const connectionMeta = inject(connectionMetaInjectionKey)!;
 const ssh = connectionMeta.value.ssh
@@ -356,8 +361,6 @@ const nextDisabled = computed(() => {
 	if (step.value === 1) return selected.value.length === 0;
 	if (step.value === 2) return !canNext.value;
 	// step 3: disable while actively uploading (until done), otherwise allow Start/Finish
-	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
-	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
 	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
 	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
 	return isUploading.value && !allDone.value;
@@ -395,8 +398,8 @@ function joinPath(dir: string, name: string) {
 	return (d ? d : '/') + '/' + n
 }
 
-function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> {
-	const map: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> = {};
+function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
+	const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
 	const t = data?.transcodes;
 	if (!Array.isArray(t)) return map;
 
@@ -406,7 +409,6 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 
 		map[vId] = {
 			queuedKinds: Array.isArray(rec?.jobs?.queuedKinds) ? rec.jobs.queuedKinds : [],
-			activeKinds: Array.isArray(rec?.jobs?.activeKinds) ? rec.jobs.activeKinds : [],
 			skippedKinds: Array.isArray(rec?.jobs?.skippedKinds) ? rec.jobs.skippedKinds : [],
 		};
 	}
@@ -417,7 +419,6 @@ function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
 	wantProxy: boolean
-	allowVideoTranscode: boolean
 	groupId: string
 	destDir: string
 	destFileAbs: string
@@ -601,34 +602,10 @@ function pickWatermark() {
 	});
 }
 function clearWatermark() { watermarkFile.value = null }
-function pickWatermark() {
-	window.electron.pickWatermark().then(f => {
-		if (f) watermarkFile.value = f;
-	});
-}
-function clearWatermark() { watermarkFile.value = null }
 
 const totalSelectedBytes = computed(() =>
 	selected.value.reduce((sum, f) => sum + (f.size || 0), 0)
 )
-const videoExts = new Set([
-	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
-	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
-])
-const hasVideoSelected = computed(() =>
-	selected.value.some(f => {
-		const ext = String(f.name || '').toLowerCase().split('.').pop() || '';
-		return videoExts.has(ext);
-	})
-)
-
-watch(selected, () => {
-	if (!hasVideoSelected.value) {
-		watermarkAfterUpload.value = false
-		watermarkFile.value = null
-	}
-}, { deep: true })
-
 const videoExts = new Set([
 	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
 	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
@@ -678,19 +655,6 @@ function formatDuration(ms: number): string {
 	return `${hours} hour${hours === 1 ? '' : 's'} ${remMinutes} minute${remMinutes === 1 ? '' : 's'}`;
 }
 
-const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|webm|m4v|wmv)$/i
-function isVideoLocalFile(f: LocalFile) {
-	return VIDEO_EXT_RE.test(f.name || f.path)
-}
-
-const canTranscodeSelected = computed(() =>
-	selected.value.length > 0 && selected.value.every(isVideoLocalFile)
-)
-
-watch(canTranscodeSelected, (ok) => {
-	if (!ok) transcodeProxyAfterUpload.value = false
-})
-
 
 // Step 2: destination
 const cwd = ref<string>('')                 // for the breadcrumb text the picker emits
@@ -724,21 +688,7 @@ const transcodeProxyAfterUpload = ref(false)
 const proxyQualities = ref<string[]>([])
 const watermarkAfterUpload = ref(false)
 const watermarkFile = ref<LocalFile | null>(null)
-const proxyQualities = ref<string[]>([])
-const watermarkAfterUpload = ref(false)
-const watermarkFile = ref<LocalFile | null>(null)
 const adaptiveHls = ref(false);
-
-watch(transcodeProxyAfterUpload, (v) => {
-	if (v && proxyQualities.value.length === 0) {
-		proxyQualities.value = ['720p']
-	}
-	if (!v) {
-		proxyQualities.value = []
-		watermarkAfterUpload.value = false
-		watermarkFile.value = null
-	}
-})
 
 watch(transcodeProxyAfterUpload, (v) => {
 	if (v && proxyQualities.value.length === 0) {
@@ -941,55 +891,6 @@ async function startUploads() {
 			return
 		}
 	}
-	let startedAny = false
-
-	if (watermarkAfterUpload.value) {
-		isUploading.value = true
-		if (!watermarkFile.value) {
-			pushNotification(
-				new Notification(
-					'Watermark Image Required',
-					'Please choose a watermark image before starting the upload.',
-					'warning',
-					8000
-				)
-			)
-			isUploading.value = false
-			return
-		}
-
-		const destDirAbs = uploads.value[0]?.dest || normalizedDest.value
-		const { done } = await window.electron.rsyncStart(
-			{
-				host: ssh?.server,
-				user: ssh?.username,
-				src: watermarkFile.value.path,
-				destDir: destDirAbs,
-				port: serverPort,
-				keyPath: privateKeyPath,
-			}
-		)
-		const res = await done
-		if (!res?.ok) {
-			pushNotification(
-				new Notification(
-					'Watermark Upload Failed',
-					res?.error || 'Unable to upload the watermark image.',
-					'error',
-					8000
-				)
-			)
-			isUploading.value = false
-			return
-		}
-	}
-
-	window.appLog?.info('local-upload.batch.started', {
-		files: uploads.value.filter(u => u.status === 'queued' && !u.alreadyUploaded).length,
-		destDir: normalizedDest.value,
-		wantsProxy: !!transcodeProxyAfterUpload.value,
-		wantsHls: !!adaptiveHls.value,
-	})
 
 	for (const row of uploads.value) {
 		// Ignore rows that are not queued or already uploaded
@@ -999,14 +900,13 @@ async function startUploads() {
 		row.startedAt = row.startedAt ?? Date.now(); 
 		isUploading.value = true
 		startedAny = true
-		startedAny = true
 
 		const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 
 		// Build a stable per-row absolute destination path for grouping + display
 		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
 		const destFileAbs = joinPath(destDirAbs, row.name)
-		const allowVideoTranscode = VIDEO_EXT_RE.test(row.name || row.path)
+
 		const taskId = transfer.createUploadTask({
 			title: `Uploading: ${row.name}`,
 			detail: destDirAbs,
@@ -1030,7 +930,6 @@ async function startUploads() {
 				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
-<<<<<<< HEAD
 				transcodeProxy: transcodeProxyAfterUpload.value,
 				proxyQualities: proxyQualities.value.slice(),
 				watermark: watermarkAfterUpload.value,
@@ -1068,7 +967,6 @@ async function startUploads() {
 			uploadId: id,
 			rowName: row.name,
 			wantProxy: transcodeProxyAfterUpload.value,
-			allowVideoTranscode,
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,
@@ -1087,6 +985,7 @@ async function startUploads() {
 				row.status = row.status === 'canceled' ? 'canceled' : 'done';
 				row.progress = 100;
 				transfer.finishUpload(taskId, true);
+
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
 					const end = Date.now();
@@ -1102,11 +1001,6 @@ async function startUploads() {
 				row.status = 'error';
 				row.error = res.error || 'rsync failed';
 				transfer.finishUpload(taskId, false, res.error || 'rsync failed');
-				window.appLog?.error('local-upload.file.failed', {
-					name: row.name,
-					destDir: row.dest,
-					error: row.error,
-				})
 
 				pushNotification(
 					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
@@ -1120,21 +1014,12 @@ async function startUploads() {
 				row.status = 'error';
 				row.error = err?.message || String(err);
 				transfer.finishUpload(taskId, false, err?.message || 'rsync failed');
-				window.appLog?.error('local-upload.file.failed', {
-					name: row.name,
-					destDir: row.dest,
-					error: row.error,
-				})
 
 				pushNotification(
 					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
 				);
 			}
 		});
-	}
-
-	if (!startedAny) {
-		isUploading.value = false
 	}
 
 	if (!startedAny) {
@@ -1201,4 +1086,3 @@ function goBack() {
 	@apply px-4 py-2 border border-default;
 }
 </style>
-
