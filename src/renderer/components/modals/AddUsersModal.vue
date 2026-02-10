@@ -219,7 +219,7 @@
   </div>
 
   <!-- Edit modal -->
-  <div v-if="editing" class="fixed inset-0 z-[60] flex items-center justify-center">
+  <div v-if="editing" class="fixed inset-0 z-[60] flex items-center justify-center text-left">
     <div class="absolute inset-0 bg-black/50" @click="editing = null"></div>
     <div class="relative w-full max-w-md bg-accent rounded-lg shadow-xl p-4">
       <div class="flex items-center justify-between mb-3">
@@ -261,14 +261,16 @@
             </option>
           </select>
         </div>
-        <button class="btn btn-secondary" @click="openReset(editing)" title="Reset password for this user">
-          Reset Password
-        </button>
+        <div class="items-center text-center">
+          <button class="btn btn-primary" @click="openReset(editing)" title="Reset password for this user">
+            Reset Password
+          </button>
+        </div>
       </div>
 
       <div class="flex justify-end gap-2 mt-4">
         <button class="btn btn-secondary" @click="editing = null">Cancel</button>
-        <button class="btn btn-primary" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPassword)">
+        <button class="btn btn-success" @click="saveEdit()" :disabled="!(hasProfileEdits || pendingResetPassword)">
           Save
         </button>
       </div>
@@ -434,6 +436,24 @@ watch(
     }
   }
 )
+
+watch(
+  newUserDefaultRoleId,
+  (newVal) => {
+    if (!linkMode.value) return
+
+    // If they pick a default role, force "Role for this link" to match.
+    // If they clear default (None), fall back to the computed modal default.
+    if (newVal == null) {
+      newUserRoleId.value = defaultRoleId.value
+      return
+    }
+
+    const n = Number(newVal)
+    newUserRoleId.value = Number.isFinite(n) ? n : defaultRoleId.value
+  }
+)
+
 
 watch(
   selectedKeys,

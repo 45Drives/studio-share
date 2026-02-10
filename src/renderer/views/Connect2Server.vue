@@ -148,7 +148,7 @@ import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
-useHeader('Welcome to the 45Studio Share App!');
+useHeader('Welcome to Flow by 45Studio!');
 
 const { to } = useResilientNav()
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
@@ -569,6 +569,30 @@ async function connectToServer() {
             ? sshPort.value
             : undefined; // undefined → “let main detect / default 22”
 
+        // Ensure SSH is ready early so any later SSH operations can use keys reliably
+        statusLine.value = 'Preparing SSH…';
+        try {
+            const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
+                host: ip,
+                username: username.value,
+                password: password.value || undefined,
+                sshPort: sshPortToUse,
+            });
+
+            if (!r?.ok) {
+                // If this fails, SSH preflight/bootstrap will probably fail too, so treat as fatal.
+                window.appLog?.error('ensure-ssh-ready.failed', { error: r?.error });
+                statusLine.value = '';
+                pushNotification(new Notification('Error', r?.error || 'SSH setup failed', 'error', 12000));
+                return;
+            }
+        } catch (e: any) {
+            statusLine.value = '';
+            window.appLog?.error('ensure-ssh-ready.failed', { error: e?.message });
+            pushNotification(new Notification('Error', e?.message || 'SSH setup failed', 'error', 12000));
+            return;
+        }
+
         // Set current server (avoid creating a "manual" entry if we already discovered it)
         providedCurrentServer.value = effectiveServer ?? {
             ip, name: ip, lastSeen: Date.now(), status: 'unknown', manuallyAdded: true
@@ -698,26 +722,26 @@ async function connectToServer() {
             },
         };
 
-        // Ensure SSH is ready for rsync (make key locally + add to authorized_keys)
-        try {
-        statusLine.value = 'Preparing SSH for file transfers…';
-            const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
-                host: ip,
-                username: username.value,
-                password: password.value || undefined,
-                sshPort: sshPortToUse,
-            });
+        // // Ensure SSH is ready for rsync (make key locally + add to authorized_keys)
+        // try {
+        // statusLine.value = 'Preparing SSH for file transfers…';
+        //     const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
+        //         host: ip,
+        //         username: username.value,
+        //         password: password.value || undefined,
+        //         sshPort: sshPortToUse,
+        //     });
 
-        if (!r?.ok) {
-            // Non-fatal: rsync may still work via agent or existing keys, but tell the user.
-            window.appLog?.warn('ensure-ssh-ready.failed', { error: r?.error });
-            pushNotification(new Notification('Notice', `SSH key setup skipped: ${r?.error || 'unknown error'}`, 'warning', 8000));
-        } else {
-            window.appLog?.info('ensure-ssh-ready.ok', { keyPath: r.keyPath });
-        }
-        } catch (e: any) {
-        window.appLog?.warn('ensure-ssh-ready.exception', { message: e?.message });
-        }
+        // if (!r?.ok) {
+        //     // Non-fatal: rsync may still work via agent or existing keys, but tell the user.
+        //     window.appLog?.warn('ensure-ssh-ready.failed', { error: r?.error });
+        //     pushNotification(new Notification('Notice', `SSH key setup skipped: ${r?.error || 'unknown error'}`, 'warning', 8000));
+        // } else {
+        //     window.appLog?.info('ensure-ssh-ready.ok', { keyPath: r.keyPath });
+        // }
+        // } catch (e: any) {
+        // window.appLog?.warn('ensure-ssh-ready.exception', { message: e?.message });
+        // }
         statusLine.value = '';
         
         try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }

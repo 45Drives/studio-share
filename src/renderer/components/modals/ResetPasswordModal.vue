@@ -8,7 +8,7 @@
           <button class="btn btn-secondary" @click="close">Close</button>
         </div>
   
-        <div class="space-y-3">
+        <div class="space-y-3 text-left">
           <p class="text-sm">
             Enter a temporary password for
             <b>{{ user?.name || user?.username }}</b>. They’ll be required to change it on
@@ -83,7 +83,7 @@
 </template>
   
   <script setup lang="ts">
-  import { ref, computed, watch, defineProps, defineEmits } from 'vue'
+  import { ref, computed, watch } from 'vue'
   import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
   import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
   

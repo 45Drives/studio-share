@@ -9,7 +9,7 @@
 
       <!-- Center (title) -->
       <div class="justify-self-center text-2xl font-semibold whitespace-nowrap">
-        {{ headerTitle || (route.meta.title as string) || '45Studio Sharing Software' }}
+        {{ headerTitle || (route.meta.title as string) || 'Flow by 45Studio' }}
       </div>
 
       <!-- Right (menu) -->

@@ -1189,6 +1189,12 @@ async function generateLink() {
         )
     } catch (e: any) {
         const msg = e?.message || e?.error || String(e)
+        window.appLog?.error('share.create.failed', {
+            files: files.value.length,
+            error: msg,
+            requestedProxy: requestProxy,
+            requestedHls: requestHls,
+        })
         const level: 'error' | 'denied' =
             /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
 

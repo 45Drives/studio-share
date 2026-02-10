@@ -213,6 +213,59 @@
           </div>
         </section>
 
+        <!-- Activity -->
+        <section class="w-full">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-semibold">Access Activity</h4>
+            <div class="text-xs opacity-70" v-if="!detailsLoading">{{ filteredAuditActivity.length }} item(s)</div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <select v-model="activityTypeFilter" class="px-2 py-1 border border-default rounded bg-default text-default">
+              <option value="all">All actions</option>
+              <option v-for="t in activityTypes" :key="t" :value="t">{{ t }}</option>
+            </select>
+            <input
+              v-model.trim="activitySearch"
+              type="text"
+              class="input-textlike px-2 py-1 rounded min-w-[16rem]"
+              placeholder="Filter by actor, IP, action, or details"
+            />
+          </div>
+
+          <div v-if="detailsLoading" class="text-sm opacity-70">Loading…</div>
+          <div v-else-if="filteredAuditActivity.length === 0" class="text-sm opacity-70">No activity found.</div>
+
+          <div v-else class="overflow-x-auto h-72 overflow-y-auto overscroll-y-contain rounded-lg border border-default">
+            <table class="min-w-full text-sm border-separate border-spacing-0">
+              <thead>
+                <tr class="bg-default text-gray-300">
+                  <th class="text-left px-3 py-2 border border-default">When</th>
+                  <th class="text-left px-3 py-2 border border-default">Action</th>
+                  <th class="text-left px-3 py-2 border border-default">Actor</th>
+                  <th class="text-left px-3 py-2 border border-default">Source</th>
+                  <th class="text-left px-3 py-2 border border-default">Summary</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(a, idx) in filteredAuditActivity" :key="`${a.ts_ms}:${a.type}:${idx}`" class="border-t border-default align-top">
+                  <td class="px-3 py-2 border border-default whitespace-nowrap">{{ formatTs(a.ts_ms) }}</td>
+                  <td class="px-3 py-2 border border-default break-all">{{ a.type || '—' }}</td>
+                  <td class="px-3 py-2 border border-default break-all">{{ actorLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default break-all">{{ sourceLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default break-all">
+                    <div>{{ activitySummary(a) }}</div>
+                    <details v-if="hasActivityDetails(a)" class="mt-1">
+                      <summary class="cursor-pointer opacity-80">Details</summary>
+                      <pre class="mt-1 text-xs whitespace-pre-wrap break-all">{{ activityDetailsPretty(a) }}</pre>
+                    </details>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- Versions manager -->
         <section class="w-full">
           <div class="flex items-center justify-between mb-2">
@@ -503,6 +556,18 @@ const transfer = useTransferProgress()
 
 const detailsLoading = ref(false)
 const files = ref<any[]>([])
+type AuditActivityRow = {
+  type: string
+  ts_ms: number
+  actor_user_id: number | null
+  actor_user_name: string | null
+  actor_ip: string | null
+  actor_user_agent: string | null
+  details: any
+}
+const auditActivity = ref<AuditActivityRow[]>([])
+const activityTypeFilter = ref('all')
+const activitySearch = ref('')
 const access = ref<AccessRow[]>([])
 const accessLoading = ref(false)
 const accessModalOpen = ref(false)
@@ -630,6 +695,26 @@ const addedFilePaths = computed(() => computeAddedPaths(draftFilePaths.value, or
 const hasAddedFiles = computed(() => addedFilePaths.value.length > 0)
 
 const uploadDirDirty = computed(() => (draftUploadDir.value || '') !== (originalUploadDir.value || ''))
+const activityTypes = computed(() => {
+  return Array.from(new Set(auditActivity.value.map(a => String(a?.type || '').trim()).filter(Boolean))).sort()
+})
+const filteredAuditActivity = computed(() => {
+  const type = activityTypeFilter.value
+  const q = activitySearch.value.trim().toLowerCase()
+  return auditActivity.value.filter((a) => {
+    if (type !== 'all' && a.type !== type) return false
+    if (!q) return true
+    const hay = [
+      a.type,
+      actorLabel(a),
+      a.actor_ip || '',
+      a.actor_user_agent || '',
+      activitySummary(a),
+      safeStringify(a.details),
+    ].join(' ').toLowerCase()
+    return hay.includes(q)
+  })
+})
 
 function normalizeAbs(p: string) {
   const s = (p || '').trim()
@@ -704,6 +789,71 @@ function snapshotName(rel?: string | null) {
 function toNumericFileId(v: any) {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function safeStringify(v: any) {
+  if (v == null) return ''
+  if (typeof v === 'string') return v
+  try { return JSON.stringify(v) } catch { return '' }
+}
+
+function normalizeAuditRow(v: any): AuditActivityRow {
+  const ts = Number(v?.ts_ms ?? v?.occurred_at_ms ?? 0)
+  const actorId = Number(v?.actor_user_id)
+  return {
+    type: String(v?.type || v?.activity_type || '').trim(),
+    ts_ms: Number.isFinite(ts) && ts > 0 ? ts : 0,
+    actor_user_id: Number.isFinite(actorId) && actorId > 0 ? actorId : null,
+    actor_user_name: v?.actor_user_name ? String(v.actor_user_name) : null,
+    actor_ip: v?.actor_ip ? String(v.actor_ip) : null,
+    actor_user_agent: v?.actor_user_agent ? String(v.actor_user_agent) : null,
+    details: v?.details ?? null,
+  }
+}
+
+function formatTs(v: number) {
+  if (!Number.isFinite(v) || v <= 0) return '—'
+  return new Date(v).toLocaleString()
+}
+
+function actorLabel(a: AuditActivityRow) {
+  if (a.actor_user_name) return a.actor_user_name
+  if (a.actor_user_id != null) return `user:${a.actor_user_id}`
+  return 'anonymous'
+}
+
+function sourceLabel(a: AuditActivityRow) {
+  if (a.actor_ip && a.actor_user_agent) return `${a.actor_ip} (${a.actor_user_agent})`
+  return a.actor_ip || a.actor_user_agent || '—'
+}
+
+function hasActivityDetails(a: AuditActivityRow) {
+  if (a.details == null) return false
+  if (typeof a.details === 'string') return a.details.trim().length > 0
+  if (Array.isArray(a.details)) return a.details.length > 0
+  if (typeof a.details === 'object') return Object.keys(a.details).length > 0
+  return true
+}
+
+function activityDetailsPretty(a: AuditActivityRow) {
+  if (a.details == null) return ''
+  if (typeof a.details === 'string') return a.details
+  try { return JSON.stringify(a.details, null, 2) } catch { return String(a.details) }
+}
+
+function activitySummary(a: AuditActivityRow) {
+  const d = a.details
+  if (typeof d === 'string' && d.trim()) return d
+  if (d && typeof d === 'object') {
+    if (typeof d.message === 'string' && d.message.trim()) return d.message
+    if (typeof d.reason === 'string' && d.reason.trim()) return d.reason
+    if (typeof d.path === 'string' && d.path.trim()) return `path=${d.path}`
+    if (typeof d.filename === 'string' && d.filename.trim()) return `file=${d.filename}`
+    if (typeof d.target === 'string' && d.target.trim()) return `target=${d.target}`
+    const keys = Object.keys(d).slice(0, 3)
+    if (keys.length) return keys.map(k => `${k}=${String((d as any)[k])}`).join(' ')
+  }
+  return a.type || '—'
 }
 
 function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }> {
@@ -969,25 +1119,65 @@ function selectDefaultVersionFile() {
   }
 }
 
-async function loadVersions(fileId: number) {
-  if (!fileId) return
-  versionsLoading.value = true
-  versionsError.value = null
+// Add near your refs:
+const noVersionsByFileId = ref<Set<number>>(new Set());
+
+// Change loadVersions signature:
+async function loadVersions(fileId: number, opts?: { force?: boolean }) {
+  if (!fileId) return;
+
+  // If we already know there are none, don't keep auto-checking
+  if (!opts?.force && noVersionsByFileId.value.has(fileId)) {
+    versions.value = [];
+    versionsError.value = null;
+    versionsLoading.value = false;
+    return;
+  }
+
+  versionsLoading.value = true;
+  versionsError.value = null;
+
   try {
-    const resp = await props.apiFetch(`/api/files/${fileId}/versions`)
-    versions.value = Array.isArray(resp?.versions) ? resp.versions : []
+    const resp = await props.apiFetch(`/api/files/${fileId}/versions`);
+    const list = Array.isArray(resp?.versions) ? resp.versions : [];
+    versions.value = list;
+
+    if (list.length === 0) {
+      // Sticky "none exist" so we don't keep re-fetching
+      noVersionsByFileId.value.add(fileId);
+    } else {
+      // If versions appear later, clear the sticky empty
+      noVersionsByFileId.value.delete(fileId);
+    }
   } catch (e: any) {
-    versionsError.value = e?.message || e?.error || String(e)
-    versions.value = []
+    const msg = e?.message || e?.error || String(e);
+
+    // If we *already* know there are none, treat errors as non-fatal and keep UI calm
+    if (noVersionsByFileId.value.has(fileId)) {
+      versionsError.value = null;
+      versions.value = [];
+    } else {
+      // Otherwise show the real error
+      versionsError.value = msg;
+      versions.value = [];
+    }
   } finally {
-    versionsLoading.value = false
+    versionsLoading.value = false;
   }
 }
 
 async function refreshVersions() {
-  if (!selectedVersionFileId.value) return
-  await loadVersions(selectedVersionFileId.value)
+  if (!selectedVersionFileId.value) return;
+  // Force refresh overrides sticky-empty cache
+  await loadVersions(selectedVersionFileId.value, { force: true });
 }
+
+watch(
+  () => props.link?.id,
+  () => {
+    noVersionsByFileId.value = new Set();
+  }
+);
 
 async function restoreVersion(v: any) {
   if (!selectedVersionFileId.value) return
@@ -1044,6 +1234,7 @@ async function fetchDetailsFor() {
   if (!props.link) return
   detailsLoading.value = true
   files.value = []
+  auditActivity.value = []
   try {
     const resp = await props.apiFetch(`/api/links/${encodeURIComponent(String(props.link.id))}/details`)
     files.value = (resp.files || []).map((f: any, idx: number) => ({
@@ -1052,6 +1243,10 @@ async function fetchDetailsFor() {
       uploader_label: f.uploader_name,
       relPath: f.relPath ?? f.path ?? f.p ?? null
     }))
+    const rawAudit = Array.isArray(resp?.auditActivity) ? resp.auditActivity : []
+    auditActivity.value = rawAudit
+      .map(normalizeAuditRow)
+      .filter((a: AuditActivityRow) => !!a.type || a.ts_ms > 0)
 
     setAccessFromResponse(resp)
 
