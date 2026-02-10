@@ -867,6 +867,15 @@ async function generateLink() {
     body.generateReviewProxy = requestProxy
     body.adaptiveHls = requestHls
 
+    window.appLog?.info('share.create.requested', {
+        files: files.value.length,
+        requestProxy,
+        requestHls,
+        accessMode: body.access_mode,
+        authMode: body.auth_mode,
+        publicBase: !!usePublicBase.value,
+    })
+
     if (proxyAlreadyActiveForAll) {
         pushNotification(
             new Notification(
@@ -897,6 +906,15 @@ async function generateLink() {
 
         viewUrl.value = data.viewUrl
         downloadUrl.value = data.downloadUrl
+
+        window.appLog?.info('share.create.succeeded', {
+            files: files.value.length,
+            hasViewUrl: !!data?.viewUrl,
+            hasDownloadUrl: !!data?.downloadUrl,
+            requestProxy,
+            requestHls,
+            transcodeItems: Array.isArray(data?.transcodes) ? data.transcodes.length : 0,
+        })
 
         if (requestProxy || requestHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
@@ -1060,6 +1078,12 @@ async function generateLink() {
         )
     } catch (e: any) {
         const msg = e?.message || e?.error || String(e)
+        window.appLog?.error('share.create.failed', {
+            files: files.value.length,
+            error: msg,
+            requestedProxy: requestProxy,
+            requestedHls: requestHls,
+        })
         const level: 'error' | 'denied' =
             /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
 

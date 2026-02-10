@@ -721,6 +721,13 @@ const rafState = new Map<
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
 
+	window.appLog?.info('local-upload.batch.started', {
+		files: uploads.value.filter(u => u.status === 'queued' && !u.alreadyUploaded).length,
+		destDir: normalizedDest.value,
+		wantsProxy: !!transcodeProxyAfterUpload.value,
+		wantsHls: !!adaptiveHls.value,
+	})
+
 	for (const row of uploads.value) {
 		// Ignore rows that are not queued or already uploaded
 		if (row.status !== 'queued' || row.alreadyUploaded) continue;
@@ -735,7 +742,6 @@ async function startUploads() {
 		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
 		const destFileAbs = joinPath(destDirAbs, row.name)
 		const allowVideoTranscode = VIDEO_EXT_RE.test(row.name || row.path)
-
 		const taskId = transfer.createUploadTask({
 			title: `Uploading: ${row.name}`,
 			detail: destDirAbs,
@@ -811,7 +817,6 @@ async function startUploads() {
 				row.status = row.status === 'canceled' ? 'canceled' : 'done';
 				row.progress = 100;
 				transfer.finishUpload(taskId, true);
-
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
 					const end = Date.now();
@@ -827,6 +832,11 @@ async function startUploads() {
 				row.status = 'error';
 				row.error = res.error || 'rsync failed';
 				transfer.finishUpload(taskId, false, res.error || 'rsync failed');
+				window.appLog?.error('local-upload.file.failed', {
+					name: row.name,
+					destDir: row.dest,
+					error: row.error,
+				})
 
 				pushNotification(
 					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
@@ -840,6 +850,11 @@ async function startUploads() {
 				row.status = 'error';
 				row.error = err?.message || String(err);
 				transfer.finishUpload(taskId, false, err?.message || 'rsync failed');
+				window.appLog?.error('local-upload.file.failed', {
+					name: row.name,
+					destDir: row.dest,
+					error: row.error,
+				})
 
 				pushNotification(
 					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)

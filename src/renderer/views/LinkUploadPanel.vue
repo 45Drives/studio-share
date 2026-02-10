@@ -481,6 +481,15 @@ async function generateLink() {
 			})
 		}
 
+		window.appLog?.info('upload-link.create.requested', {
+			dest: body.path,
+			publicBase: !!usePublicBase.value,
+			restrictToUsers: !!restrictToUsers.value,
+			users: Array.isArray(body.users) ? body.users.length : 0,
+			requestProxy: !!body.generateReviewProxy,
+			requestHls: !!body.adaptiveHls,
+		})
+
 		const resp = await apiFetch('/api/create-upload-link', {
 			method: 'POST',
 			body: JSON.stringify(body),
@@ -495,6 +504,14 @@ async function generateLink() {
 			expiresAt: resp.expiresAt,
 		}
 
+		window.appLog?.info('upload-link.create.succeeded', {
+			dest: body.path,
+			expiresAt: resp?.expiresAt ?? null,
+			hasUrl: !!resp?.url,
+			requestProxy: !!body.generateReviewProxy,
+			requestHls: !!body.adaptiveHls,
+		})
+
 		const modeLabel = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
 
 		pushNotification(
@@ -507,6 +524,10 @@ async function generateLink() {
 		)
 	} catch (e: any) {
 		const msg = e?.message || e?.error || String(e)
+		window.appLog?.error('upload-link.create.failed', {
+			dest: destFolderRel.value,
+			error: msg,
+		})
 		const level: 'error' | 'denied' =
 			/forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
 

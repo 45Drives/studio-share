@@ -5,9 +5,9 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"45studio-filesharing-app@workspace:.":
+"flow-by-45studio@workspace:.":
   version: 0.0.0-use.local
-  resolution: "45studio-filesharing-app@workspace:."
+  resolution: "flow-by-45studio@workspace:."
   dependencies:
     "@45drives/houston-common-css": "workspace:*"
     "@45drives/houston-common-lib": "workspace:*"

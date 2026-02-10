@@ -14,7 +14,7 @@
 				</div>
 
 				<div class="ml-auto  button-group-row">
-					<!-- <button @click="goToLogs" class="btn btn-secondary px-6 py-3">View Logs</button> -->
+					<button @click="goToLogs" class="btn btn-secondary px-6 py-3">View Logs</button>
 					<button @click="goToSettings" class="btn btn-secondary px-6 py-3">Settings</button>
 					
 					<!-- <button @click="goToSettings" title="Settings">
@@ -36,6 +36,7 @@
 		</template>
 	</CardContainer>
 	<SettingsModal v-if="showSettings" @close="showSettings = false" />
+	<LogViewModal v-if="showLogs" @close="showLogs = false" />
 	<AddUsersModal v-model="usersModalOpen" :apiFetch="apiFetch" />
 
 </template>
@@ -47,7 +48,8 @@ import { useResilientNav } from '../composables/useResilientNav'
 import ManageLinks from './ManageLinks.vue'
 import SettingsModal from '../components/modals/SettingsModal.vue'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
-import { Cog6ToothIcon } from '@heroicons/vue/24/solid'
+import LogViewModal from '../components/modals/LogViewModal.vue'
+// import { Cog6ToothIcon } from '@heroicons/vue/24/solid'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
