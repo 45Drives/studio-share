@@ -722,26 +722,6 @@ async function connectToServer() {
             },
         };
 
-        // // Ensure SSH is ready for rsync (make key locally + add to authorized_keys)
-        // try {
-        // statusLine.value = 'Preparing SSH for file transfers…';
-        //     const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
-        //         host: ip,
-        //         username: username.value,
-        //         password: password.value || undefined,
-        //         sshPort: sshPortToUse,
-        //     });
-
-        // if (!r?.ok) {
-        //     // Non-fatal: rsync may still work via agent or existing keys, but tell the user.
-        //     window.appLog?.warn('ensure-ssh-ready.failed', { error: r?.error });
-        //     pushNotification(new Notification('Notice', `SSH key setup skipped: ${r?.error || 'unknown error'}`, 'warning', 8000));
-        // } else {
-        //     window.appLog?.info('ensure-ssh-ready.ok', { keyPath: r.keyPath });
-        // }
-        // } catch (e: any) {
-        // window.appLog?.warn('ensure-ssh-ready.exception', { message: e?.message });
-        // }
         statusLine.value = '';
         
         try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }

@@ -2,8 +2,8 @@
   <div class="flex flex-col gap-3 max-h-[500px] mt-2">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
-      <div class="text-muted">Click on files to share. <span v-if="viewMode === 'grid'">Double-click on folders to
-          enter.</span></div>
+      <div class="text-muted">Click on files to select or deselect them. <span v-if="viewMode === 'grid'">Double-click
+          on folders to enter.</span></div>
 
       <div class="flex flex-row gap-2 items-center">
         <span class="whitespace-nowrap ">Enter root path to use.</span>
@@ -42,33 +42,24 @@
       <div>
         <!-- List view -->
         <template v-if="viewMode === 'list'">
-          <TreeNode :key="'list-'+cwd" :apiFetch="apiFetch" :selected="internalSelected"
-            :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
-            :isRoot="true" useCase="share" @toggle="togglePath" @navigate="navigateTo" />
+          <TreeNode :key="'list-'+cwd" :apiFetch="apiFetch" :selected="selectedSet"
+            :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0" :isRoot="true" useCase="share"
+            @toggle="togglePath" @navigate="navigateTo" />
         </template>
 
         <!-- Grid view -->
         <template v-else>
-          <IconMode :key="'grid-'+cwd" :apiFetch="apiFetch" :selected="internalSelected"
-            :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
-            :isRoot="true" useCase="share" @toggle="togglePath" @navigate="navigateTo" />
+          <IconMode :key="'grid-'+cwd" :apiFetch="apiFetch" :selected="selectedSet"
+            :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0" :isRoot="true" useCase="share"
+            @toggle="togglePath" @navigate="navigateTo" />
         </template>
       </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="flex items-center gap-2">
-      <button class="btn btn-primary" :disabled="!internalSelected.size" @click="emitSelection">
-        Add {{ internalSelected.size }} selected
-      </button>
-      <button class="btn btn-secondary" :disabled="!internalSelected.size" @click="clearSelection">Clear</button>
-      <div class="grow"></div>
     </div>
   </div>
 </template>
   
   <script setup lang="ts">
-  import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
   import PathInput from './PathInput.vue'
   import TreeNode from './TreeNode.vue'
   import IconMode from './IconMode.vue'
@@ -81,10 +72,10 @@
     modelValue?: string[] // existing selection passed in (if any)
   }>()
   
-  const emit = defineEmits<{
+const emit = defineEmits<{
     (e: 'add', paths: string[]): void
-    (e: 'update:modelValue', v: string[]): void
-  }>()
+    (e: 'remove', paths: string[]): void
+}>()
   
   const apiFetch = props.apiFetch
   
@@ -105,8 +96,34 @@
     (cwd.value || '/').replace(/\/+$/, '') // keep leading slash; trim trailing
   )
   
-  const internalSelected = ref<Set<string>>(new Set())
-  const selectedVersion = ref(0)
+function normalizePath(p?: string) {
+  const s = String(p || '').trim().replace(/\/+/g, '/')
+  if (!s) return '/'
+  return s.startsWith('/') ? s : ('/' + s)
+}
+
+function stripLeadingSlash(p: string) {
+  return p.replace(/^\/+/, '')
+}
+
+function pathVariants(p?: string) {
+  const raw = String(p || '').trim()
+  const abs = normalizePath(raw)
+  return [raw, abs, stripLeadingSlash(abs)]
+}
+
+const selectedSet = computed(() => {
+  const s = new Set<string>()
+  for (const p of (props.modelValue || [])) {
+    for (const v of pathVariants(p)) if (v) s.add(v)
+  }
+  return s
+})
+
+function isSelected(path: string) {
+  for (const v of pathVariants(path)) if (selectedSet.value.has(v)) return true
+  return false
+}
   
   // ---------- View mode toggle (persisted) ----------
   type ViewMode = 'list' | 'grid'
@@ -138,37 +155,24 @@
     }
   }
   
-  // ---------- Selection helpers ----------
-  function cloneSet(s: Set<string>) { return new Set(Array.from(s)) }
-  function addMany(paths: string[]) {
-    const s = cloneSet(internalSelected.value)
-    for (const p of paths) s.add(p)
-    internalSelected.value = s
-    selectedVersion.value++
+type TogglePayload = { path: string; isDir: boolean }
+async function togglePath({ path, isDir }: TogglePayload) {
+  if (!isDir) {
+    const normalized = normalizePath(path)
+    if (isSelected(path)) emit('remove', [normalized])
+    else emit('add', [normalized])
+    return
   }
-  function removeMany(paths: string[]) {
-    const s = cloneSet(internalSelected.value)
-    for (const p of paths) s.delete(p)
-    internalSelected.value = s
-    selectedVersion.value++
+  const files = await getFilesForFolder(path)
+  if (!files.length) return
+  const normalizedFiles = Array.from(new Set(files.map(normalizePath)))
+  const allSelected = normalizedFiles.every(f => isSelected(f))
+  if (allSelected) emit('remove', normalizedFiles)
+  else {
+    const toAdd = normalizedFiles.filter(f => !isSelected(f))
+    if (toAdd.length) emit('add', toAdd)
   }
-  
-  type TogglePayload = { path: string; isDir: boolean }
-  async function togglePath({ path, isDir }: TogglePayload) {
-    if (!isDir) {
-      internalSelected.value.has(path) ? removeMany([path]) : addMany([path])
-      return
-    }
-    const files = await getFilesForFolder(path)
-    if (!files.length) return
-    const allSelected = files.every(f => internalSelected.value.has(f))
-    allSelected ? removeMany(files) : addMany(files)
-  }
-  
-  function clearSelection() {
-    internalSelected.value = new Set()
-    selectedVersion.value++
-  }
+}
   
   // ---------- Navigation ----------
   function onChoose(pick: { path: string; isDir: boolean }) {
@@ -211,14 +215,5 @@
     cwd.value = parent.startsWith(base) ? parent : base
   }
   
-  // ---------- Emit selection to parent ----------
-  async function emitSelection() {
-    const selected = Array.from(internalSelected.value)
-    if (!selected.length) return
-    const already = new Set(props.modelValue || [])
-    const uniq: string[] = []
-    for (const p of selected) if (!already.has(p)) uniq.push(p)
-    if (uniq.length) emit('add', uniq)
-  }
   </script>
   

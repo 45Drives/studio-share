@@ -25,7 +25,7 @@
                 </div>
 
                 <FileExplorer :apiFetch="apiFetch" :modelValue="selected" :base="base" :startDir="startDir"
-                    @add="onExplorerAdd" />
+                    @add="onExplorerAdd" @remove="onExplorerRemove" />
 
                 <div class="border rounded bg-accent">
                     <div class="flex flex-wrap items-center gap-2 p-2">
@@ -141,6 +141,11 @@ function onExplorerAdd(paths: string[]) {
     }
 }
 
+function onExplorerRemove(paths: string[]) {
+    const removeSet = new Set(paths.map(normalizeAbs).filter(Boolean))
+    selected.value = selected.value.filter((p) => !removeSet.has(normalizeAbs(p)))
+}
+
 const validationError = computed(() => {
     if (selected.value.length < 1) return 'Select at least 1 file.'
     return ''
@@ -155,4 +160,3 @@ function apply() {
     close()
 }
 </script>
-

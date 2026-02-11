@@ -1,7 +1,7 @@
 <template>
     <!-- Non-root row -->
     <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer bg-default
-         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]"
+         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] focus:outline-none"
         @click="modeIsUpload ? selectFolder() : onRowClick()"
         @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
         @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()" role="button" tabindex="0"
@@ -73,12 +73,12 @@
                 modeIsUpload ? 'opacity-90 pointer-events-none' : ''
             ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
                 @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
-                :aria-pressed="!modeIsUpload && selected.has(ch.path)">
+                :aria-pressed="!modeIsUpload && selected.has(ch.path)" class="focus:outline-none">
                 <!-- checkbox -->
                 <div class="px-2 py-1 flex justify-center">
                     <template v-if="!modeIsUpload">
                         <input class="input-checkbox h-4 w-4 m-0" type="checkbox" :checked="selected.has(ch.path)"
-                            @click.stop @change="$emit('toggle', { path: ch.path, isDir: false })"
+                            @click.stop @change="onFileToggle(ch.path)"
                             :aria-checked="selected.has(ch.path)" />
                     </template>
                 </div>
@@ -220,7 +220,7 @@ function fmtDateFull(ms?: number) {
 }
 
 function onFileToggle(path: string) {
-  if (modeIsUpload.value) return;            
+  if (modeIsUpload.value) return;
   emit('toggle', { path, isDir: false })
 }
 

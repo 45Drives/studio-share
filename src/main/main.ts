@@ -1594,7 +1594,6 @@ app.whenReady().then(() => {
     // plain IPv4 or .local – adjust for environment
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return true;
     if (hostname.endsWith('.local')) return true;
-    // if you have a corporate domain, add it here:
     // if (hostname.endsWith('.45drives.internal')) return true;
     return false;
   };
@@ -1903,7 +1902,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
       // NOTE: runWinSftp expects SSH port (22) normally.
       // If  opts.port is the API port (9095), do not reuse it for SSH.
-      // If you have a separate sshPort, pass that instead. For now default to 22.
+      // If separate sshPort, pass that instead. For now default to 22.
       const sshPort = 22
 
       await runWinSftp({

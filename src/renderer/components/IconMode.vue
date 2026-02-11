@@ -11,9 +11,12 @@
         <!-- icon grid -->
         <div v-else class="grid gap-3 justify-start [grid-template-columns:repeat(auto-fill,minmax(9rem,9rem))]">
             <button v-for="ent in entries" :key="ent.path" data-fp-item type="button" class="group relative rounded-xl border border-default bg-default hover:bg-white/5
-         focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-[var(--btn-primary-border)]
+         focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-offset-0 focus-visible:ring-[var(--btn-primary-border)]
          p-1 text-left" :class="[
             foldersOnly && !ent.isDir ? 'pointer-events-none opacity-60 select-none' : '',
+            (!modeIsUpload && !ent.isDir && selected.has(ent.path))
+                ? 'selected-tile text-[var(--btn-primary-border)]'
+                : '',
             (modeIsUpload && ent.isDir && localSelectedFolder === ent.path)
                 ? 'selected-tile text-[var(--btn-primary-border)]'
                 : ''
@@ -54,8 +57,7 @@
                     <!-- share mode: file checkbox -->
                     <template v-if="!modeIsUpload && !ent.isDir">
                         <input type="checkbox" class="input-checkbox h-4 w-4 m-0" :checked="selected.has(ent.path)"
-                            :aria-checked="selected.has(ent.path)" @click.stop
-                            @change="$emit('toggle', { path: ent.path, isDir: false })" />
+                            :aria-checked="selected.has(ent.path)" @click.stop @change="onFileToggle(ent.path)" />
                     </template>
 
                     <!-- upload mode: folder radio -->
@@ -173,7 +175,7 @@ function openFolder(ent: Entry) {
 
 function onFileClick(ent: Entry) {
     if (foldersOnly.value) return
-    emit('toggle', { path: ent.path, isDir: false })
+    onFileToggle(ent.path)
 }
 
 
@@ -183,6 +185,11 @@ function onFileClick(ent: Entry) {
 function onFileKey(ent: Entry) {
     if (foldersOnly.value) return
     onFileClick(ent)
+}
+
+function onFileToggle(path: string) {
+    if (foldersOnly.value) return
+    emit('toggle', { path, isDir: false })
 }
 
 /** Decide which media icon to use */

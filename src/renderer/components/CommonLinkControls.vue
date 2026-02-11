@@ -30,12 +30,11 @@
             <!-- Lane 3 -->
             <div class="clc__lane">
                 <div class="clc__sections">
-                    <div v-if="$slots.password" class="clc__section">
-                        <slot name="password" />
-                    </div>
-
                     <div v-if="$slots.title" class="clc__section">
                         <slot name="title" />
+                    </div>
+                    <div v-if="$slots.password" class="clc__section">
+                        <slot name="password" />
                     </div>
                 </div>
             </div>

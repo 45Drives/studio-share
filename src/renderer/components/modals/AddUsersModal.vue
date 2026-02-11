@@ -200,7 +200,7 @@
                 <div class="flex flex-row w-full justify-between mt-2">
 
                   <button class="btn btn-secondary" @click="resetNewUser()">Reset</button>
-                  <button class="btn btn-primary" @click="createUser()" tabindex="9" :disabled="!canSubmit">Create & Select</button>
+                  <button class="btn btn-primary" @click="createUser()" tabindex="9" :disabled="!canSubmit">{{linkMode ? 'Create & Select User' : 'Create User'}}</button>
                 </div>
 
 
