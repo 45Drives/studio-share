@@ -363,6 +363,18 @@
                                     role_id: c.role_id ?? undefined,
                                     role_name: c.role_name ?? undefined,
                                 }))" @apply="onApplyUsers" />
+                            <ConfirmDeleteModal
+                                v-model="outputsExistModalOpen"
+                                title="Outputs Already Exist"
+                                message="Outputs already exist for one or more files. Overwrite them?"
+                                confirmText="Overwrite"
+                                cancelText="Generate Link"
+                                :danger="false"
+                                :closeIsCancel="false"
+                                @confirm="onOutputsExistConfirm"
+                                @cancel="onOutputsExistCancel"
+                                @close="onOutputsExistClose"
+                            />
                         </div>
                     </template>
 
@@ -416,6 +428,7 @@ import FileExplorer from '../components/FileExplorer.vue'
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import { useProjectChoices } from '../composables/useProjectChoices'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
+import ConfirmDeleteModal from '../components/modals/ConfirmDeleteModal.vue'
 import CommonLinkControls from '../components/CommonLinkControls.vue'
 import CheckPortForwarding from '../components/CheckPortForwarding.vue'
 import type { Commenter } from '../typings/electron'
@@ -1177,7 +1190,9 @@ async function generateLink() {
     body.generateReviewProxy = !!transcodeProxy.value
     if (transcodeProxy.value) {
         body.proxyQualities = proxyQualities.value.slice()
-        body.overwrite = !!overwriteExisting.value
+    }
+    if (overwriteExisting.value) {
+        body.overwrite = true
     }
     if (watermarkEnabled.value && watermarkFile.value?.name) {
         body.watermark = true
@@ -1202,7 +1217,7 @@ async function generateLink() {
             }
         }
 
-        // console.log('[magic-link] request body', JSON.stringify(body))
+        console.log('[magic-link] request body', JSON.stringify(body))
         let data: any
         try {
             data = await apiFetch('/api/magic-link', {
@@ -1214,20 +1229,20 @@ async function generateLink() {
                 let payload: any = null
                 try { payload = JSON.parse(e?.message) } catch { }
 
-                if (payload?.error === 'outputs_exist') {
-                    const proceed = window.confirm('Proxy outputs already exist for one or more files. Overwrite them?')
-                    if (proceed) {
+                if (payload?.error === 'outputs_exist' || payload?.error === 'hls_exists') {
+                    const action = await confirmOutputsExistOverwrite()
+                    if (action === 'overwrite') {
                         overwriteExisting.value = true
                         body.overwrite = true
-                        // console.log('[magic-link] retry with overwrite', JSON.stringify(body))
+                        console.log('[magic-link] retry with overwrite', JSON.stringify(body))
                         data = await apiFetch('/api/magic-link', {
                             method: 'POST',
                             body: JSON.stringify(body),
                         })
-                    } else {
+                    } else if (action === 'generate') {
                         body.keepExistingOutputs = true
                         body.overwrite = false
-                        // console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
+                        console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
                         data = await apiFetch('/api/magic-link', {
                             method: 'POST',
                             body: JSON.stringify(body),
@@ -1235,11 +1250,14 @@ async function generateLink() {
                         pushNotification(
                             new Notification(
                                 'Overwrite Canceled',
-                                'Existing proxy outputs were kept and the link was created.',
+                                'Existing outputs were kept and the link was created.',
                                 'info',
                                 6000
                             )
-                        );
+                        )
+                    } else {
+                        // Closed the dialog; cancel flow.
+                        return
                     }
                 } else {
                     throw e
@@ -1255,7 +1273,7 @@ async function generateLink() {
         // Only apply overwrite for the retry; reset for subsequent requests
         overwriteExisting.value = false
 
-        const wantsHls = true
+        const wantsHls = hasVideoSelected.value
         if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
 
@@ -1444,6 +1462,36 @@ const userModalOpen = ref(false)
 
 function openUserModal() {
     userModalOpen.value = true
+}
+
+const outputsExistModalOpen = ref(false)
+let outputsExistResolver: ((v: 'overwrite' | 'generate' | 'close') => void) | null = null
+
+function confirmOutputsExistOverwrite(): Promise<'overwrite' | 'generate' | 'close'> {
+    outputsExistModalOpen.value = true
+    return new Promise(resolve => {
+        outputsExistResolver = resolve
+    })
+}
+
+function resolveOutputsExist(next: 'overwrite' | 'generate' | 'close') {
+    if (outputsExistResolver) {
+        outputsExistResolver(next)
+        outputsExistResolver = null
+    }
+    outputsExistModalOpen.value = false
+}
+
+function onOutputsExistConfirm() {
+    resolveOutputsExist('overwrite')
+}
+
+function onOutputsExistCancel() {
+    resolveOutputsExist('generate')
+}
+
+function onOutputsExistClose() {
+    resolveOutputsExist('close')
 }
 
 function makeKey(name?: string, user_email?: string, username?: string) {

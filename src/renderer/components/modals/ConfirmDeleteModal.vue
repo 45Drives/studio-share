@@ -6,11 +6,11 @@
         role="dialog"
         :aria-labelledby="ids.title"
         :aria-describedby="ids.desc"
-        @keydown.esc.prevent.stop="onCancel"
+        @keydown.esc.prevent.stop="(closeIsCancel ? onCancel() : onClose())"
       >
         <div class="flex items-center justify-between mb-3">
           <h3 :id="ids.title" class="text-lg font-semibold">{{ titleText }}</h3>
-          <button class="btn btn-secondary" @click="onCancel" :disabled="busy">Close</button>
+          <button class="btn btn-secondary" @click="(closeIsCancel ? onCancel() : onClose())" :disabled="busy">Close</button>
         </div>
   
         <div :id="ids.desc" class="text-sm">
@@ -48,12 +48,14 @@
     danger?: boolean
     error?: string | null
     clickOutsideCancels?: boolean
+    closeIsCancel?: boolean
   }>()
   
   const emit = defineEmits<{
     (e: 'update:modelValue', v: boolean): void
     (e: 'confirm'): void
     (e: 'cancel'): void
+    (e: 'close'): void
   }>()
   
   const ids = { title: 'confirm-title', desc: 'confirm-desc' }
@@ -65,12 +67,19 @@
   
   function onBackdrop() {
     if (props.busy) return
-    if (props.clickOutsideCancels ?? true) onCancel()
+    if (!(props.clickOutsideCancels ?? true)) return
+    if (props.closeIsCancel ?? true) onCancel()
+    else onClose()
   }
   function onCancel() {
     if (props.busy) return
     emit('update:modelValue', false)
     emit('cancel')
+  }
+  function onClose() {
+    if (props.busy) return
+    emit('update:modelValue', false)
+    emit('close')
   }
   function onConfirm() {
     if (props.busy) return
@@ -84,6 +93,7 @@
   const cancelText = computed(() => props.cancelText ?? 'Cancel')
   const busyText = computed(() => props.busyText ?? 'Working…')
   const danger = computed(() => props.danger ?? true)
+  const closeIsCancel = computed(() => props.closeIsCancel ?? true)
   
   /* expose simple pass-throughs so the template can use them as plain values */
   const busy = computed(() => !!props.busy)
