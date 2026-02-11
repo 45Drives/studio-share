@@ -603,7 +603,7 @@ function isVideoPath(path: string) {
 
 const canTranscodeSelected = computed(() =>
     files.value.length > 0 &&
-    files.value.every(isVideoPath)
+    files.value.some(isVideoPath)
 )
 
 // const canTranscodeSelected = true;
@@ -790,8 +790,8 @@ function schedulePreflight() {
 
 async function runPreflight() {
     const selected = files.value.slice()
-    const hasVideos = selected.some(isVideoPath)
-    if (!selected.length || !hasVideos) {
+    const videoSelected = selected.filter(isVideoPath)
+    if (!videoSelected.length) {
         resetPreflightState()
         return
     }
@@ -799,9 +799,9 @@ async function runPreflight() {
     const seq = ++preflightReqSeq
     preflightLoading.value = true
     try {
-        const body: any = selected.length === 1
-            ? { filePath: selected[0] }
-            : { filePaths: selected }
+        const body: any = videoSelected.length === 1
+            ? { filePath: videoSelected[0] }
+            : { filePaths: videoSelected }
 
         const data = await apiFetch('/api/magic-link/preflight', {
             method: 'POST',
@@ -818,7 +818,7 @@ async function runPreflight() {
         preflightTranscodeInProgressCount.value = Number(summary.transcodeInProgressCount || 0)
 
         const noticeKey = [
-            selected.slice().sort().join('|'),
+            videoSelected.slice().sort().join('|'),
             preflightProxyBlocked.value ? '1' : '0',
             preflightWatermarkBlocked.value ? '1' : '0',
             preflightProxyExistingCount.value,
@@ -867,6 +867,7 @@ watch(transcodeProxy, (v) => {
 
 watch(files, () => {
     if (!hasVideoSelected.value) {
+        transcodeProxy.value = false
         watermarkEnabled.value = false
         watermarkFile.value = null
     }
