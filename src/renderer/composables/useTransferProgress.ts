@@ -136,6 +136,43 @@ function hasActiveTranscodeForFile(file: string, jobKind?: 'proxy_mp4' | 'hls' |
     return hasActiveTranscode({ file, jobKind })
 }
 
+function hasActiveTranscodeForFileId(fileId: number, jobKind?: 'proxy_mp4' | 'hls' | 'any') {
+    const fid = Number(fileId)
+    if (!Number.isFinite(fid) || fid <= 0) return false
+    return _state.tasks.some(t => {
+        if (t.kind !== 'transcode') return false
+        if (!isActiveTask(t)) return false
+        if (!jobKindMatches(t.jobKind, jobKind)) return false
+        const ids = (t.fileIds || []).map(Number)
+        return ids.includes(fid)
+    })
+}
+
+function findActiveTranscodeTaskByIds(opts: {
+    mode: 'file' | 'version'
+    ids: number[]
+    jobKind?: 'proxy_mp4' | 'hls' | 'any'
+}) {
+    const ids = Array.from(new Set((opts.ids || [])
+        .map(n => Number(n))
+        .filter(n => Number.isFinite(n) && n > 0)))
+    if (!ids.length) return null
+
+    for (const t of _state.tasks) {
+        if (t.kind !== 'transcode') continue
+        if (!isActiveTask(t)) continue
+        if (!jobKindMatches(t.jobKind, opts.jobKind)) continue
+
+        const taskIds = (opts.mode === 'version'
+            ? (t.assetVersionIds || [])
+            : (t.fileIds || [])
+        ).map(Number)
+
+        if (ids.some(id => taskIds.includes(id))) return t
+    }
+    return null
+}
+
 function splitActiveTranscodeAssetVersions(assetVersionIds: number[], jobKind?: 'proxy_mp4' | 'hls' | 'any') {
     const ids = Array.from(new Set((assetVersionIds || [])
         .map(n => Number(n))
@@ -351,6 +388,23 @@ export function useTransferProgress() {
         summarizeItems: (items: TItem[], jobKind: 'proxy_mp4' | 'hls' | 'any') => { status: TranscodeStatus; progress: number }
         initialItems: TItem[]
     }) {
+        const normalizedIds = Array.from(new Set((opts.ids || [])
+            .map(n => Number(n))
+            .filter(n => Number.isFinite(n) && n > 0)))
+
+        const idsToTrack = opts.mode === 'version'
+            ? normalizedIds.filter(id => !hasActiveTranscode({ assetVersionIds: [id], jobKind: opts.jobKind }))
+            : normalizedIds.filter(id => !hasActiveTranscodeForFileId(id, opts.jobKind))
+
+        if (!idsToTrack.length) {
+            const existing = findActiveTranscodeTaskByIds({
+                mode: opts.mode,
+                ids: normalizedIds,
+                jobKind: opts.jobKind,
+            })
+            return existing?.taskId || ''
+        }
+
         const taskId = makeId(opts.mode === 'version' ? 'trnV' : 'trn')
         const t: TransferTask = {
             taskId,
@@ -360,7 +414,7 @@ export function useTransferProgress() {
             status: 'queued',
             progress: 0,
             error: null,
-            ...(opts.mode === 'version' ? { assetVersionIds: opts.ids.slice() } : { fileIds: opts.ids.slice() }),
+            ...(opts.mode === 'version' ? { assetVersionIds: idsToTrack.slice() } : { fileIds: idsToTrack.slice() }),
             items: opts.initialItems,
             startedAt: now(),
             stop: undefined,
@@ -372,8 +426,8 @@ export function useTransferProgress() {
         const stop = startProgressPolling({
             apiFetch: opts.apiFetch,
             ...(opts.mode === 'version'
-                ? { assetVersionIds: () => opts.ids }
-                : { fileIds: () => opts.ids }),
+                ? { assetVersionIds: () => idsToTrack }
+                : { fileIds: () => idsToTrack }),
             intervalMs: opts.intervalMs ?? 1500,
             onUpdate: (items) => {
                 const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as

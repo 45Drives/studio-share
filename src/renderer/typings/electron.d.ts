@@ -54,6 +54,12 @@ export type LinkItem = {
   access_mode?: 'open' | 'restricted'
   auth_mode?: 'none' | 'password'
   allow_comments?: boolean
+  generateReviewProxy?: boolean
+  adaptiveHls?: boolean
+  proxyQualities?: string[]
+  watermark?: boolean
+  watermarkFile?: string | null
+  watermarkProxyQualities?: string[]
   createdIp?: string | null
   createdUa?: string | null
   owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }

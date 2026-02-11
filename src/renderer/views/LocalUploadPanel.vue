@@ -1110,7 +1110,7 @@ function goBack() {
 }
 
 .wizard-table-shell--filled {
-	@apply max-h-[28rem];
+	@apply max-h-[34rem];
 }
 
 .wizard-table-shell--empty {

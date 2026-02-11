@@ -130,10 +130,10 @@
                                             </label>
 
                                             <Switch id="transcode-switch" v-model="transcodeProxy"
-                                                :disabled="!canTranscodeSelected"
-                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''" :class="[
+                                                :disabled="transcodeSwitchDisabled"
+                                                :title="transcodeSwitchTitle" :class="[
                                                     transcodeProxy ? 'bg-secondary' : 'bg-well',
-                                                    !canTranscodeSelected ? 'opacity-50 cursor-not-allowed' : '',
+                                                    transcodeSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
                                                     'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                                 ]">
                                                 <span class="sr-only">Toggle proxy file generation</span>
@@ -144,27 +144,33 @@
                                             </Switch>
 
                                              <span class="text-sm select-none truncate min-w-0 flex-1"
-                                                :title="!canTranscodeSelected ? 'Only for Videos' : ''">
-                                                <template v-if="canTranscodeSelected">
-                                                    {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
-                                                </template>
-                                                <template v-else>
+                                                :title="transcodeSwitchTitle">
+                                                <template v-if="!canTranscodeSelected">
                                                     (Only for Videos)
                                                 </template>
+                                                <template v-else-if="preflightProxyBlocked">
+                                                    {{ proxyBlockReason }}
+                                                </template>
+                                                <template v-else>
+                                                    {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                </template>
                                             </span>
+                                        </div>
+                                        <div v-if="canTranscodeSelected && preflightProxyBlocked" class="text-xs text-amber-300 mb-2">
+                                            {{ proxyBlockReason }}
                                         </div>
                                         <div v-if="transcodeProxy" class="grid grid-cols-[auto_1fr] items-start gap-3 mb-3">
                                             <label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
                                             <div class="flex flex-col gap-2">
-                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
                                                     <input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
                                                     <span>720p</span>
                                                 </label>
-                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
                                                     <input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
                                                     <span>1080p</span>
                                                 </label>
-                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
                                                     <input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
                                                     <span>Original</span>
                                                 </label>
@@ -178,8 +184,10 @@
                                                 Watermark Videos:
                                             </label>
 
-                                            <Switch v-model="watermarkEnabled" :class="[
+                                            <Switch v-model="watermarkEnabled" :disabled="watermarkSwitchDisabled"
+                                                :title="watermarkSwitchTitle" :class="[
                                                 watermarkEnabled ? 'bg-secondary' : 'bg-well',
+                                                watermarkSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
                                                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                             ]">
                                                 <span class="sr-only">Toggle video watermarking</span>
@@ -189,14 +197,18 @@
                                                 ]" />
                                             </Switch>
 
-                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
-                                                {{ watermarkEnabled ? 'Apply watermark to videos' : 'No watermark' }}
+                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+                                                :title="watermarkSwitchTitle">
+                                                {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? 'Apply watermark' : 'No watermark') }}
                                             </span>
+                                        </div>
+                                        <div v-if="hasVideoSelected && transcodeProxy && preflightWatermarkBlocked" class="text-xs text-amber-300 mb-2">
+                                            {{ watermarkBlockReason }}
                                         </div>
                                         <div v-if="hasVideoSelected && watermarkEnabled" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 mb-2">
                                             <span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
                                             <button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
-                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis" :title="watermarkFile ? watermarkFile.name : 'No image selected'">
                                                 {{ watermarkFile ? watermarkFile.name : 'No image selected' }}
                                             </span>
                                             <button v-if="watermarkFile" class="btn btn-secondary" @click="clearWatermark">Clear</button>
@@ -272,6 +284,10 @@
                                                     </button>
                                                 </div>
                                             </div>
+                                        </div>
+                                        <div v-else class="text-center p-3 bg-accent rounded-md items-center">
+                                            <label class="text-base font-semibold text-muted">Using User
+                                                Password</label>
                                         </div>
                                     </template>
 
@@ -456,6 +472,7 @@ function resetAll() {
     watermarkEnabled.value = false
     watermarkFile.value = null
     overwriteExisting.value = false
+    resetPreflightState()
     if (regenTimer) {
         clearTimeout(regenTimer)
         regenTimer = null
@@ -476,6 +493,7 @@ function resetProject() {
     projectBase.value = ''
     invalidateLink()
     files.value = []
+    resetPreflightState()
     // Refresh choice list (honors current checkbox)
     loadProjectChoices()
 }
@@ -487,6 +505,7 @@ const files = ref<string[]>([])
 const showSelected = ref(true)
 function clearAll() {
     files.value = []
+    resetPreflightState()
     invalidateLink()
 }
 
@@ -574,6 +593,7 @@ watch(files, () => {
     // This catches adds/removes done outside the helpers (e.g., FileExplorer @add)
     invalidateLink()
     scheduleAutoRegen()
+    schedulePreflight()
 }, { deep: true })
 
 function isVideoPath(path: string) {
@@ -596,11 +616,13 @@ watch(showEntireTree, (v) => {
         // Bypass the project picker and jump straight to the normal file selector
         projectBase.value = '';          // no restriction
         projectSelected.value = true;    // show step 2
+        resetPreflightState()
         invalidateLink();
     } else {
         // Return to ZFS pool selection
         projectSelected.value = false;
         projectBase.value = '';
+        resetPreflightState()
         invalidateLink();
         loadProjectChoices();
     }
@@ -684,6 +706,15 @@ const watermarkEnabled = ref(false)
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 const watermarkFile = ref<LocalFile | null>(null)
 const overwriteExisting = ref(false)
+const preflightLoading = ref(false)
+const preflightProxyBlocked = ref(false)
+const preflightWatermarkBlocked = ref(false)
+const preflightProxyExistingCount = ref(0)
+const preflightWatermarkExistingCount = ref(0)
+const preflightTranscodeInProgressCount = ref(0)
+const lastPreflightNoticeKey = ref('')
+let preflightTimer: ReturnType<typeof setTimeout> | null = null
+let preflightReqSeq = 0
 
 // HLS is generated server-side; no client flag needed
 
@@ -697,6 +728,130 @@ const hasVideoSelected = computed(() =>
         return videoExts.has(ext)
     })
 )
+
+const proxyBlockReason = computed(() => {
+    if (!preflightProxyBlocked.value) return ''
+    if (preflightTranscodeInProgressCount.value > 0) {
+        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
+    }
+    if (preflightProxyExistingCount.value > 0) {
+        return `Proxy output already exists for ${preflightProxyExistingCount.value} selected video(s).`
+    }
+    return 'Proxy generation is not available for this selection.'
+})
+
+const watermarkBlockReason = computed(() => {
+    if (!preflightWatermarkBlocked.value) return ''
+    if (preflightTranscodeInProgressCount.value > 0) {
+        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
+    }
+    if (preflightWatermarkExistingCount.value > 0) {
+        return `Watermark output already exists for ${preflightWatermarkExistingCount.value} selected video(s).`
+    }
+    return 'Watermark generation is not available for this selection.'
+})
+
+const transcodeSwitchDisabled = computed(() =>
+    !canTranscodeSelected.value || preflightLoading.value || preflightProxyBlocked.value
+)
+
+const transcodeSwitchTitle = computed(() => {
+    if (!canTranscodeSelected.value) return 'Only for Videos'
+    if (preflightLoading.value) return 'Checking transcode status...'
+    if (preflightProxyBlocked.value) return proxyBlockReason.value
+    return ''
+})
+
+const watermarkSwitchDisabled = computed(() =>
+    preflightLoading.value || preflightWatermarkBlocked.value
+)
+
+const watermarkSwitchTitle = computed(() => {
+    if (preflightLoading.value) return 'Checking transcode status...'
+    if (preflightWatermarkBlocked.value) return watermarkBlockReason.value
+    return watermarkEnabled.value ? 'Watermark is enabled' : 'Watermark is disabled'
+})
+
+function resetPreflightState() {
+    preflightLoading.value = false
+    preflightProxyBlocked.value = false
+    preflightWatermarkBlocked.value = false
+    preflightProxyExistingCount.value = 0
+    preflightWatermarkExistingCount.value = 0
+    preflightTranscodeInProgressCount.value = 0
+}
+
+function schedulePreflight() {
+    if (preflightTimer) clearTimeout(preflightTimer)
+    preflightTimer = setTimeout(() => {
+        void runPreflight()
+    }, 250)
+}
+
+async function runPreflight() {
+    const selected = files.value.slice()
+    const hasVideos = selected.some(isVideoPath)
+    if (!selected.length || !hasVideos) {
+        resetPreflightState()
+        return
+    }
+
+    const seq = ++preflightReqSeq
+    preflightLoading.value = true
+    try {
+        const body: any = selected.length === 1
+            ? { filePath: selected[0] }
+            : { filePaths: selected }
+
+        const data = await apiFetch('/api/magic-link/preflight', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        })
+
+        if (seq !== preflightReqSeq) return
+
+        const summary = data?.summary || {}
+        preflightProxyBlocked.value = !!summary.proxyBlocked
+        preflightWatermarkBlocked.value = !!summary.watermarkBlocked
+        preflightProxyExistingCount.value = Number(summary.proxyExistingCount || 0)
+        preflightWatermarkExistingCount.value = Number(summary.watermarkExistingCount || 0)
+        preflightTranscodeInProgressCount.value = Number(summary.transcodeInProgressCount || 0)
+
+        const noticeKey = [
+            selected.slice().sort().join('|'),
+            preflightProxyBlocked.value ? '1' : '0',
+            preflightWatermarkBlocked.value ? '1' : '0',
+            preflightProxyExistingCount.value,
+            preflightWatermarkExistingCount.value,
+            preflightTranscodeInProgressCount.value,
+        ].join('::')
+
+        if ((preflightProxyBlocked.value || preflightWatermarkBlocked.value) && noticeKey !== lastPreflightNoticeKey.value) {
+            const msgParts: string[] = []
+            if (preflightTranscodeInProgressCount.value > 0) {
+                msgParts.push(`Transcode already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`)
+            }
+            if (preflightProxyExistingCount.value > 0) {
+                msgParts.push(`Proxy already exists for ${preflightProxyExistingCount.value} selected video(s).`)
+            }
+            if (preflightWatermarkExistingCount.value > 0) {
+                msgParts.push(`Watermark already exists for ${preflightWatermarkExistingCount.value} selected video(s).`)
+            }
+            const message = msgParts.length
+                ? msgParts.join(' ')
+                : 'Some transcode options are unavailable for the selected files.'
+            pushNotification(new Notification('Transcode Options Unavailable', message, 'info', 7000))
+            lastPreflightNoticeKey.value = noticeKey
+        } else if (!preflightProxyBlocked.value && !preflightWatermarkBlocked.value) {
+            lastPreflightNoticeKey.value = ''
+        }
+    } catch {
+        if (seq !== preflightReqSeq) return
+        resetPreflightState()
+    } finally {
+        if (seq === preflightReqSeq) preflightLoading.value = false
+    }
+}
 
 watch(transcodeProxy, (v) => {
     if (v && proxyQualities.value.length === 0) {
@@ -716,6 +871,14 @@ watch(files, () => {
         watermarkFile.value = null
     }
 }, { deep: true })
+
+watch(preflightProxyBlocked, (blocked) => {
+    if (blocked) transcodeProxy.value = false
+})
+
+watch(preflightWatermarkBlocked, (blocked) => {
+    if (blocked) watermarkEnabled.value = false
+})
 
 function pickWatermark() {
     window.electron.pickWatermark().then(f => {
@@ -1003,7 +1166,7 @@ async function generateLink() {
             }
         }
 
-        console.log('[magic-link] request body', JSON.stringify(body))
+        // console.log('[magic-link] request body', JSON.stringify(body))
         let data: any
         try {
             data = await apiFetch('/api/magic-link', {
@@ -1020,21 +1183,27 @@ async function generateLink() {
                     if (proceed) {
                         overwriteExisting.value = true
                         body.overwrite = true
-                        console.log('[magic-link] retry with overwrite', JSON.stringify(body))
+                        // console.log('[magic-link] retry with overwrite', JSON.stringify(body))
                         data = await apiFetch('/api/magic-link', {
                             method: 'POST',
                             body: JSON.stringify(body),
                         })
                     } else {
+                        body.keepExistingOutputs = true
+                        body.overwrite = false
+                        // console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
+                        data = await apiFetch('/api/magic-link', {
+                            method: 'POST',
+                            body: JSON.stringify(body),
+                        })
                         pushNotification(
                             new Notification(
                                 'Overwrite Canceled',
-                                'Existing proxy outputs were kept.',
+                                'Existing proxy outputs were kept and the link was created.',
                                 'info',
                                 6000
                             )
                         );
-                        return
                     }
                 } else {
                     throw e

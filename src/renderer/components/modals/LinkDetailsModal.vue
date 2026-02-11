@@ -59,6 +59,20 @@
             <span class="text-default font-bold">Status:</span>
             <span :class="statusChipClass(statusOf(link!))">{{ link ? statusOf(link).toUpperCase() : '' }}</span>
           </div>
+
+          <div class="space-x-2">
+            <span class="text-default font-bold">Proxy Files:</span>
+            <span>{{ currentGenerateReviewProxy ? 'Enabled' : 'Disabled' }}</span>
+            <span v-if="currentProxyQualities.length" class="opacity-70">
+              ({{ currentProxyQualities.join(', ') }})
+            </span>
+          </div>
+
+          <div class="space-x-2">
+            <span class="text-default font-bold">Watermark:</span>
+            <span>{{ currentWatermark ? 'Enabled' : 'Disabled' }}</span>
+            <span v-if="currentWatermarkFile" class="opacity-70">(file: {{ currentWatermarkFile }})</span>
+          </div>
         </section>
 
         <!-- Edit fields (view vs edit) -->
@@ -85,6 +99,78 @@
                 {{ link?.notes || '—' }}
               </div>
             </template>
+          </div>
+
+          <div class="pt-2 space-y-3">
+            <div class="text-default font-semibold">Media Processing</div>
+
+            <div class="flex flex-wrap items-center gap-3 min-w-0">
+              <label class="font-semibold sm:whitespace-nowrap">Generate Proxy Files</label>
+              <template v-if="editMode">
+                <Switch id="link-proxy-switch" v-model="draftGenerateReviewProxy" :class="[
+                  draftGenerateReviewProxy ? 'bg-secondary' : 'bg-well',
+                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                ]">
+                  <span class="sr-only">Toggle proxy file generation</span>
+                  <span aria-hidden="true" :class="[
+                    draftGenerateReviewProxy ? 'translate-x-5' : 'translate-x-0',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                  ]" />
+                </Switch>
+              </template>
+              <template v-else>
+                <span class="text-sm opacity-80">{{ currentGenerateReviewProxy ? 'Enabled' : 'Disabled' }}</span>
+              </template>
+            </div>
+
+            <div v-if="editMode && draftGenerateReviewProxy" class="flex flex-wrap items-center gap-3">
+              <span class="text-xs opacity-80">Proxy qualities:</span>
+              <label v-for="q in proxyQualityChoices" :key="q" class="inline-flex items-center gap-1 text-sm">
+                <input type="checkbox" class="checkbox" :value="q" v-model="draftProxyQualities" />
+                <span>{{ q }}</span>
+              </label>
+            </div>
+            <div v-else-if="!editMode && currentProxyQualities.length" class="text-xs opacity-70">
+              Qualities: {{ currentProxyQualities.join(', ') }}
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 min-w-0">
+              <label class="font-semibold sm:whitespace-nowrap">Apply Watermark</label>
+              <template v-if="editMode">
+                <Switch id="link-watermark-switch" v-model="draftWatermarkEnabled" :disabled="!draftGenerateReviewProxy"
+                  :class="[
+                    draftWatermarkEnabled ? 'bg-secondary' : 'bg-well',
+                    !draftGenerateReviewProxy ? 'opacity-50 cursor-not-allowed' : '',
+                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                  ]">
+                  <span class="sr-only">Toggle watermark</span>
+                  <span aria-hidden="true" :class="[
+                    draftWatermarkEnabled ? 'translate-x-5' : 'translate-x-0',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                  ]" />
+                </Switch>
+              </template>
+              <template v-else>
+                <span class="text-sm opacity-80">{{ currentWatermark ? 'Enabled' : 'Disabled' }}</span>
+              </template>
+            </div>
+
+            <div v-if="editMode && draftWatermarkEnabled" class="space-y-2">
+              <div class="flex flex-col gap-1 min-w-0">
+                <label class="text-default font-semibold sm:whitespace-nowrap">Watermark File Name</label>
+                <input
+                  v-model.trim="draftWatermarkFile"
+                  placeholder="e.g. watermark.png"
+                  class="input-textlike border rounded px-3 py-2 w-full min-w-0"
+                />
+                <p class="text-xs opacity-70">
+                  Use an existing file name already available on the server.
+                </p>
+              </div>
+            </div>
+            <div v-else-if="!editMode && currentWatermarkFile" class="text-xs opacity-70">
+              File: <code>{{ currentWatermarkFile }}</code>
+            </div>
           </div>
 
           <!-- Download/Collection: manage files -->
@@ -576,7 +662,9 @@ const versionsError = ref<string | null>(null)
 const versions = ref<any[]>([])
 const selectedVersionFileId = ref<number | null>(null)
 const restoreBackup = ref(true)
+const detailsToken = ref('')
 let suppressVersionWatch = false
+const proxyQualityChoices = ['720p', '1080p', 'original'] as const
 
 const versionFileById = computed(() => {
   const map = new Map<number, any>()
@@ -600,6 +688,10 @@ const draftAccessMode = ref<'open' | 'restricted'>('open')
 const draftAllowComments = ref(true)
 const draftUsePassword = ref(false)
 const draftPassword = ref('')
+const draftGenerateReviewProxy = ref(false)
+const draftProxyQualities = ref<string[]>([])
+const draftWatermarkEnabled = ref(false)
+const draftWatermarkFile = ref('')
 
 const filesEditorOpen = ref(false)
 const draftFilePaths = ref<string[]>([])
@@ -669,6 +761,18 @@ const downloadUrl = computed(() => {
   return (it?.downloadUrl || '') as string
 })
 
+const currentGenerateReviewProxy = computed(() => !!(props.link?.generateReviewProxy))
+const currentProxyQualities = computed(() => normalizeQualities(props.link?.proxyQualities))
+const currentWatermark = computed(() => !!(props.link?.watermark))
+const currentWatermarkFile = computed(() => String(props.link?.watermarkFile || '').trim())
+const mediaSettingsDirty = computed(() => {
+  if (!!draftGenerateReviewProxy.value !== currentGenerateReviewProxy.value) return true
+  if (!sameValues(normalizeQualities(draftProxyQualities.value), currentProxyQualities.value)) return true
+  if (!!draftWatermarkEnabled.value !== currentWatermark.value) return true
+  if ((draftWatermarkFile.value || '').trim() !== currentWatermarkFile.value) return true
+  return false
+})
+
 
 function canonPaths(arr: string[]) {
   return (arr || [])
@@ -676,6 +780,106 @@ function canonPaths(arr: string[]) {
     .filter(Boolean)
     .slice()
     .sort()
+}
+
+function normalizeQualities(v: any): string[] {
+  if (!Array.isArray(v)) return []
+  const allowed = new Set(proxyQualityChoices)
+  const out: string[] = []
+  for (const q of v) {
+    const s = String(q || '').trim()
+    if (!s || !allowed.has(s as any)) continue
+    if (!out.includes(s)) out.push(s)
+  }
+  return out
+}
+
+function sameValues(a: string[], b: string[]) {
+  if (a.length !== b.length) return false
+  const as = [...a].sort()
+  const bs = [...b].sort()
+  for (let i = 0; i < as.length; i++) if (as[i] !== bs[i]) return false
+  return true
+}
+
+function assignMediaSettingsFromSource(src: any) {
+  if (!src || typeof src !== 'object' || !props.link) return
+  const target: any = props.link as any
+
+  const proxyVal = src.generateReviewProxy ?? src.generate_review_proxy
+  if (typeof proxyVal === 'boolean') target.generateReviewProxy = proxyVal
+
+  const proxyQualities = normalizeQualities(src.proxyQualities ?? src.proxy_qualities)
+  if (proxyQualities.length || Array.isArray(src.proxyQualities) || Array.isArray(src.proxy_qualities)) {
+    target.proxyQualities = proxyQualities
+  }
+
+  const wmVal = src.watermark
+  if (typeof wmVal === 'boolean') target.watermark = wmVal
+
+  const wmFile = src.watermarkFile ?? src.watermark_file
+  if (wmFile != null) target.watermarkFile = String(wmFile || '')
+}
+
+function isVideoishFile(f: any) {
+  const mime = String(f?.mime || '').toLowerCase()
+  if (mime.startsWith('video/')) return true
+  const name = String(f?.name || f?.relPath || '').toLowerCase()
+  const ext = name.includes('.') ? name.split('.').pop() || '' : ''
+  return ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', '3g2'].includes(ext)
+}
+
+async function hydrateMediaSettingsFromArtifacts() {
+  if (!props.link) return
+  if (!detailsToken.value) return
+  if (!Array.isArray(files.value) || files.value.length === 0) return
+
+  const candidateIds = files.value
+    .filter(isVideoishFile)
+    .map((f: any) => toNumericFileId(f?.id))
+    .filter((n: number | null): n is number => !!n)
+
+  if (!candidateIds.length) return
+
+  let foundProxy = false
+  let foundWatermark = false
+  const mergedQualities = new Set<string>(normalizeQualities((props.link as any)?.proxyQualities))
+
+  // Keep requests bounded while still sampling enough files for mixed collections.
+  const maxChecks = Math.min(candidateIds.length, 12)
+  for (let i = 0; i < maxChecks; i++) {
+    const fileId = candidateIds[i]
+    try {
+      const data = await props.apiFetch(
+        `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback?prefer=auto`
+      )
+
+      if (data?.hasProxy || data?.hasHls || (Array.isArray(data?.proxyQualities) && data.proxyQualities.length)) {
+        foundProxy = true
+      }
+      if (data?.watermarkEnabled) foundWatermark = true
+
+      for (const q of normalizeQualities(data?.proxyQualities)) mergedQualities.add(q)
+
+      if (foundProxy && foundWatermark && mergedQualities.size > 0) break
+    } catch {
+      // Non-fatal; continue sampling.
+    }
+  }
+
+  const target: any = props.link as any
+  if (foundProxy) target.generateReviewProxy = true
+  if (mergedQualities.size) target.proxyQualities = Array.from(mergedQualities)
+  if (foundWatermark) target.watermark = true
+}
+
+function seedDraftMediaSettings() {
+  draftGenerateReviewProxy.value = currentGenerateReviewProxy.value
+  draftProxyQualities.value = currentProxyQualities.value.length
+    ? currentProxyQualities.value.slice()
+    : (draftGenerateReviewProxy.value ? ['720p'] : [])
+  draftWatermarkEnabled.value = currentWatermark.value
+  draftWatermarkFile.value = currentWatermarkFile.value
 }
 
 function computeAddedPaths(next: string[], prev: string[]) {
@@ -1235,8 +1439,13 @@ async function fetchDetailsFor() {
   detailsLoading.value = true
   files.value = []
   auditActivity.value = []
+  detailsToken.value = ''
   try {
     const resp = await props.apiFetch(`/api/links/${encodeURIComponent(String(props.link.id))}/details`)
+    assignMediaSettingsFromSource(resp?.link)
+    assignMediaSettingsFromSource(resp?.settings)
+    assignMediaSettingsFromSource(resp)
+    detailsToken.value = String(resp?.link?.token || resp?.token || '')
     files.value = (resp.files || []).map((f: any, idx: number) => ({
       key: `f${idx}`,
       ...f,
@@ -1253,6 +1462,9 @@ async function fetchDetailsFor() {
     suppressVersionWatch = true
     selectDefaultVersionFile()
     suppressVersionWatch = false
+
+    await hydrateMediaSettingsFromArtifacts()
+
     if (selectedVersionFileId.value) await loadVersions(selectedVersionFileId.value)
   } finally {
     detailsLoading.value = false
@@ -1327,6 +1539,7 @@ function beginEdit() {
     ((props.link.auth_mode || '') === 'password' || !!props.link.passwordRequired)
   draftPassword.value = ''
   if (draftAccessMode.value === 'restricted') draftAllowComments.value = false
+  seedDraftMediaSettings()
 
   // Seed upload destination
   if (props.link.type === 'upload') {
@@ -1374,6 +1587,7 @@ function cancelEdit() {
     ((props.link?.auth_mode || '') === 'password' || !!props.link?.passwordRequired)
   draftPassword.value = ''
   if (draftAccessMode.value === 'restricted') draftAllowComments.value = false
+  seedDraftMediaSettings()
 
   draftFilePaths.value = originalFilePaths.value.slice()
   draftUploadDir.value = originalUploadDir.value || currentUploadDir.value || ''
@@ -1446,13 +1660,48 @@ async function saveAll() {
     const passwordChanged = passwordWillSet || passwordWillClear
 
     const shouldUpdateDetails =
-      titleChanged || notesChanged || accessModeChanged || allowCommentsChanged || authModeChanged || passwordChanged
+      titleChanged || notesChanged || accessModeChanged || allowCommentsChanged || authModeChanged || passwordChanged || mediaSettingsDirty.value
     const shouldUpdateFiles = isDownloadish.value && filesDirty.value
     const shouldUpdateUploadDest = props.link.type === 'upload' && uploadDirDirty.value
 
     const addedPaths = computeAddedPaths(draftFilePaths.value, originalFilePaths.value)
     const wantsHls = addedPaths.length > 0
     const wantsProxy = wantsHls && generateProxyForNewFiles.value
+    const nextProxyQualities = normalizeQualities(draftProxyQualities.value)
+
+    if (draftWatermarkEnabled.value && !draftGenerateReviewProxy.value) {
+      pushNotification(
+        new Notification(
+          'Invalid Media Settings',
+          'Enable proxy files before enabling watermark.',
+          'warning',
+          8000
+        )
+      )
+      return
+    }
+    if (draftGenerateReviewProxy.value && nextProxyQualities.length === 0) {
+      pushNotification(
+        new Notification(
+          'Proxy Quality Required',
+          'Select at least one proxy quality.',
+          'warning',
+          8000
+        )
+      )
+      return
+    }
+    if (draftWatermarkEnabled.value && !draftWatermarkFile.value.trim()) {
+      pushNotification(
+        new Notification(
+          'Watermark File Required',
+          'Enter a watermark file name.',
+          'warning',
+          8000
+        )
+      )
+      return
+    }
 
     // 1) Title/notes
     if (shouldUpdateDetails) {
@@ -1470,6 +1719,13 @@ async function saveAll() {
         body.password = passwordInput
       } else if (passwordWillClear) {
         body.password = ''
+      }
+      if (mediaSettingsDirty.value) {
+        body.generateReviewProxy = !!draftGenerateReviewProxy.value
+        body.proxyQualities = draftGenerateReviewProxy.value ? nextProxyQualities : []
+        body.watermark = !!draftWatermarkEnabled.value
+        body.watermarkFile = draftWatermarkEnabled.value ? draftWatermarkFile.value.trim() : null
+        body.watermarkProxyQualities = draftWatermarkEnabled.value ? nextProxyQualities : []
       }
 
       try {
@@ -1587,6 +1843,13 @@ async function saveAll() {
     }
     if (passwordWillSet) updatedPayload.passwordRequired = true
     if (passwordWillClear) updatedPayload.passwordRequired = false
+    if (mediaSettingsDirty.value) {
+      updatedPayload.generateReviewProxy = !!draftGenerateReviewProxy.value
+      updatedPayload.proxyQualities = draftGenerateReviewProxy.value ? nextProxyQualities : []
+      updatedPayload.watermark = !!draftWatermarkEnabled.value
+      updatedPayload.watermarkFile = draftWatermarkEnabled.value ? draftWatermarkFile.value.trim() : null
+      updatedPayload.watermarkProxyQualities = draftWatermarkEnabled.value ? nextProxyQualities : []
+    }
 
     if (did.files && filesResp && typeof filesResp.type === 'string') {
       updatedPayload.type = filesResp.type
@@ -1632,6 +1895,7 @@ watch(
         ((props.link?.auth_mode || '') === 'password' || !!props.link?.passwordRequired)
       draftPassword.value = ''
       if (draftAccessMode.value === 'restricted') draftAllowComments.value = false
+      seedDraftMediaSettings()
       generateProxyForNewFiles.value = false
       draftUploadDir.value = currentUploadDir.value || ''
       originalUploadDir.value = draftUploadDir.value
@@ -1658,6 +1922,7 @@ watch(
         ((props.link?.auth_mode || '') === 'password' || !!props.link?.passwordRequired)
       draftPassword.value = ''
       if (draftAccessMode.value === 'restricted') draftAllowComments.value = false
+      seedDraftMediaSettings()
       generateProxyForNewFiles.value = false
       draftUploadDir.value = currentUploadDir.value || ''
       originalUploadDir.value = draftUploadDir.value
@@ -1701,6 +1966,29 @@ watch(
   () => hasAddedFiles.value,
   (has) => {
     if (!has) generateProxyForNewFiles.value = false
+  }
+)
+
+watch(
+  () => draftGenerateReviewProxy.value,
+  (v) => {
+    if (v && draftProxyQualities.value.length === 0) {
+      draftProxyQualities.value = ['720p']
+    }
+    if (!v) {
+      draftProxyQualities.value = []
+      draftWatermarkEnabled.value = false
+      draftWatermarkFile.value = ''
+    }
+  }
+)
+
+watch(
+  () => draftWatermarkEnabled.value,
+  (v) => {
+    if (!v) {
+      draftWatermarkFile.value = ''
+    }
   }
 )
 </script>
