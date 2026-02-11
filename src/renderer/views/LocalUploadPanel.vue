@@ -210,7 +210,7 @@
 						<div v-if="step === 3" class="wizard-settings my-10">
 							<div class="grid gap-2">
 								<!-- Generate Proxy -->
-								<div class="settings-row">
+								<div v-if="hasVideoSelected" class="settings-row">
 									<label class="settings-label">Generate Proxy Files:</label>
 
 									<Switch v-model="transcodeProxyAfterUpload" :class="[
@@ -232,7 +232,7 @@
 								</div>
 
 								<!-- Proxy qualities -->
-								<div v-if="transcodeProxyAfterUpload" class="settings-row-2 mt-4">
+								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="settings-row-2 mt-4">
 									<label class="settings-label pt-1">Proxy Qualities:</label>
 
 									<div>
@@ -440,6 +440,7 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
+	wantHls: boolean
 	wantProxy: boolean
 	groupId: string
 	destDir: string
@@ -471,7 +472,7 @@ function waitForIngestAndStartTranscode(opts: {
 		const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
 
 		// HLS
-		if (shouldTrack('hls')) {
+		if (opts.wantHls && shouldTrack('hls')) {
 			if (useAssetVersion) {
 				transfer.startAssetVersionTranscodeTask({
 					apiFetch,
@@ -551,7 +552,7 @@ function waitForIngestAndStartTranscode(opts: {
 						const params = new URLSearchParams();
 						if (payload?.destRel) params.set('dest', String(payload.destRel));
 						if (payload?.name) params.set('name', String(payload.name));
-						params.set('hls', '1');
+						if (opts.wantHls) params.set('hls', '1');
 						if (opts.wantProxy) params.set('proxy', '1');
 						if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 
@@ -632,15 +633,18 @@ const videoExts = new Set([
 	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
 	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
 ])
+function isVideoFileName(name?: string) {
+	const ext = String(name || '').toLowerCase().split('.').pop() || ''
+	return videoExts.has(ext)
+}
+
 const hasVideoSelected = computed(() =>
-	selected.value.some(f => {
-		const ext = String(f.name || '').toLowerCase().split('.').pop() || '';
-		return videoExts.has(ext);
-	})
+	selected.value.some(f => isVideoFileName(f.name))
 )
 
 watch(selected, () => {
 	if (!hasVideoSelected.value) {
+		transcodeProxyAfterUpload.value = false
 		watermarkAfterUpload.value = false
 		watermarkFile.value = null
 	}
@@ -940,6 +944,11 @@ async function startUploads() {
 		})
 		row.dockTaskId = taskId
 
+		const isVideo = isVideoFileName(row.name)
+		const wantHls = isVideo
+		const wantProxy = transcodeProxyAfterUpload.value && isVideo
+		const wantWatermark = watermarkAfterUpload.value && isVideo
+
 		const { id, done } = await window.electron.rsyncStart(
 			{
 				host: ssh?.server,
@@ -948,11 +957,11 @@ async function startUploads() {
 				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
-				transcodeProxy: transcodeProxyAfterUpload.value,
-				proxyQualities: proxyQualities.value.slice(),
-				watermark: watermarkAfterUpload.value,
-				watermarkFileName: watermarkFile.value?.name,
-				watermarkProxyQualities: watermarkAfterUpload.value ? proxyQualities.value.slice() : undefined,
+				transcodeProxy: wantProxy,
+				proxyQualities: wantProxy ? proxyQualities.value.slice() : [],
+				watermark: wantWatermark,
+				watermarkFileName: wantWatermark ? watermarkFile.value?.name : undefined,
+				watermarkProxyQualities: wantWatermark ? proxyQualities.value.slice() : undefined,
 			},
 			p => {
 				let pct: number | undefined =
@@ -984,7 +993,8 @@ async function startUploads() {
 		const stopIngestListener = waitForIngestAndStartTranscode({
 			uploadId: id,
 			rowName: row.name,
-			wantProxy: transcodeProxyAfterUpload.value,
+			wantHls,
+			wantProxy,
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,
