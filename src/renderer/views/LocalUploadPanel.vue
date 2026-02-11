@@ -1,7 +1,7 @@
 <template>
 	<div class="h-full flex items-start justify-center pt-6 overflow-y-auto">
 		<div class="grid grid-cols-1 gap-5 text-xl w-9/12 mx-auto">
-			<CardContainer class="bg-accent rounded-md shadow-xl">
+			<CardContainer class="local-upload-card bg-accent rounded-md shadow-xl h-[calc(100vh-11rem)] flex flex-col">
 				<template #header>
 					<!-- Stepper -->
 					<div class="flex items-center gap-3 text-sm justify-center">
@@ -15,7 +15,7 @@
 
 				<div class="wizard-stage">
 
-				<!-- STEP 1: Local files -->
+					<!-- STEP 1: Local files -->
 					<section v-show="step === 1" class="wizard-pane wizard-pane--fill">
 
 						<h2 class="wizard-heading">Pick local files</h2>
@@ -27,16 +27,17 @@
 							</div>
 
 							<span class="wizard-muted">
-								{{ selected.length ? `${selected.length} item(s) • ${formatSize(totalSelectedBytes)}` : 'No files selected' }}
+								{{ selected.length ? `${selected.length} item(s) • ${formatSize(totalSelectedBytes)}` :	'No files selected' }}
 
 							</span>
 
 							<div class="grow"></div>
-							<button class="btn btn-secondary" v-if="selected.length" @click="clearSelected">Clear</button>
+							<button class="btn btn-secondary" v-if="selected.length"
+								@click="clearSelected">Clear</button>
 						</div>
 
-						<div class="wizard-table-shell"
-							:class="uploads.length ? 'wizard-table-shell--filled' : 'wizard-table-shell--empty'">
+							<div class="wizard-table-shell"
+								:class="selected.length ? 'wizard-table-shell--filled' : 'wizard-table-shell--empty'">
 							<table class="wizard-table">
 								<thead>
 									<tr class="wizard-thead-row">
@@ -48,7 +49,8 @@
 								<tbody class="bg-accent">
 									<tr v-if="!selected.length">
 										<td colspan="3" class="wizard-td text-center text-muted">
-											No files selected. Click <span class="font-bold">Choose Files</span> (you can
+											No files selected. Click <span class="font-bold">Choose Files</span> (you
+											can
 											select multiple),
 											or <span class="font-bold">Choose Folder</span> to add its contents.
 										</td>
@@ -61,7 +63,8 @@
 											formatSize(f.size) }}</span></td>
 										<td class="wizard-td">
 											<div class="flex justify-end">
-												<button class="btn btn-secondary" @click="removeSelected(f)">Remove</button>
+												<button class="btn btn-secondary"
+													@click="removeSelected(f)">Remove</button>
 											</div>
 										</td>
 									</tr>
@@ -71,7 +74,7 @@
 					</section>
 
 					<!-- STEP 2: Destination (server) -->
-						<section v-show="step === 2" class="wizard-pane wizard-pane--fill">
+					<section v-show="step === 2" class="wizard-pane wizard-pane--fill">
 
 						<h2 class="wizard-heading">Choose destination on server</h2>
 
@@ -83,134 +86,138 @@
 
 
 					<!-- STEP 3: Upload progress -->
-						<section v-show="step === 3" class="wizard-pane wizard-pane--fill">
+					<section v-show="step === 3" class="wizard-pane wizard-pane--fill">
 
-							<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
+						<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
 
-							<div class="wizard-table-shell">
-								<table class="min-w-full text-sm border border-default border-collapse text-left">
-									<thead>
-										<tr class="bg-default text-default border-b border-default">
-											<th scope="col" class="px-4 py-2 font-semibold border border-default">Name</th>
-											<th scope="col" class="px-4 py-2 font-semibold border border-default">Size</th>
-											<th scope="col" class="px-4 py-2 font-semibold border border-default">Speed/Time</th>
-											<th scope="col" class="px-4 py-2 font-semibold border border-default">Status</th>
-											<th scope="col" class="px-4 py-2 font-semibold border border-default text-right">
-												Action</th>
-										</tr>
-									</thead>
+						<div class="wizard-table-shell">
+							<table class="min-w-full text-sm border border-default border-collapse text-left">
+								<thead>
+									<tr class="bg-default text-default border-b border-default">
+										<th scope="col" class="px-4 py-2 font-semibold border border-default">Name</th>
+										<th scope="col" class="px-4 py-2 font-semibold border border-default">Size</th>
+										<th scope="col" class="px-4 py-2 font-semibold border border-default">Speed/Time
+										</th>
+										<th scope="col" class="px-4 py-2 font-semibold border border-default">Status
+										</th>
+										<th scope="col"
+											class="px-4 py-2 font-semibold border border-default text-right">
+											Action</th>
+									</tr>
+								</thead>
 
-									<tbody class="">
-										<!-- Empty state -->
-										<tr v-if="!uploads.length">
-											<td colspan="4" class="px-4 py-4 text-center text-muted border border-default">
-												Ready to start. Click <b>Start Upload</b>.
-											</td>
-										</tr>
+								<tbody class="">
+									<!-- Empty state -->
+									<tr v-if="!uploads.length">
+										<td colspan="4" class="px-4 py-4 text-center text-muted border border-default">
+											Ready to start. Click <b>Start Upload</b>.
+										</td>
+									</tr>
 
-										<!-- Rows -->
-										<template v-for="u in uploads" :key="u.localKey">
-											<tr
-												class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
-												<!-- Name -->
-												<td class="px-4 py-2 border border-default">
-													<div class="truncate font-medium" :title="u.path">{{ u.name }}</div>
-													<div class="text-xs opacity-70">
-														<template v-if="u.status === 'uploading'">
-															{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
-															<span v-if="u.speed"> • {{ u.speed }}</span>
-															<span v-if="u.eta"> • ETA {{ u.eta }}</span>
-														</template>
-														<template v-else></template>
-													</div>
-												</td>
-
-												<!-- Size -->
-												<td class="px-4 py-2 border border-default">
-													<span class="text-sm opacity-80">{{ formatSize(u.size) }}</span>
-												</td>
-
-												<!-- Speed / Time -->
-												<td class="px-4 py-2 border border-default">
+									<!-- Rows -->
+									<template v-for="u in uploads" :key="u.localKey">
+										<tr
+											class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
+											<!-- Name -->
+											<td class="px-4 py-2 border border-default">
+												<div class="truncate font-medium" :title="u.path">{{ u.name }}</div>
+												<div class="text-xs opacity-70">
 													<template v-if="u.status === 'uploading'">
-														<span v-if="u.speed">{{ u.speed }}</span>
-														<br />
-														<span v-if="u.eta">ETA {{ u.eta }}</span>
+														{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+														<span v-if="u.speed"> • {{ u.speed }}</span>
+														<span v-if="u.eta"> • ETA {{ u.eta }}</span>
 													</template>
+													<template v-else></template>
+												</div>
+											</td>
 
-													<template v-else-if="u.status === 'done' && u.completedIn">
-														Completed in {{ u.completedIn }}
+											<!-- Size -->
+											<td class="px-4 py-2 border border-default">
+												<span class="text-sm opacity-80">{{ formatSize(u.size) }}</span>
+											</td>
+
+											<!-- Speed / Time -->
+											<td class="px-4 py-2 border border-default">
+												<template v-if="u.status === 'uploading'">
+													<span v-if="u.speed">{{ u.speed }}</span>
+													<br />
+													<span v-if="u.eta">ETA {{ u.eta }}</span>
+												</template>
+
+												<template v-else-if="u.status === 'done' && u.completedIn">
+													Completed in {{ u.completedIn }}
+												</template>
+
+												<template v-else>
+													<span>-</span>
+												</template>
+											</td>
+
+											<!-- Status -->
+											<td class="px-4 py-2 border border-default">
+												<span
+													class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+													:class="{
+														'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
+														'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
+														'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
+														'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
+														'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
+													}">
+
+													<template v-if="u.status === 'uploading'">
+														{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
 													</template>
 
 													<template v-else>
-														<span>-</span>
+														<span v-if="u.alreadyUploaded && u.status === 'done'">
+															done (already uploaded to this folder)
+														</span>
+														<span v-else>{{ u.status }}</span>
 													</template>
-												</td>
 
-												<!-- Status -->
-												<td class="px-4 py-2 border border-default">
-													<span
-														class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-														:class="{
-															'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
-															'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
-															'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
-															'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
-															'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
-														}">
+												</span>
 
-														<template v-if="u.status === 'uploading'">
-															{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
-														</template>
+											</td>
 
-														<template v-else>
-															<span v-if="u.alreadyUploaded && u.status === 'done'">
-																done (already uploaded to this folder)
-															</span>
-															<span v-else>{{ u.status }}</span>
-														</template>
+											<!-- Action -->
+											<td class="px-4 py-2 border border-default">
+												<div class="flex justify-end">
+													<button class="btn btn-secondary" @click="cancelOne(u)"
+														:disabled="u.status !== 'uploading'" title="Cancel this upload">
+														Cancel
+													</button>
+												</div>
+											</td>
+										</tr>
 
-													</span>
-
-												</td>
-
-												<!-- Action -->
-												<td class="px-4 py-2 border border-default">
-													<div class="flex justify-end">
-														<button class="btn btn-secondary" @click="cancelOne(u)"
-															:disabled="u.status !== 'uploading'" title="Cancel this upload">
-															Cancel
-														</button>
-													</div>
-												</td>
-											</tr>
-
-											<!-- Progress row -->
-											<tr v-if="u.status === 'uploading'">
-												<td colspan="4" class="px-4 py-2 border border-default">
-													<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
+										<!-- Progress row -->
+										<tr v-if="u.status === 'uploading'">
+											<td colspan="4" class="px-4 py-2 border border-default">
+												<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
 													accent-[#584c91]
 													[&::-webkit-progress-value]:bg-[#584c91]
 													[&::-moz-progress-bar]:bg-[#584c91]" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
-													</progress>
-												</td>
-											</tr>
+												</progress>
+											</td>
+										</tr>
 
-											<!-- Error row -->
-											<tr v-if="u.error">
-												<td colspan="4" class="px-4 py-2 border border-default text-xs text-red-400">
-													{{ u.error }}
-												</td>
-											</tr>
+										<!-- Error row -->
+										<tr v-if="u.error">
+											<td colspan="4"
+												class="px-4 py-2 border border-default text-xs text-red-400">
+												{{ u.error }}
+											</td>
+										</tr>
 									</template>
 								</tbody>
 							</table>
 						</div>
 						<!-- Settings block (moved up into the step content) -->
-						<div v-if="step === 3" class="wizard-settings my-10">
+						<div v-if="step === 3 && hasVideoSelected" class="wizard-settings my-10">
 							<div class="grid gap-2">
 								<!-- Generate Proxy -->
-								<div v-if="hasVideoSelected" class="settings-row">
+								<div class="settings-row">
 									<label class="settings-label">Generate Proxy Files:</label>
 
 									<Switch v-model="transcodeProxyAfterUpload" :class="[
@@ -232,7 +239,7 @@
 								</div>
 
 								<!-- Proxy qualities -->
-								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="settings-row-2 mt-4">
+								<div v-if="transcodeProxyAfterUpload" class="settings-row-2 mt-4">
 									<label class="settings-label pt-1">Proxy Qualities:</label>
 
 									<div>
@@ -262,7 +269,7 @@
 								</div>
 
 								<!-- Watermark toggle -->
-								<div v-if="hasVideoSelected && transcodeProxyAfterUpload" class="settings-row mt-4">
+								<div v-if="transcodeProxyAfterUpload" class="settings-row mt-4">
 									<label class="settings-label">Watermark Videos:</label>
 
 									<Switch v-model="watermarkAfterUpload" :class="[
@@ -283,7 +290,7 @@
 								</div>
 
 								<!-- Watermark file -->
-								<div v-if="hasVideoSelected && watermarkAfterUpload" class="settings-row-file mt-4">
+								<div v-if="watermarkAfterUpload" class="settings-row-file mt-4">
 									<span class="settings-label">Watermark Image:</span>
 									<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
 									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
@@ -294,12 +301,12 @@
 										@click="clearWatermark">Clear</button>
 								</div>
 
-								<div v-if="hasVideoSelected && watermarkAfterUpload && !watermarkFile"
+								<div v-if="watermarkAfterUpload && !watermarkFile"
 									class="text-xs text-amber-300">
 									Select a watermark image to continue.
 								</div>
 
-								<div v-if="hasVideoSelected && watermarkAfterUpload && watermarkFile?.dataUrl"
+								<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl"
 									class="mt-2">
 									<div class="text-xs text-slate-400 mb-1 text-center">Preview (approximate)</div>
 									<div
@@ -322,17 +329,17 @@
 				</div>
 
 				<template #footer>
-					<div class="grid grid-cols-2 items-center">
+					<div class="wizard-footer grid grid-cols-2 items-center">
 						<div class="justify-self-start">
 							<button v-if="step !== 1" class="btn btn-secondary" @click="prevStep">Back</button>
 						</div>
 
-						<div class="justify-self-end">
-							<button class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
-								{{ nextLabel }}
-							</button>
-						</div>
+					<div class="justify-self-end">
+						<button class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
+							{{ nextLabel }}
+						</button>
 					</div>
+				</div>
 				</template>
 
 			</CardContainer>
@@ -440,7 +447,6 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
-	wantHls: boolean
 	wantProxy: boolean
 	groupId: string
 	destDir: string
@@ -472,7 +478,7 @@ function waitForIngestAndStartTranscode(opts: {
 		const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
 
 		// HLS
-		if (opts.wantHls && shouldTrack('hls')) {
+		if (shouldTrack('hls')) {
 			if (useAssetVersion) {
 				transfer.startAssetVersionTranscodeTask({
 					apiFetch,
@@ -552,7 +558,7 @@ function waitForIngestAndStartTranscode(opts: {
 						const params = new URLSearchParams();
 						if (payload?.destRel) params.set('dest', String(payload.destRel));
 						if (payload?.name) params.set('name', String(payload.name));
-						if (opts.wantHls) params.set('hls', '1');
+						params.set('hls', '1');
 						if (opts.wantProxy) params.set('proxy', '1');
 						if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 
@@ -633,18 +639,15 @@ const videoExts = new Set([
 	'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
 	'mpg', 'mpeg', 'm2v', '3gp', '3g2',
 ])
-function isVideoFileName(name?: string) {
-	const ext = String(name || '').toLowerCase().split('.').pop() || ''
-	return videoExts.has(ext)
-}
-
 const hasVideoSelected = computed(() =>
-	selected.value.some(f => isVideoFileName(f.name))
+	selected.value.some(f => {
+		const ext = String(f.name || '').toLowerCase().split('.').pop() || '';
+		return videoExts.has(ext);
+	})
 )
 
 watch(selected, () => {
 	if (!hasVideoSelected.value) {
-		transcodeProxyAfterUpload.value = false
 		watermarkAfterUpload.value = false
 		watermarkFile.value = null
 	}
@@ -762,12 +765,6 @@ watch(step, (s, old) => {
 
 	if (old === 3 && s !== 3 && allTerminal.value) {
 		resetUploadState()
-
-	// full reset when leaving step 3 after all terminal
-	/*  selected.value = [];
-		uploadedRegistry.value.clear();
-		destFolderRel.value = '';
-		projectBase.value = '';  */
 	}
 })
 
@@ -778,7 +775,7 @@ type UploadRow = {
 	path: string
 	name: string
 	size: number
-	dest: string 
+	dest: string
 	rsyncId?: string | null
 	status: 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
 	error: string | null
@@ -919,7 +916,7 @@ async function startUploads() {
 		if (row.status !== 'queued' || row.alreadyUploaded) continue;
 
 		row.status = 'uploading';
-		row.startedAt = row.startedAt ?? Date.now(); 
+		row.startedAt = row.startedAt ?? Date.now();
 		isUploading.value = true
 		startedAny = true
 
@@ -939,15 +936,10 @@ async function startUploads() {
 				source: 'upload',
 				groupId,
 				destDir: destDirAbs,
-				file: destFileAbs, 
+				file: destFileAbs,
 			},
 		})
 		row.dockTaskId = taskId
-
-		const isVideo = isVideoFileName(row.name)
-		const wantHls = isVideo
-		const wantProxy = transcodeProxyAfterUpload.value && isVideo
-		const wantWatermark = watermarkAfterUpload.value && isVideo
 
 		const { id, done } = await window.electron.rsyncStart(
 			{
@@ -957,11 +949,11 @@ async function startUploads() {
 				destDir: row.dest,
 				port: serverPort,
 				keyPath: privateKeyPath,
-				transcodeProxy: wantProxy,
-				proxyQualities: wantProxy ? proxyQualities.value.slice() : [],
-				watermark: wantWatermark,
-				watermarkFileName: wantWatermark ? watermarkFile.value?.name : undefined,
-				watermarkProxyQualities: wantWatermark ? proxyQualities.value.slice() : undefined,
+				transcodeProxy: transcodeProxyAfterUpload.value,
+				proxyQualities: proxyQualities.value.slice(),
+				watermark: watermarkAfterUpload.value,
+				watermarkFileName: watermarkFile.value?.name,
+				watermarkProxyQualities: watermarkAfterUpload.value ? proxyQualities.value.slice() : undefined,
 			},
 			p => {
 				let pct: number | undefined =
@@ -993,8 +985,7 @@ async function startUploads() {
 		const stopIngestListener = waitForIngestAndStartTranscode({
 			uploadId: id,
 			rowName: row.name,
-			wantHls,
-			wantProxy,
+			wantProxy: transcodeProxyAfterUpload.value,
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,
@@ -1078,16 +1069,15 @@ function goBack() {
 
 <style lang="css" scoped>
 .wizard-stage {
-	@apply flex flex-col;
-	min-height: 34rem;
+	@apply flex flex-col flex-1 min-h-0 overflow-hidden;
 }
 
 .wizard-pane {
-	@apply flex flex-col gap-4 text-left;
+	@apply flex flex-col gap-4 text-left flex-1 min-h-0;
 }
 
 .wizard-pane--fill {
-	@apply flex-1;
+	@apply flex-1 min-h-0 overflow-hidden;
 }
 
 .wizard-settings {
@@ -1116,15 +1106,23 @@ function goBack() {
 }
 
 .wizard-table-shell {
-	@apply border rounded overflow-auto;
+	@apply border rounded overflow-auto flex-1 min-h-0;
 }
 
 .wizard-table-shell--filled {
-	@apply max-h-[34rem];
+	@apply flex-1 min-h-0;
 }
 
 .wizard-table-shell--empty {
-	@apply max-h-[9rem];
+	@apply flex-1 min-h-0;
+}
+
+.wizard-footer {
+	@apply relative z-20;
+}
+
+.local-upload-card :deep(> div:nth-child(2)) {
+	@apply min-h-0 overflow-hidden flex flex-col;
 }
 
 .wizard-table {

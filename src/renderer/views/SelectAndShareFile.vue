@@ -385,6 +385,9 @@
                         <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-300 mt-2">
                             A transcode is already running for this selection. Please wait until it finishes, or select a different video to start another.
                         </div>
+                        <div v-if="hasActiveUploadForSelection" class="text-xs text-amber-300 mt-2">
+                            One or more selected files are still uploading. Wait for upload completion before creating a link (transcodes run after upload completes).
+                        </div>
 
                         <div v-if="viewUrl" class="p-3 border rounded flex flex-col items-center mt-1 min-w-0">
                             <code class="max-w-full break-all">{{ viewUrl }}</code>
@@ -599,6 +602,10 @@ watch(files, () => {
 function isVideoPath(path: string) {
     const ext = String(path || '').toLowerCase().split('.').pop() || ''
     return videoExts.has(ext)
+}
+
+function normServerPath(p: string) {
+    return String(p || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/')
 }
 
 const canTranscodeSelected = computed(() =>
@@ -954,7 +961,8 @@ const canGenerate = computed(() =>
     accessSatisfied.value &&
     (!transcodeProxy.value || proxyQualities.value.length > 0) &&
     (!watermarkEnabled.value || !!watermarkFile.value) &&
-    !hasActiveTranscodeForSelection.value
+    !hasActiveTranscodeForSelection.value &&
+    !hasActiveUploadForSelection.value
 );
 
 function sameSelection(a: string[], b: string[]) {
@@ -981,6 +989,33 @@ const hasActiveTranscodeForSelection = computed(() => {
         }
         return false
     })
+})
+
+const hasActiveUploadForSelection = computed(() => {
+    const selected = new Set(files.value.map(normServerPath))
+    if (!selected.size) return false
+
+    return transfer.state.tasks.some(t => {
+        if (t.kind !== 'upload') return false
+        if (!['queued', 'uploading'].includes(t.status)) return false
+        if (t.context?.source !== 'upload') return false
+        const uploadFile = normServerPath(String(t.context?.file || ''))
+        if (!uploadFile) return false
+        return selected.has(uploadFile)
+    })
+})
+
+watch(hasActiveUploadForSelection, (active, wasActive) => {
+    if (active && !wasActive) {
+        pushNotification(
+            new Notification(
+                'Upload In Progress',
+                'Selected file is still uploading. Wait for upload and transcode completion before sharing.',
+                'info',
+                6000
+            )
+        )
+    }
 })
 
 function invalidateLink() {
