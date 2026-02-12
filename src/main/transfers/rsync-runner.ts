@@ -13,6 +13,11 @@ export type RunOpts = {
   onProgress?: (parsed: any) => void;
 };
 
+export type RunHandle = {
+  child: ChildProcessWithoutNullStreams;
+  done: Promise<number>;
+};
+
 // Parse rsync progress lines like:
 // "73.01M   6%   69.59MB/s    0:00:14"
 export function parseProgress(line: string) {
@@ -31,7 +36,7 @@ export function parseProgress(line: string) {
   };
 }
 
-export function runRsync(opts: RunOpts): Promise<number> {
+export function runRsync(opts: RunOpts): RunHandle {
   const { id, cmd, args, env, win, onLine, onProgress } = opts;
 
   jl('info', 'rsync.exec', { id, cmd, args });
@@ -73,7 +78,7 @@ export function runRsync(opts: RunOpts): Promise<number> {
     }
   });
 
-  return new Promise((resolve, reject) => {
+  const done = new Promise<number>((resolve, reject) => {
     child.on('error', (err) => {
       jl('error', 'rsync.spawn.error', { id, error: err?.message || String(err) });
       reject(err);
@@ -83,4 +88,6 @@ export function runRsync(opts: RunOpts): Promise<number> {
       resolve(code ?? -1);
     });
   });
+
+  return { child, done };
 }

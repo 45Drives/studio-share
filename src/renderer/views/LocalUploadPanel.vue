@@ -87,247 +87,208 @@
 
 					<!-- STEP 3: Upload progress -->
 					<section v-show="step === 3" class="wizard-pane wizard-pane--fill">
-
 						<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
 
-						<div class="wizard-pane-scroll">
+						<div class="wizard-step3-body">
 							<div class="wizard-table-shell wizard-table-shell--uploads">
-
-							<table class="min-w-full text-sm border border-default border-collapse text-left">
-								<thead>
-									<tr class="bg-default text-default border-b border-default">
-										<th scope="col" class="px-4 py-2 font-semibold border border-default">Name</th>
-										<th scope="col" class="px-4 py-2 font-semibold border border-default">Size</th>
-										<th scope="col" class="px-4 py-2 font-semibold border border-default">Speed/Time
-										</th>
-										<th scope="col" class="px-4 py-2 font-semibold border border-default">Status
-										</th>
-										<th scope="col"
-											class="px-4 py-2 font-semibold border border-default text-right">
-											Action</th>
-									</tr>
-								</thead>
-
-								<tbody class="">
-									<!-- Empty state -->
-									<tr v-if="!uploads.length">
-										<td colspan="4" class="px-4 py-4 text-center text-muted border border-default">
-											Ready to start. Click <b>Start Upload</b>.
-										</td>
-									</tr>
-
-									<!-- Rows -->
-									<template v-for="u in uploads" :key="u.localKey">
-										<tr
-											class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
-											<!-- Name -->
-											<td class="px-4 py-2 border border-default">
-												<div class="truncate font-medium" :title="u.path">{{ u.name }}</div>
-												<div class="text-xs opacity-70">
+								<table class="min-w-full text-sm border border-default border-collapse text-left">
+									<thead>
+										<tr class="bg-default text-default border-b border-default">
+											<th scope="col" class="px-4 py-2 font-semibold border border-default">Name</th>
+											<th scope="col" class="px-4 py-2 font-semibold border border-default">Size</th>
+											<th scope="col" class="px-4 py-2 font-semibold border border-default">Speed/Time</th>
+											<th scope="col" class="px-4 py-2 font-semibold border border-default">Status</th>
+											<th scope="col" class="px-4 py-2 font-semibold border border-default text-right">Action</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-if="!uploads.length">
+											<td colspan="5" class="px-4 py-4 text-center text-muted border border-default">
+												Ready to start. Click <b>Start Upload</b>.
+											</td>
+										</tr>
+										<template v-for="u in uploads" :key="u.localKey">
+											<tr class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default">
+												<td class="px-4 py-2 border border-default">
+													<div class="truncate font-medium" :title="u.path">{{ u.name }}</div>
+													<div class="text-xs opacity-70">
+														<template v-if="u.status === 'uploading'">
+															{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+															<span v-if="u.speed"> • {{ u.speed }}</span>
+															<span v-if="u.eta"> • ETA {{ u.eta }}</span>
+														</template>
+													</div>
+												</td>
+												<td class="px-4 py-2 border border-default">
+													<span class="text-sm opacity-80">{{ formatSize(u.size) }}</span>
+												</td>
+												<td class="px-4 py-2 border border-default">
 													<template v-if="u.status === 'uploading'">
-														{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
-														<span v-if="u.speed"> • {{ u.speed }}</span>
-														<span v-if="u.eta"> • ETA {{ u.eta }}</span>
+														<span v-if="u.speed">{{ u.speed }}</span>
+														<br />
+														<span v-if="u.eta">ETA {{ u.eta }}</span>
 													</template>
-													<template v-else></template>
-												</div>
-											</td>
-
-											<!-- Size -->
-											<td class="px-4 py-2 border border-default">
-												<span class="text-sm opacity-80">{{ formatSize(u.size) }}</span>
-											</td>
-
-											<!-- Speed / Time -->
-											<td class="px-4 py-2 border border-default">
-												<template v-if="u.status === 'uploading'">
-													<span v-if="u.speed">{{ u.speed }}</span>
-													<br />
-													<span v-if="u.eta">ETA {{ u.eta }}</span>
-												</template>
-
-												<template v-else-if="u.status === 'done' && u.completedIn">
-													Completed in {{ u.completedIn }}
-												</template>
-
-												<template v-else>
-													<span>-</span>
-												</template>
-											</td>
-
-											<!-- Status -->
-											<td class="px-4 py-2 border border-default">
-												<span
-													class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-													:class="{
-														'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
-														'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
-														'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
-														'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
-														'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
-													}">
-
-													<template v-if="u.status === 'uploading'">
-														{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+													<template v-else-if="u.status === 'done' && u.completedIn">
+														Completed in {{ u.completedIn }}
 													</template>
-
 													<template v-else>
-														<span v-if="u.alreadyUploaded && u.status === 'done'">
-															done (already uploaded to this folder)
-														</span>
-														<span v-else>{{ u.status }}</span>
+														<span>-</span>
 													</template>
+												</td>
+												<td class="px-4 py-2 border border-default">
+													<span
+														class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+														:class="{
+															'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
+															'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
+															'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
+															'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
+															'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
+														}">
+														<template v-if="u.status === 'uploading'">
+															{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+														</template>
+														<template v-else>
+															<span v-if="u.alreadyUploaded && u.status === 'done'">
+																done (already uploaded to this folder)
+															</span>
+															<span v-else>{{ u.status }}</span>
+														</template>
+													</span>
+												</td>
+												<td class="px-4 py-2 border border-default">
+													<div class="flex justify-end">
+														<button class="btn btn-secondary" @click="cancelOne(u)"
+															:disabled="u.status !== 'uploading'" title="Cancel this upload">
+															Cancel
+														</button>
+													</div>
+												</td>
+											</tr>
 
+											<tr v-if="u.status === 'uploading'">
+												<td colspan="5" class="px-4 py-2 border border-default">
+													<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
+														accent-[#584c91]
+														[&::-webkit-progress-value]:bg-[#584c91]
+														[&::-moz-progress-bar]:bg-[#584c91]" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
+													</progress>
+												</td>
+											</tr>
+
+											<tr v-if="u.error">
+												<td colspan="5" class="px-4 py-2 border border-default text-xs text-red-400">
+													{{ u.error }}
+												</td>
+											</tr>
+										</template>
+									</tbody>
+								</table>
+							</div>
+
+							<div v-if="hasVideoSelected" class="advanced-video-card">
+								<div class="advanced-video-header">
+									<p class="font-semibold">Advanced video options</p>
+									<p class="text-xs text-muted">
+										{{ transcodeProxyAfterUpload || watermarkAfterUpload ? 'Proxy/watermark options enabled' : 'Configure proxy qualities and watermarking' }}
+									</p>
+								</div>
+
+								<div class="advanced-video-grid">
+									<div class="advanced-col">
+										<div class="flex flex-wrap items-center gap-2">
+											<label class="font-semibold whitespace-nowrap">Use Proxy Files:</label>
+											<Switch v-model="transcodeProxyAfterUpload" :class="[
+												transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
+												'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+											]">
+												<span class="sr-only">Toggle proxy file generation</span>
+												<span aria-hidden="true" :class="[
+													transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-0',
+													'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+												]" />
+											</Switch>
+											<span class="text-sm text-muted">
+												{{ transcodeProxyAfterUpload ? 'Generate and use proxy files' : 'Share raw files only' }}
+											</span>
+										</div>
+
+										<div class="mt-2" :class="!transcodeProxyAfterUpload ? 'opacity-60' : ''">
+											<label class="font-semibold block mb-1">Proxy Qualities</label>
+											<div class="flex flex-wrap gap-x-3 gap-y-2">
+												<label class="inline-flex items-center gap-2 text-sm">
+													<input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities"
+														:disabled="!transcodeProxyAfterUpload" />
+													<span>720p</span>
+												</label>
+												<label class="inline-flex items-center gap-2 text-sm">
+													<input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities"
+														:disabled="!transcodeProxyAfterUpload" />
+													<span>1080p</span>
+												</label>
+												<label class="inline-flex items-center gap-2 text-sm">
+													<input type="checkbox" class="checkbox" value="original" v-model="proxyQualities"
+														:disabled="!transcodeProxyAfterUpload" />
+													<span>Original</span>
+												</label>
+											</div>
+											<div class="text-xs text-slate-400 mt-2">
+												These versions are used for shared links instead of original files.
+											</div>
+										</div>
+									</div>
+
+									<div class="advanced-col">
+										<div v-if="transcodeProxyAfterUpload" class="space-y-2">
+											<div class="flex flex-wrap items-center gap-2">
+												<label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
+												<Switch v-model="watermarkAfterUpload" :class="[
+													watermarkAfterUpload ? 'bg-secondary' : 'bg-well',
+													'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+												]">
+													<span class="sr-only">Toggle video watermarking</span>
+													<span aria-hidden="true" :class="[
+														watermarkAfterUpload ? 'translate-x-5' : 'translate-x-0',
+														'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+													]" />
+												</Switch>
+												<span class="text-sm text-muted">{{ watermarkAfterUpload ? 'Apply watermark' : 'No watermark' }}</span>
+											</div>
+
+											<div v-if="watermarkAfterUpload" class="flex flex-wrap items-center gap-2">
+												<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
+												<span class="text-sm truncate min-w-0" :title="watermarkFile ? watermarkFile.name : 'No image selected'">
+													{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
 												</span>
+											</div>
 
-											</td>
-
-											<!-- Action -->
-											<td class="px-4 py-2 border border-default">
-												<div class="flex justify-end">
-													<button class="btn btn-secondary" @click="cancelOne(u)"
-														:disabled="u.status !== 'uploading'" title="Cancel this upload">
-														Cancel
-													</button>
-												</div>
-											</td>
-										</tr>
-
-										<!-- Progress row -->
-										<tr v-if="u.status === 'uploading'">
-											<td colspan="4" class="px-4 py-2 border border-default">
-												<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
-													accent-[#584c91]
-													[&::-webkit-progress-value]:bg-[#584c91]
-													[&::-moz-progress-bar]:bg-[#584c91]" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
-												</progress>
-											</td>
-										</tr>
-
-										<!-- Error row -->
-										<tr v-if="u.error">
-											<td colspan="4"
-												class="px-4 py-2 border border-default text-xs text-red-400">
-												{{ u.error }}
-											</td>
-										</tr>
-									</template>
-								</tbody>
-							</table>
-						</div>
-						<!-- Settings block (moved up into the step content) -->
-							<div v-if="hasVideoSelected" class="wizard-settings">
-
-							<div class="grid gap-2">
-								<!-- Generate Proxy -->
-								<div class="settings-row">
-									<label class="settings-label">Generate Proxy Files:</label>
-
-									<Switch v-model="transcodeProxyAfterUpload" :class="[
-										transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
-										'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out',
-										'focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2',
-									]">
-										<span class="sr-only">Toggle proxy file generation</span>
-										<span aria-hidden="true" :class="[
-											transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-1',
-											'inline-block h-5 w-5 transform rounded-full bg-default shadow transition duration-200 ease-in-out',
-										]"></span>
-									</Switch>
-
-
-									<span class="settings-help">
-										{{ transcodeProxyAfterUpload ? 'Share raw + proxy files' : 'Share raw files	only' }}
-									</span>
-								</div>
-
-								<!-- Proxy qualities -->
-								<div v-if="transcodeProxyAfterUpload" class="settings-row-2 mt-4">
-									<label class="settings-label pt-1">Proxy Qualities:</label>
-
-									<div>
-										<label class="inline-flex items-center gap-2 text-sm">
-											<input type="checkbox" class="checkbox" value="720p"
-												v-model="proxyQualities" />
-											<span>720p</span>
-										</label>
-
-										<label class="inline-flex items-center gap-2 text-sm ml-2">
-											<input type="checkbox" class="checkbox" value="1080p"
-												v-model="proxyQualities" />
-											<span>1080p</span>
-										</label>
-
-										<label class="inline-flex items-center gap-2 text-sm ml-2">
-											<input type="checkbox" class="checkbox" value="original"
-												v-model="proxyQualities" />
-											<span>Original</span>
-										</label>
-
-										<div class="text-xs text-slate-400">
-											These versions take extra space and are used for shared links instead of the
-											original file.
+											<div v-if="watermarkAfterUpload && !watermarkFile" class="text-xs text-amber-300">
+												Select a watermark image to continue.
+											</div>
+										</div>
+										<div v-else class="text-sm text-muted">
+											Enable proxy files to use watermark options.
 										</div>
 									</div>
-								</div>
 
-								<!-- Watermark toggle -->
-								<div v-if="transcodeProxyAfterUpload" class="settings-row mt-4">
-									<label class="settings-label">Watermark Videos:</label>
-
-									<Switch v-model="watermarkAfterUpload" :class="[
-										watermarkAfterUpload ? 'bg-secondary' : 'bg-well',
-										'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out',
-										'focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2',
-									]">
-										<span class="sr-only">Toggle video watermarking</span>
-										<span aria-hidden="true" :class="[
-											watermarkAfterUpload ? 'translate-x-5' : 'translate-x-1',
-											'inline-block h-5 w-5 transform rounded-full bg-default shadow transition duration-200 ease-in-out',
-										]"></span>
-									</Switch>
-
-									<span class="settings-help">
-										{{ watermarkAfterUpload ? 'Apply watermark to videos' : 'No watermark' }}
-									</span>
-								</div>
-
-								<!-- Watermark file -->
-								<div v-if="watermarkAfterUpload" class="settings-row-file mt-4">
-									<span class="settings-label">Watermark Image:</span>
-									<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
-									<span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
-										{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
-									</span>
-									<div class="grow"></div>
-									<button v-if="watermarkFile" class="btn btn-secondary"
-										@click="clearWatermark">Clear</button>
-								</div>
-
-								<div v-if="watermarkAfterUpload && !watermarkFile"
-									class="text-xs text-amber-300">
-									Select a watermark image to continue.
-								</div>
-
-								<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl"
-									class="mt-2">
-									<div class="text-xs text-slate-400 mb-1 text-center">Preview (approximate)</div>
-									<div
-										class="relative aspect-video w-full max-w-sm rounded-md border border-default bg-default/60 overflow-hidden mx-auto">
-										<div
-											class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60">
+									<div class="advanced-col">
+										<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl" class="space-y-2">
+											<div class="flex items-center justify-between gap-2">
+												<div class="text-xs text-slate-400">Preview (approximate)</div>
+												<button v-if="watermarkFile" class="btn btn-danger" @click="clearWatermark">Clear Image</button>
+											</div>
+											<div class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
+												<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
+												<img :src="watermarkFile.dataUrl" alt="Watermark preview"
+													class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+											</div>
 										</div>
-										<img :src="watermarkFile.dataUrl" alt="Watermark preview"
-											class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+										<div v-else class="text-xs text-muted">
+											Preview appears after selecting an image.
+										</div>
 									</div>
-									<div class="text-xs text-slate-400 mt-1 text-center">Size and position may vary by
-										source video.</div>
 								</div>
 							</div>
-						</div>
-
-						<!-- This spacer absorbs extra height when settings are collapsed -->
-							<div class="wizard-step-spacer"></div>
 						</div>
 					</section>
 				</div>
@@ -451,6 +412,60 @@ function resolveWatermarkRelPath() {
 	return name ? `flow45studio-watermarks/${name}` : ''
 }
 
+function resolveWatermarkProjectRoot() {
+	const base = String(projectBase.value || '').trim()
+	return base || rootOfServerPath(normalizedDest.value)
+}
+
+function resolveCandidateServerWatermarkRelPath() {
+	const selectedPath = String(watermarkFile.value?.path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+	if (!selectedPath) return ''
+
+	let root = String(resolveWatermarkProjectRoot() || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+	if (!root) root = '/'
+	if (!root.startsWith('/')) root = '/' + root
+
+	if (root !== '/' && (selectedPath === root || selectedPath.startsWith(root + '/'))) {
+		const rel = selectedPath.slice(root.length).replace(/^\/+/, '')
+		return rel
+	}
+
+	if (root === '/' && selectedPath.startsWith('/')) {
+		return selectedPath.replace(/^\/+/, '')
+	}
+
+	return ''
+}
+
+function splitRelPath(relPath: string) {
+	const clean = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+	if (!clean) return { dir: '', name: '' }
+	const idx = clean.lastIndexOf('/')
+	if (idx < 0) return { dir: '', name: clean }
+	return {
+		dir: clean.slice(0, idx),
+		name: clean.slice(idx + 1),
+	}
+}
+
+async function serverFileExists(relPath: string) {
+	const { dir, name } = splitRelPath(relPath)
+	if (!name) return false
+	try {
+		const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dir)}`, { method: 'GET' })
+		const entries = Array.isArray(data?.entries) ? data.entries : []
+		return entries.some((e: any) => !e?.isDir && String(e?.name || '') === name)
+	} catch {
+		return false
+	}
+}
+
+async function resolveExistingServerWatermarkRelPath() {
+	const candidate = resolveCandidateServerWatermarkRelPath()
+	if (!candidate) return ''
+	return (await serverFileExists(candidate)) ? candidate : ''
+}
+
 function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
 	const map: Record<number, { queuedKinds: string[]; skippedKinds: string[] }> = {};
 	const t = data?.transcodes;
@@ -475,6 +490,7 @@ function waitForIngestAndStartTranscode(opts: {
 	groupId: string
 	destDir: string
 	destFileAbs: string
+	watermarkRelPath?: string
 }) {
 	const chan = `upload:ingest:${opts.uploadId}`
 
@@ -572,50 +588,51 @@ function waitForIngestAndStartTranscode(opts: {
 		}
 	};
 
-	const handler = async (_e: any, payload: any) => {
-		try {
-			if (!payload?.ok) {
-				if (payload?.error === 'outputs_exist') {
-					const msg = 'Proxy outputs already exist for this file. Overwrite them?';
-					const proceed = window.confirm(msg);
-					if (proceed) {
-						const params = new URLSearchParams();
-						if (payload?.destRel) params.set('dest', String(payload.destRel));
-						if (payload?.name) params.set('name', String(payload.name));
-						params.set('hls', '1');
-						if (opts.wantProxy) params.set('proxy', '1');
-						if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
+		const handler = async (_e: any, payload: any) => {
+			try {
+				if (!payload?.ok) {
+					if (payload?.error === 'outputs_exist') {
+						const msg = 'Proxy outputs already exist for this file. Overwrite them?';
+						const proceed = window.confirm(msg);
+						if (proceed) {
+							const params = new URLSearchParams();
+							if (payload?.destRel) params.set('dest', String(payload.destRel));
+							if (payload?.name) params.set('name', String(payload.name));
+							params.set('hls', '1');
+							if (opts.wantProxy) params.set('proxy', '1');
+							if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 
 							if (watermarkAfterUpload.value) {
-								params.set('watermark', '1');
-								if (watermarkFile.value?.name) {
-									params.set('watermarkFile', resolveWatermarkRelPath() || watermarkFile.value.name);
+								const wmRel = String(opts.watermarkRelPath || resolveWatermarkRelPath() || watermarkFile.value?.name || '').trim()
+								if (wmRel) {
+									params.set('watermark', '1');
+									params.set('watermarkFile', wmRel);
+									if (proxyQualities.value.length) {
+										params.set('watermarkProxyQualities', proxyQualities.value.join(','));
+									}
 								}
-								if (proxyQualities.value.length) {
-									params.set('watermarkProxyQualities', proxyQualities.value.join(','));
-								}
+							}
+
+							params.set('overwrite', '1');
+
+							const data = await apiFetch(`/api/ingest/register?${params.toString()}`, {
+								method: 'POST',
+							});
+
+							startTranscodeFromPayload(data);
+						} else {
+							pushNotification(
+								new Notification(
+									'Overwrite Canceled',
+									'Existing proxy outputs were kept.',
+									'info',
+									6000
+								)
+							);
 						}
-
-						params.set('overwrite', '1');
-
-						const data = await apiFetch(`/api/ingest/register?${params.toString()}`, {
-							method: 'POST',
-						});
-
-						startTranscodeFromPayload(data);
 					} else {
 						pushNotification(
 							new Notification(
-								'Overwrite Canceled',
-								'Existing proxy outputs were kept.',
-								'info',
-								6000
-							)
-						);
-					}
-				} else {
-					pushNotification(
-						new Notification(
 							'Ingest Failed',
 							payload?.error || 'Ingest failed.',
 							'error',
@@ -893,6 +910,7 @@ const rafState = new Map<
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
 	let startedAny = false
+	let watermarkRelPathForIngest = ''
 
 	if (watermarkAfterUpload.value) {
 		isUploading.value = true
@@ -909,30 +927,34 @@ async function startUploads() {
 			return
 		}
 
-		const watermarkDestDir = resolveWatermarkUploadDir()
-		const { done } = await window.electron.rsyncStart(
-			{
-				host: ssh?.server,
-				user: ssh?.username,
-				src: watermarkFile.value.path,
-				destDir: watermarkDestDir,
-				port: serverPort,
-				keyPath: privateKeyPath,
-				noIngest: true,
-			}
-		)
-		const res = await done
-		if (!res?.ok) {
-			pushNotification(
-				new Notification(
-					'Watermark Upload Failed',
-					res?.error || 'Unable to upload the watermark image.',
-					'error',
-					8000
-				)
+		watermarkRelPathForIngest = await resolveExistingServerWatermarkRelPath()
+		if (!watermarkRelPathForIngest) {
+			const watermarkDestDir = resolveWatermarkUploadDir()
+			const { done } = await window.electron.rsyncStart(
+				{
+					host: ssh?.server,
+					user: ssh?.username,
+					src: watermarkFile.value.path,
+					destDir: watermarkDestDir,
+					port: serverPort,
+					keyPath: privateKeyPath,
+					noIngest: true,
+				}
 			)
-			isUploading.value = false
-			return
+			const res = await done
+			if (!res?.ok) {
+				pushNotification(
+					new Notification(
+						'Watermark Upload Failed',
+						res?.error || 'Unable to upload the watermark image.',
+						'error',
+						8000
+					)
+				)
+				isUploading.value = false
+				return
+			}
+			watermarkRelPathForIngest = resolveWatermarkRelPath() || String(watermarkFile.value?.name || '').trim()
 		}
 	}
 
@@ -955,6 +977,9 @@ async function startUploads() {
 			title: `Uploading: ${row.name}`,
 			detail: destDirAbs,
 			cancel: () => {
+				row.status = 'canceled'
+				try { row.ingestUnsub?.(); } catch { }
+				row.ingestUnsub = null
 				if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
 			},
 			context: {
@@ -966,6 +991,7 @@ async function startUploads() {
 		})
 		row.dockTaskId = taskId
 
+		const enableWatermark = watermarkAfterUpload.value && !!watermarkRelPathForIngest
 		const { id, done } = await window.electron.rsyncStart(
 			{
 				host: ssh?.server,
@@ -976,11 +1002,13 @@ async function startUploads() {
 				keyPath: privateKeyPath,
 				transcodeProxy: transcodeProxyAfterUpload.value,
 				proxyQualities: proxyQualities.value.slice(),
-				watermark: watermarkAfterUpload.value,
-				watermarkFileName: watermarkAfterUpload.value ? resolveWatermarkRelPath() : undefined,
-				watermarkProxyQualities: watermarkAfterUpload.value ? proxyQualities.value.slice() : undefined,
+				watermark: enableWatermark,
+				watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
+				watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
 			},
 			p => {
+				if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
+
 				let pct: number | undefined =
 					typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
 
@@ -1005,6 +1033,9 @@ async function startUploads() {
 		);
 
 		row.rsyncId = id;
+		if (row.status === 'canceled') {
+			window.electron.rsyncCancel(id)
+		}
 
 		// Start listening for ingest -> fileId (so we can track transcode progress)
 		const stopIngestListener = waitForIngestAndStartTranscode({
@@ -1014,6 +1045,7 @@ async function startUploads() {
 			groupId,
 			destDir: destDirAbs,
 			destFileAbs,
+			watermarkRelPath: watermarkRelPathForIngest,
 		})
 		row.ingestUnsub = stopIngestListener
 
@@ -1026,9 +1058,13 @@ async function startUploads() {
 			cleanup();
 
 			if (res.ok) {
-				row.status = row.status === 'canceled' ? 'canceled' : 'done';
-				row.progress = 100;
-				transfer.finishUpload(taskId, true);
+				if (row.status === 'canceled') {
+					transfer.updateUpload(taskId, { status: 'canceled', completedAt: Date.now() })
+				} else {
+					row.status = 'done';
+					row.progress = 100;
+					transfer.finishUpload(taskId, true);
+				}
 
 				if (row.status === 'done') {
 					markUploaded(row.path, row.dest);
@@ -1073,11 +1109,13 @@ async function startUploads() {
 
 
 function cancelOne(row: UploadRow) {
-	if (!row.rsyncId) return
-	if (row.dockTaskId) transfer.cancelUpload(row.dockTaskId)
+	if (row.dockTaskId) {
+		transfer.cancelUpload(row.dockTaskId)
+	} else if (row.rsyncId) {
+		window.electron.rsyncCancel(row.rsyncId)
+	}
 	try { row.ingestUnsub?.(); } catch { }
 	row.ingestUnsub = null;
-	window.electron.rsyncCancel(row.rsyncId)
 	row.status = 'canceled'
 }
 
@@ -1105,19 +1143,6 @@ function goBack() {
 	@apply flex-1 min-h-0 overflow-hidden;
 }
 
-.wizard-settings {
-	@apply flex justify-center;
-}
-
-.wizard-settings>.grid {
-	@apply w-full max-w-3xl;
-}
-
-.wizard-step-spacer {
-	@apply flex-1;
-	min-height: 0;
-}
-
 .wizard-heading {
 	@apply text-xl font-semibold mt-2 text-left;
 }
@@ -1140,6 +1165,37 @@ function goBack() {
 
 .wizard-table-shell--empty {
 	@apply flex-1 min-h-0;
+}
+
+.wizard-table-shell--uploads {
+	@apply flex-1 min-h-[16rem];
+}
+
+.wizard-step3-body {
+	@apply flex flex-col flex-1 min-h-0 gap-3;
+}
+
+.advanced-video-card {
+	@apply shrink-0 rounded-md border border-default bg-accent p-3;
+}
+
+.advanced-video-header {
+	@apply mb-2;
+}
+
+.advanced-video-grid {
+	@apply grid gap-3 items-start;
+	grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.advanced-col {
+	@apply rounded-md p-2 min-w-0;
+}
+
+@media (min-width: 1024px) {
+	.advanced-video-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 }
 
 .wizard-footer {
@@ -1166,27 +1222,4 @@ function goBack() {
 	@apply px-4 py-2 border border-default;
 }
 
-/* Add these to your <style scoped> */
-.settings-row {
-	@apply grid items-center gap-x-3 gap-y-1;
-	grid-template-columns: max-content max-content 1fr;
-}
-
-.settings-row-2 {
-	@apply grid items-start gap-x-3 gap-y-1;
-	grid-template-columns: max-content 1fr;
-}
-
-.settings-row-file {
-	@apply grid items-center gap-x-3 gap-y-1;
-	grid-template-columns: max-content max-content minmax(0, 1fr) 1fr max-content;
-}
-
-.settings-label {
-	@apply font-semibold whitespace-nowrap text-left;
-}
-
-.settings-help {
-	@apply text-sm whitespace-nowrap overflow-hidden text-ellipsis;
-}
 </style>

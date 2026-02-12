@@ -1870,6 +1870,7 @@ export type RsyncStartOpts = {
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
+const pendingRsyncCancel = new Set<string>()
 
 ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
@@ -1893,6 +1894,12 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
   jl('info', 'upload.start', { id, host: opts.host, user: opts.user, src: opts.src, destDir: opts.destDir })
   inflightRsync.set(id, null)
+  if (pendingRsyncCancel.delete(id)) {
+    event.sender.send(`upload:done:${id}`, { error: 'canceled' })
+    inflightRsync.delete(id)
+    jl('info', 'upload.start.canceled-before-run', { id })
+    return
+  }
 
   try {
     // ─────────────────────────────────────────────────────────────────────────
@@ -1924,49 +1931,23 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     } else {
       const picked = buildRsyncCmdAndArgs({ ...opts, keyPath, knownHostsPath })
 
-      const child = runRsync({
+      const rsync = runRsync({
         id,
         cmd: picked.cmd,
         args: picked.args,
         win: BrowserWindow.getAllWindows()[0],
-        // If  runRsync supports onProgress, keep it; otherwise remove this.
-        onProgress: (p: any) => {
-          if (typeof p?.percent === 'number') {
-            event.sender.send(`upload:progress:${id}`, p)
-          }
-        },
-      }) as any
+      })
 
-      // If runRsync returns a number (exit code), this block won't work.
-      //  earlier snippet shows runRsync returns a code;  imports show it exists.
-      // So we do the "code path" below and only store a child handle if you have one.
-      // If  runRsync actually returns an exit code Promise, keep inflight as null.
-
-      // If  runRsync returns a child process handle instead of a code:
-      if (child && typeof child.kill === 'function') {
-        inflightRsync.set(id, child as ChildProcessWithoutNullStreams)
-        const code: number = await new Promise((resolve) => {
-          ; (child as ChildProcessWithoutNullStreams).on('close', (c) => resolve(Number(c ?? 0)))
-        })
-        if (code !== 0) {
-          event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
-          jl('info', 'rsync.close', { id, code })
-          return
-        }
-      } else {
-        // If runRsync returns exit code:
-        const code: number = await runRsync({
-          id,
-          cmd: picked.cmd,
-          args: picked.args,
-          win: BrowserWindow.getAllWindows()[0],
-        })
-
-        if (code !== 0) {
-          event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
-          jl('info', 'rsync.close', { id, code })
-          return
-        }
+      inflightRsync.set(id, rsync.child)
+      if (pendingRsyncCancel.delete(id)) {
+        try { rsync.child.kill('SIGINT') } catch { }
+        jl('info', 'upload.cancel.kill-after-spawn', { id })
+      }
+      const code = await rsync.done
+      if (code !== 0) {
+        event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
+        jl('info', 'rsync.close', { id, code })
+        return
       }
     }
 
@@ -2000,10 +1981,16 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
       const proxyQualities = Array.isArray((opts as any).proxyQualities)
         ? (opts as any).proxyQualities.filter((q: any) => typeof q === 'string' && q.length)
         : []
+      const watermarkProxyQualities = Array.isArray((opts as any).watermarkProxyQualities)
+        ? (opts as any).watermarkProxyQualities.filter((q: any) => typeof q === 'string' && q.length)
+        : []
+      const rawWatermarkFileName =
+        typeof (opts as any).watermarkFileName === 'string'
+          ? String((opts as any).watermarkFileName).trim()
+          : ''
       const wantsWatermark =
         (opts as any).watermark === true &&
-        typeof (opts as any).watermarkFileName === 'string' &&
-        (opts as any).watermarkFileName.length > 0
+        rawWatermarkFileName.length > 0
       const isVideo = (() => {
         const ext = path.extname(fileName || '').toLowerCase().replace('.', '');
         const videoExts = new Set([
@@ -2012,69 +1999,117 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         ]);
         return videoExts.has(ext);
       })();
-
-      const url =
-        `${base}/api/ingest/register` +
-        `?dest=${encodeURIComponent(destRel)}` +
-        `&name=${encodeURIComponent(fileName)}` +
-        `&uploader=${encodeURIComponent(os.userInfo().username)}` +
-        `&hls=1` +
-        (wantsProxy ? `&proxy=1` : ``) +
-        (proxyQualities.length ? `&proxyQualities=${encodeURIComponent(proxyQualities.join(','))}` : ``) +
-        (wantsWatermark && isVideo
-          ? `&watermark=1&watermarkFile=${encodeURIComponent(String((opts as any).watermarkFileName))}` +
-            (Array.isArray((opts as any).watermarkProxyQualities) && (opts as any).watermarkProxyQualities.length
-              ? `&watermarkProxyQualities=${encodeURIComponent((opts as any).watermarkProxyQualities.join(','))}`
-              : ``)
-          : ``)
-      try {
-        const r = await fetch(url, { method: 'POST' })
-        const text = await r.text()
-        let j: any = {}
-        try { j = JSON.parse(text) } catch { j = { raw: text } }
-
-        jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j })
-
-        if (!r.ok || !j?.ok) {
-          jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url })
+      const watermarkCandidates: string[] = (() => {
+        if (!(wantsWatermark && isVideo)) return ['']
+        const out: string[] = []
+        const seen = new Set<string>()
+        const add = (v: string) => {
+          const s = String(v || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+          if (!s || seen.has(s)) return
+          seen.add(s)
+          out.push(s)
         }
 
-        if (j?.ok) {
-          const fileId = Number(j.fileId ?? j.file_id ?? j?.file?.id);
-          const assetVersionId = Number(j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id);
+        const normalizedRaw = rawWatermarkFileName.replace(/\\/g, '/').replace(/^\/+/, '').trim()
+        const baseName = path.posix.basename(normalizedRaw || rawWatermarkFileName).trim()
+        const destRootSeg = String(destRel || '').replace(/^\/+/, '').split('/').filter(Boolean)[0] || ''
 
-          const jobs = j.jobs || { queuedKinds: [], skippedKinds: [] };
+        add(normalizedRaw)
+        if (baseName) add(baseName)
+        if (baseName) add(`flow45studio-watermarks/${baseName}`)
+        if (destRootSeg && baseName) add(`${destRootSeg}/flow45studio-watermarks/${baseName}`)
+        if (destRootSeg && normalizedRaw && !normalizedRaw.startsWith(destRootSeg + '/')) {
+          add(`${destRootSeg}/${normalizedRaw}`)
+        }
+        return out.length ? out : ['']
+      })()
 
-          if (Number.isFinite(fileId) && fileId > 0) {
-            if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) {
-              jl('warn', 'ingest.register.missing_asset_version', { id, fileId, resp: j });
-            }
-            event.sender.send(`upload:ingest:${id}`, {
-              ok: true,
-              fileId,
-              assetVersionId: Number.isFinite(assetVersionId) ? assetVersionId : null,
-              host: opts.host,
-              apiPort,
-              // add a "transcodes" array so your existing extractJobInfoByVersion() works unchanged:
-              transcodes: Number.isFinite(assetVersionId) ? [{
-                assetVersionId,
-                jobs
-              }] : [],
-            });
+      for (let i = 0; i < watermarkCandidates.length; i++) {
+        const watermarkFileCandidate = watermarkCandidates[i]
+        const params = new URLSearchParams()
+        params.set('dest', destRel)
+        params.set('name', fileName)
+        params.set('uploader', os.userInfo().username)
+        params.set('hls', '1')
+        if (wantsProxy) params.set('proxy', '1')
+        if (proxyQualities.length) params.set('proxyQualities', proxyQualities.join(','))
+        if (wantsWatermark && isVideo && watermarkFileCandidate) {
+          params.set('watermark', '1')
+          params.set('watermarkFile', watermarkFileCandidate)
+          if (watermarkProxyQualities.length) {
+            params.set('watermarkProxyQualities', watermarkProxyQualities.join(','))
           }
-        } else {
-          event.sender.send(`upload:ingest:${id}`, {
-            ok: false,
-            error: j?.error || 'ingest not ok',
-            status: r.status,
-            destRel,
-            name: fileName,
-            existing: j?.existing || null,
-            assetVersionId: j?.assetVersionId || j?.asset_version_id || null,
-          });
         }
-      } catch (e: any) {
-        jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url })
+
+        const url = `${base}/api/ingest/register?${params.toString()}`
+        try {
+          const r = await fetch(url, { method: 'POST' })
+          const text = await r.text()
+          let j: any = {}
+          try { j = JSON.parse(text) } catch { j = { raw: text } }
+
+          jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j, watermarkFileCandidate })
+
+          if (!r.ok || !j?.ok) {
+            jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url, watermarkFileCandidate })
+          }
+
+          if (j?.ok) {
+            const fileId = Number(j.fileId ?? j.file_id ?? j?.file?.id)
+            const assetVersionId = Number(j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id)
+            const jobs = j.jobs || { queuedKinds: [], skippedKinds: [] }
+
+            if (Number.isFinite(fileId) && fileId > 0) {
+              if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) {
+                jl('warn', 'ingest.register.missing_asset_version', { id, fileId, resp: j })
+              }
+              event.sender.send(`upload:ingest:${id}`, {
+                ok: true,
+                fileId,
+                assetVersionId: Number.isFinite(assetVersionId) ? assetVersionId : null,
+                host: opts.host,
+                apiPort,
+                transcodes: Number.isFinite(assetVersionId) ? [{
+                  assetVersionId,
+                  jobs,
+                }] : [],
+              })
+            }
+            break
+          } else {
+            const errText = String(j?.error || '').toLowerCase()
+            const watermarkMissing = /watermark.*not found/.test(errText)
+            const canRetryWatermark =
+              wantsWatermark &&
+              isVideo &&
+              watermarkMissing &&
+              i < watermarkCandidates.length - 1
+
+            if (canRetryWatermark) {
+              jl('warn', 'ingest.register.watermark_retry', {
+                id,
+                attempt: i + 1,
+                watermarkFileCandidate,
+                nextWatermarkFileCandidate: watermarkCandidates[i + 1],
+              })
+              continue
+            }
+
+            event.sender.send(`upload:ingest:${id}`, {
+              ok: false,
+              error: j?.error || 'ingest not ok',
+              status: r.status,
+              destRel,
+              name: fileName,
+              existing: j?.existing || null,
+              assetVersionId: j?.assetVersionId || j?.asset_version_id || null,
+            })
+            break
+          }
+        } catch (e: any) {
+          jl('warn', 'ingest.register.failed', { id, error: e?.message || String(e), url, watermarkFileCandidate })
+          break
+        }
       }
     }
 
@@ -2084,19 +2119,26 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     jl('error', 'upload.error', { id, error: err?.message || String(err) })
   } finally {
     inflightRsync.delete(id)
+    pendingRsyncCancel.delete(id)
   }
 })
 
 // One cancel handler only.
-// Works for rsync child-process mode. If runRsync returns only an exit code,
-// adjust runRsync to expose the ChildProcess so this can kill it.
+// Handles three states:
+// - active child process (kill immediately)
+// - upload id registered but child not attached yet (mark pending)
+// - cancel sent before upload:start processed (queue by id)
 ipcMain.on('upload:cancel', (_event, { id }) => {
   const p = inflightRsync.get(id)
   if (p) {
     try { p.kill('SIGINT') } catch { }
     jl('info', 'upload.cancel', { id })
+  } else if (inflightRsync.has(id)) {
+    pendingRsyncCancel.add(id)
+    jl('info', 'upload.cancel.pending', { id })
   } else {
-    jl('info', 'upload.cancel.noop', { id })
+    pendingRsyncCancel.add(id)
+    jl('info', 'upload.cancel.queued', { id })
   }
 })
 

@@ -267,12 +267,25 @@ export function useTransferProgress() {
             | undefined
         if (!t) return
 
+        const nextStatus = patch.status
+        if (t.status === 'canceled' && nextStatus && nextStatus !== 'canceled') return
+        if ((t.status === 'done' || t.status === 'error') && (nextStatus === 'queued' || nextStatus === 'uploading')) return
+
         if (typeof patch.detail === 'string') patch.detail = patch.detail.trim()
         Object.assign(t, patch)
         if (typeof patch.progress !== 'undefined') t.progress = clampPct(patch.progress)
     }
 
     function finishUpload(taskId: string, ok: boolean, err?: string) {
+        const t = _state.tasks.find(x => x.taskId === taskId && x.kind === 'upload') as
+            | Extract<TransferTask, { kind: 'upload' }>
+            | undefined
+        if (!t) return
+        if (t.status === 'canceled') {
+            updateUpload(taskId, { status: 'canceled', completedAt: t.completedAt ?? now() })
+            return
+        }
+
         if (ok) {
             updateUpload(taskId, { status: 'done', progress: 100, completedAt: now(), error: null })
         } else {
@@ -288,7 +301,7 @@ export function useTransferProgress() {
         try {
             t.cancel?.()
         } catch { }
-        updateUpload(taskId, { status: 'canceled', completedAt: now() })
+        updateUpload(taskId, { status: 'canceled', completedAt: now(), speed: null, eta: null })
     }
 
     // Aggregate transcode progress from items:
