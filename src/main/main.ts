@@ -1866,6 +1866,7 @@ export type RsyncStartOpts = {
   watermark?: boolean
   watermarkFileName?: string
   watermarkProxyQualities?: string[]
+  noIngest?: boolean
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -1978,7 +1979,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     let isDir = false
     try { isDir = fs.statSync(src).isDirectory() } catch { }
 
-    if (!isDir) {
+    if (!isDir && !opts.noIngest) {
       const fileName = path.basename(src)
 
       const apiPort = 9095

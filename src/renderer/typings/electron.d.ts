@@ -35,6 +35,8 @@ export type RsyncOpts = {
   watermarkFileName?: string
   /** qualities that should receive watermark (defaults to proxyQualities) */
   watermarkProxyQualities?: string[]
+  /** skip ingest/register after transfer */
+  noIngest?: boolean
 }
 export type LinkType = 'upload' | 'download' | 'collection'
 export type Status = 'active' | 'expired' | 'disabled'

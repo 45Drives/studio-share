@@ -90,7 +90,9 @@
 
 						<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
 
-						<div class="wizard-table-shell">
+						<div class="wizard-pane-scroll">
+							<div class="wizard-table-shell wizard-table-shell--uploads">
+
 							<table class="min-w-full text-sm border border-default border-collapse text-left">
 								<thead>
 									<tr class="bg-default text-default border-b border-default">
@@ -214,7 +216,8 @@
 							</table>
 						</div>
 						<!-- Settings block (moved up into the step content) -->
-						<div v-if="step === 3 && hasVideoSelected" class="wizard-settings my-10">
+							<div v-if="hasVideoSelected" class="wizard-settings">
+
 							<div class="grid gap-2">
 								<!-- Generate Proxy -->
 								<div class="settings-row">
@@ -324,9 +327,11 @@
 						</div>
 
 						<!-- This spacer absorbs extra height when settings are collapsed -->
-						<div class="wizard-step-spacer"></div>
+							<div class="wizard-step-spacer"></div>
+						</div>
 					</section>
 				</div>
+				
 
 				<template #footer>
 					<div class="wizard-footer grid grid-cols-2 items-center">
@@ -425,6 +430,25 @@ function joinPath(dir: string, name: string) {
 	const d = String(dir || '').replace(/\/+$/, '')
 	const n = String(name || '').replace(/^\/+/, '')
 	return (d ? d : '/') + '/' + n
+}
+
+function rootOfServerPath(p: string) {
+	const clean = String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+	if (!clean) return '/'
+	const first = clean.split('/').filter(Boolean)[0] || ''
+	return first ? `/${first}` : '/'
+}
+
+function resolveWatermarkUploadDir() {
+	const base = String(projectBase.value || '').trim()
+	const root = base || rootOfServerPath(normalizedDest.value)
+	const cleanRoot = root === '/' ? '' : root.replace(/\/+$/, '')
+	return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+}
+
+function resolveWatermarkRelPath() {
+	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+	return name ? `flow45studio-watermarks/${name}` : ''
 }
 
 function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
@@ -562,14 +586,14 @@ function waitForIngestAndStartTranscode(opts: {
 						if (opts.wantProxy) params.set('proxy', '1');
 						if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 
-						if (watermarkAfterUpload.value) {
-							params.set('watermark', '1');
-							if (watermarkFile.value?.name) {
-								params.set('watermarkFile', watermarkFile.value.name);
-							}
-							if (proxyQualities.value.length) {
-								params.set('watermarkProxyQualities', proxyQualities.value.join(','));
-							}
+							if (watermarkAfterUpload.value) {
+								params.set('watermark', '1');
+								if (watermarkFile.value?.name) {
+									params.set('watermarkFile', resolveWatermarkRelPath() || watermarkFile.value.name);
+								}
+								if (proxyQualities.value.length) {
+									params.set('watermarkProxyQualities', proxyQualities.value.join(','));
+								}
 						}
 
 						params.set('overwrite', '1');
@@ -885,15 +909,16 @@ async function startUploads() {
 			return
 		}
 
-		const destDirAbs = uploads.value[0]?.dest || normalizedDest.value
+		const watermarkDestDir = resolveWatermarkUploadDir()
 		const { done } = await window.electron.rsyncStart(
 			{
 				host: ssh?.server,
 				user: ssh?.username,
 				src: watermarkFile.value.path,
-				destDir: destDirAbs,
+				destDir: watermarkDestDir,
 				port: serverPort,
 				keyPath: privateKeyPath,
+				noIngest: true,
 			}
 		)
 		const res = await done
@@ -952,7 +977,7 @@ async function startUploads() {
 				transcodeProxy: transcodeProxyAfterUpload.value,
 				proxyQualities: proxyQualities.value.slice(),
 				watermark: watermarkAfterUpload.value,
-				watermarkFileName: watermarkFile.value?.name,
+				watermarkFileName: watermarkAfterUpload.value ? resolveWatermarkRelPath() : undefined,
 				watermarkProxyQualities: watermarkAfterUpload.value ? proxyQualities.value.slice() : undefined,
 			},
 			p => {

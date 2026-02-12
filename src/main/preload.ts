@@ -38,6 +38,8 @@ export type RsyncOpts = {
   watermarkFileName?: string
   /** qualities that should receive watermark (defaults to proxyQualities) */
   watermarkProxyQualities?: string[]
+  /** skip ingest/register step after transfer (useful for helper assets like watermark images) */
+  noIngest?: boolean
 }
 
 export type RsyncResult = { ok?: boolean; error?: string }

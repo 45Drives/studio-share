@@ -5,7 +5,7 @@
                 <CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
                     <template #header>
                         <!-- ===== Step 1: Project selection ===== -->
-                        <div v-if="!projectSelected" class="flex w-full flex-col gap-3 text-left min-w-0">
+                        <div v-if="!projectSelected" class="flex w-full flex-col gap-3 text-left min-w-0 bg-accent rounded-md p-4">
                             <h2 class="text-xl font-semibold">Select a project</h2>
 
                             <label class="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
@@ -21,7 +21,7 @@
                                     <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
                                 </div>
 
-                                <div class="max-h-64 overflow-auto border-default bg-default rounded-md min-w-0">
+                                <div class="max-h-64 overflow-auto border-default bg-accent rounded-md min-w-0">
                                     <div v-for="r in projectRoots" :key="r.mountpoint"
                                         class="flex items-center justify-between gap-2 border-b border-default px-3 py-2 text-base min-w-0">
                                         <div class="min-w-0 flex-1">
@@ -399,13 +399,15 @@
                                                             </div>
                                                             <div v-if="hasVideoSelected && watermarkEnabled"
                                                                 class="flex flex-wrap items-center gap-2 mb-2">
-                                                                <button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
+                                                                <button class="btn btn-secondary" @click="pickWatermark">
+                                                                    {{ usingExistingWatermark ? 'Choose New Image' : 'Choose Image' }}
+                                                                </button>
                                                                 <span class="text-sm truncate min-w-0"
-                                                                    :title="watermarkFile ? watermarkFile.name : 'No image selected'">
-                                                                    {{ watermarkFile ? watermarkFile.name : 'No image selected' }}
+                                                                    :title="watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected')">
+                                                                    {{ watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected') }}
                                                                 </span>                                                       
                                                             </div>
-                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile"
+                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile && !usingExistingWatermark"
                                                                 class="text-xs text-amber-700 dark:text-amber-300 mb-2">
                                                                 Select a watermark image to continue.
                                                             </div>
@@ -1009,25 +1011,44 @@ function dirOfServerPath(p: string) {
     return clean.slice(0, idx)
 }
 
-async function uploadWatermarkToDirs(dirs: string[]) {
+function rootOfServerPath(p: string) {
+    const clean = String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+    if (!clean) return '/'
+    const first = clean.split('/').filter(Boolean)[0] || ''
+    return first ? `/${first}` : '/'
+}
+
+function resolveWatermarkUploadDir() {
+    const base = String(projectBase.value || '').trim()
+    const root = base || rootOfServerPath(files.value[0] || '')
+    const cleanRoot = root === '/' ? '' : root.replace(/\/+$/, '')
+    return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+}
+
+function resolveWatermarkRelPath() {
+    const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+    return name ? `flow45studio-watermarks/${name}` : ''
+}
+
+async function uploadWatermarkToProject() {
     if (!watermarkFile.value) return { ok: false, error: 'no watermark file' }
     const host = ssh?.server
     const user = ssh?.username
     if (!host || !user) return { ok: false, error: 'missing ssh connection info' }
 
-    for (const destDir of dirs) {
-        const { done } = await window.electron.rsyncStart({
-            host,
-            user,
-            src: watermarkFile.value.path,
-            destDir,
-            port: 22,
-            keyPath: undefined,
-        })
-        const res = await done
-        if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
-    }
-    return { ok: true }
+    const destDir = resolveWatermarkUploadDir()
+    const { done } = await window.electron.rsyncStart({
+        host,
+        user,
+        src: watermarkFile.value.path,
+        destDir,
+        port: 22,
+        keyPath: undefined,
+        noIngest: true,
+    })
+    const res = await done
+    if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
+    return { ok: true, relPath: resolveWatermarkRelPath() }
 }
 
 // Map units → seconds
@@ -1286,19 +1307,23 @@ async function generateLink() {
     if (overwriteExisting.value) {
         body.overwrite = true
     }
+    const useExistingWatermarkOnly =
+        watermarkEnabled.value && !watermarkFile.value?.name && usingExistingWatermark.value
+
     if (watermarkEnabled.value && watermarkFile.value?.name) {
         body.watermark = true
-        body.watermarkFile = watermarkFile.value.name
+        body.watermarkFile = resolveWatermarkRelPath() || watermarkFile.value.name
         body.watermarkProxyQualities = proxyQualities.value.slice()
-    } else if (watermarkEnabled.value && usingExistingWatermark.value) {
+    } else if (useExistingWatermarkOnly) {
         body.watermark = true
         body.keepExistingOutputs = true
+        body.allowExistingOutputs = true
+        body.watermarkProxyQualities = proxyQualities.value.slice()
     }
 
     try {
         if (watermarkEnabled.value && watermarkFile.value) {
-            const dirs = Array.from(new Set(files.value.map(dirOfServerPath)))
-            const up = await uploadWatermarkToDirs(dirs)
+            const up = await uploadWatermarkToProject()
             if (!up.ok) {
                 pushNotification(
                     new Notification(
@@ -1310,6 +1335,7 @@ async function generateLink() {
                 )
                 return
             }
+            if ((up as any).relPath) body.watermarkFile = (up as any).relPath
         }
 
         console.log('[magic-link] request body', JSON.stringify(body))
@@ -1477,6 +1503,8 @@ async function generateLink() {
             )
         )
     } finally {
+        // Keep overwrite as a one-shot retry flag only.
+        overwriteExisting.value = false
         loading.value = false
     }
 }
