@@ -2,7 +2,7 @@
     <div class="h-full min-h-0 flex items-start justify-center pt-2 overflow-y-auto">
         <div class="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8">
             <div class="grid w-full grid-cols-1 gap-4 text-2xl min-w-0">
-                <CardContainer class="w-full bg-accent rounded-md shadow-xl min-w-0">
+                <CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
                     <template #header>
                         <!-- ===== Step 1: Project selection ===== -->
                         <div v-if="!projectSelected" class="flex w-full flex-col gap-3 text-left min-w-0">
@@ -54,12 +54,17 @@
                                 :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
 
                             <!-- Selected files panel -->
-                            <div v-if="files.length" class="border rounded bg-accent min-w-0">
-                                <div class="flex flex-wrap items-center gap-2 p-2 min-w-0">
-                                    <button class="btn btn-secondary" @click="showSelected = !showSelected">
-                                        {{ showSelected ? 'Hide' : 'Show' }} list
-                                    </button>
-                                    <button class="btn btn-danger" @click="clearAll">Clear all</button>
+                            <div v-if="files.length" class="border border-default p-0.5 rounded bg-accent min-w-0">
+                                <div class="flex flex-wrap items-center justify-between gap-2 px-2 py-1 min-w-0">
+                                    <div class="text-sm font-semibold">
+                                        Selected files <span class="text-muted">({{ files.length }})</span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button class="btn btn-secondary" @click="showSelected = !showSelected">
+                                            {{ showSelected ? 'Hide' : 'Show' }} list
+                                        </button>
+                                        <button class="btn btn-danger" @click="clearAll">Clear all</button>
+                                    </div>
                                 </div>
 
                                 <div v-show="showSelected" class="max-h-40 overflow-auto min-w-0">
@@ -79,7 +84,7 @@
 
                             <div class="border-t border-default mt-4 pt-4 min-w-0">
                                 <!-- ===== Common link options ===== -->
-                                <CommonLinkControls>
+                                <CommonLinkControls class="">
                                     <template #expiry>
                                         <div class="flex flex-col gap-3 min-w-0">
                                             <!-- Row 1: label + input + select (always one row; inputs stay together) -->
@@ -124,110 +129,9 @@
                                     </template>
 
                                     <template #access>
-                                        <div class="flex flex-wrap items-center gap-3 min-w-0 mb-2">
-                                            <label class="font-semibold sm:whitespace-nowrap" for="transcode-switch">
-                                                Use Proxy Files:
-                                            </label>
-
-                                            <Switch id="transcode-switch" v-model="transcodeProxy"
-                                                :disabled="transcodeSwitchDisabled"
-                                                :title="transcodeSwitchTitle" :class="[
-                                                    transcodeProxy ? 'bg-secondary' : 'bg-well',
-                                                    transcodeSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
-                                                    'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                ]">
-                                                <span class="sr-only">Toggle proxy file generation</span>
-                                                <span aria-hidden="true" :class="[
-                                                    transcodeProxy ? 'translate-x-5' : 'translate-x-0',
-                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                ]" />
-                                            </Switch>
-
-                                             <span class="text-sm select-none truncate min-w-0 flex-1"
-                                                :title="transcodeSwitchTitle">
-                                                <template v-if="!canTranscodeSelected">
-                                                    (Only for Videos)
-                                                </template>
-                                                <template v-else-if="preflightProxyBlocked">
-                                                    {{ proxyBlockReason }}
-                                                </template>
-                                                <template v-else>
-                                                    {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share raw files only' }}
-                                                </template>
-                                            </span>
-                                        </div>
-                                        <div v-if="canTranscodeSelected && preflightProxyBlocked" class="text-xs text-amber-300 mb-2">
-                                            {{ proxyBlockReason }}
-                                        </div>
-                                        <div v-if="transcodeProxy" class="grid grid-cols-[auto_1fr] items-start gap-3 mb-3">
-                                            <label class="font-semibold whitespace-nowrap pt-1">Proxy Qualities:</label>
-                                            <div class="flex flex-col gap-2">
-                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
-                                                    <input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities" />
-                                                    <span>720p</span>
-                                                </label>
-                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
-                                                    <input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities" />
-                                                    <span>1080p</span>
-                                                </label>
-                                                <label class="inline-flex items-center gap-2 text-sm w-fit">
-                                                    <input type="checkbox" class="checkbox" value="original" v-model="proxyQualities" />
-                                                    <span>Original</span>
-                                                </label>
-                                                <div class="text-xs text-slate-400">
-                                                    These versions take extra space and are used for shared links instead of the original file.
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div v-if="hasVideoSelected && transcodeProxy" class="grid grid-cols-[auto_auto_minmax(10rem,10rem)] items-center gap-3 mb-2">
-                                            <label class="font-semibold whitespace-nowrap">
-                                                Watermark Videos:
-                                            </label>
-
-                                            <Switch v-model="watermarkEnabled" :disabled="watermarkSwitchDisabled"
-                                                :title="watermarkSwitchTitle" :class="[
-                                                watermarkEnabled ? 'bg-secondary' : 'bg-well',
-                                                watermarkSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
-                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
-                                                <span class="sr-only">Toggle video watermarking</span>
-                                                <span aria-hidden="true" :class="[
-                                                    watermarkEnabled ? 'translate-x-5' : 'translate-x-0',
-                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                ]" />
-                                            </Switch>
-
-                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis"
-                                                :title="watermarkSwitchTitle">
-                                                {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark') }}
-                                            </span>
-                                        </div>
-                                        <div v-if="hasVideoSelected && transcodeProxy && preflightWatermarkBlocked" class="text-xs text-amber-300 mb-2">
-                                            {{ watermarkBlockReason }}
-                                        </div>
-                                        <div v-if="hasVideoSelected && watermarkEnabled" class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 mb-2">
-                                            <span class="text-sm font-semibold whitespace-nowrap">Watermark Image:</span>
-                                            <button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
-                                            <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis" :title="watermarkFile ? watermarkFile.name : 'No image selected'">
-                                                {{ watermarkFile ? watermarkFile.name : 'No image selected' }}
-                                            </span>
-                                            <button v-if="watermarkFile" class="btn btn-secondary" @click="clearWatermark">Clear</button>
-                                        </div>
-                                        <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile" class="text-xs text-amber-300 mb-2">
-                                            Select a watermark image to continue.
-                                        </div>
-                                        <div v-if="hasVideoSelected && watermarkEnabled && watermarkFile?.dataUrl" class="mb-2">
-                                            <div class="text-xs text-slate-400 mb-1">Preview (approximate)</div>
-                                            <div class="relative aspect-video w-full max-w-sm rounded-md border border-default bg-default/60 overflow-hidden">
-                                                <div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
-                                                <img :src="watermarkFile.dataUrl" alt="Watermark preview"
-                                                    class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
-                                            </div>
-                                            <div class="text-[11px] text-slate-400 mt-1">Size and position may vary by source video.</div>
-                                        </div>
                                         <div class="flex flex-wrap items-center gap-3 min-w-0">
                                             <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
-                                                Link Access:
+                                                Network Access:
                                             </label>
 
                                             <Switch id="link-access-switch" v-model="usePublicBase" :class="[
@@ -245,110 +149,295 @@
                                                 {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
                                             </span>
                                         </div>
+                                        <p class="text-xs text-muted mt-1">
+                                            External sharing needs working port forwarding.
+                                        </p>
                                     </template>
 
                                     <template #accessExtra>
-                                        <CheckPortForwarding v-if="usePublicBase" :apiFetch="apiFetch"
-                                            endpoint="/api/forwarding/check" :autoCheckOnMount="false" :showDetails="true" />
+                                        <div v-if="usePublicBase" class="flex flex-col gap-3 min-w-0">
+                                            <CheckPortForwarding :apiFetch="apiFetch"
+                                                endpoint="/api/forwarding/check" :autoCheckOnMount="false"
+                                                :showDetails="true" />
+                                        </div>
                                     </template>
 
-                                    <template #password>
-                                        <div v-if="!restrictToUsers" class="flex flex-col gap-2 min-w-0">
-                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
-                                                <label class="font-semibold sm:whitespace-nowrap">Password Protected Link:</label>
+                                    <!-- Link Access row -->
+                                    <template #after class="">
+                                        <div class="border-t border-default mt-2 pt-2 min-w-0">
+                                            <div class="rounded-md border border-default bg-accent min-w-0 p-3">
+                                                <div class="font-semibold mb-2">Link Access Mode</div>
+                                                <div class="grid grid-cols-3 gap-2 min-w-0">
+                                                    <div>
+                                                        <label
+                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
+                                                            <input type="radio" name="access-mode" value="open"
+                                                                v-model="accessMode" class="mt-1" />
+                                                            <span class="min-w-0">
+                                                                <span class="font-semibold block">Anyone with the
+                                                                    link</span>
+                                                                <span class="text-xs text-muted block">No sign-in
+                                                                    required.</span>
+                                                            </span>
+                                                        </label>
 
-                                                <Switch id="use-password-switch" v-model="protectWithPassword" :class="[
-                                                    protectWithPassword ? 'bg-secondary' : 'bg-well',
-                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                ]">
-                                                    <span class="sr-only">Toggle use password</span>
-                                                    <span aria-hidden="true" :class="[
-                                                        protectWithPassword ? 'translate-x-5' : 'translate-x-0',
-                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                    ]" />
-                                                </Switch>
-                                            </div>
+                                                        <label
+                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
+                                                            <input type="radio" name="access-mode" value="open_password"
+                                                                v-model="accessMode" class="mt-1" />
+                                                            <span class="min-w-0">
+                                                                <span class="font-semibold block">Anyone with the link +
+                                                                    password</span>
+                                                                <span class="text-xs text-muted block">One shared
+                                                                    password for everyone.</span>
+                                                            </span>
+                                                        </label>
 
-                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
-                                                <label class="text-default font-semibold sm:whitespace-nowrap">Password</label>
+                                                        <label
+                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
+                                                            <input type="radio" name="access-mode" value="restricted"
+                                                                v-model="accessMode" class="mt-1" />
+                                                            <span class="min-w-0">
+                                                                <span class="font-semibold block">Only invited
+                                                                    users</span>
+                                                                <span class="text-xs text-muted block">Sign in with a
+                                                                    user account. Permissions come from roles.</span>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                    <div
+                                                        class="col-span-2 border-default min-w-0 p-3 border border-default rounded-md gap-2">
+                                                        <div v-if="accessMode !== 'restricted'"
+                                                            class="flex flex-wrap items-center gap-3 min-w-0">
+                                                            <label class="font-semibold sm:whitespace-nowrap">Allow
+                                                                comments</label>
+                                                            <Switch id="allow-comments-switch"
+                                                                v-model="allowOpenComments" :class="[
+                                                                    allowOpenComments ? 'bg-secondary' : 'bg-well',
+                                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                                ]">
+                                                                <span class="sr-only">Toggle comments</span>
+                                                                <span aria-hidden="true" :class="[
+                                                                    allowOpenComments ? 'translate-x-5' : 'translate-x-0',
+                                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                                ]" />
+                                                            </Switch>
+                                                            <span class="text-xs text-muted">{{ allowOpenComments ?
+                                                                'Visitors can leave a name and a comment.' : 'Comments are disabled.'}}</span>
+                                                        </div>
+                                                        <div v-if="accessMode === 'open_password'"
+                                                            class="flex flex-col gap-2 min-w-0 mt-1">
+                                                            <div class="flex flex-row gap-6 items-center text-center">
+                                                                <label
+                                                                    class="text-default font-semibold sm:whitespace-nowrap">Link
+                                                                    password</label>
+                                                                <p class="text-xs text-muted">Share this password with
+                                                                    anyone
+                                                                    you want to access the link.</p>
+                                                            </div>
 
-                                                <div class="relative flex items-center min-w-0 w-full">
-                                                    <input :disabled="!protectWithPassword"
-                                                        :type="showPassword ? 'text' : 'password'" v-model.trim="password"
-                                                        placeholder="Enter your password"
-                                                        class="input-textlike border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed w-full pr-10 min-w-0" />
-                                                    <button type="button" @click="showPassword = !showPassword"
-                                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                                                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                                                        <EyeSlashIcon v-else class="w-5 h-5" />
-                                                    </button>
+                                                            <div class="relative flex items-center min-w-0 w-full">
+                                                                <input :type="showPassword ? 'text' : 'password'"
+                                                                    v-model.trim="password"
+                                                                    placeholder="Enter a password"
+                                                                    class="input-textlike border rounded px-3 py-2 w-full pr-10 min-w-0" />
+                                                                <button type="button"
+                                                                    @click="showPassword = !showPassword"
+                                                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                                                    <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                                                    <EyeSlashIcon v-else class="w-5 h-5" />
+                                                                </button>
+                                                            </div>
+                                                          
+                                                            <p v-if="!password" class="text-sm text-red-500">
+                                                                Password is required when protection is enabled.
+                                                            </p>
+                                                        </div>
+
+                                                        <div v-if="accessMode === 'restricted'"
+                                                            class="flex flex-col gap-2 min-w-0">
+                                                            <p class="text-xs text-muted">
+                                                                Invited users sign in with their own username and
+                                                                password.
+                                                                Roles control download and comment permissions.
+                                                            </p>
+                                                            <button type="button" class="btn btn-primary"
+                                                                @click="openUserModal()">
+                                                                {{ accessCount ? 'Manage invited users' : 'Invite users…' }}
+                                                                <span v-if="accessCount"
+                                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                                                    {{ accessCount }}
+                                                                </span>
+                                                            </button>
+                                                            <p class="text-xs opacity-70">Roles control permissions.</p>
+                                                            <p v-if="!accessSatisfied" class="text-sm text-red-500">
+                                                                Add at least one user to continue.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-span-3 grid grid-cols-3">
+                                                        <p class="mx-auto text-xs text-success">
+                                                            Access:
+                                                            {{
+                                                                accessMode === 'open'
+                                                                    ? 'Anyone with the link'
+                                                                    : accessMode === 'open_password'
+                                                                        ? 'Anyone with the link + password'
+                                                                        : 'Invited users only'
+                                                            }}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div v-else class="text-center p-3 bg-accent rounded-md items-center">
-                                            <label class="text-base font-semibold text-muted">Using User
-                                                Password</label>
+                                 
+                                        <!-- Advanced Video Options -->
+                                        <div class="border-t border-default mt-2 pt-2 min-w-0">
+                                            <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled"
+                                                class="rounded-md border border-default bg-accent min-w-0">
+                                                <DisclosureButton
+                                                    class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left min-w-0 bg-accent rounded-md">
+                                                    <div class="min-w-0">
+                                                        <p class="font-semibold">Advanced video options</p>
+                                                        <p class="text-xs text-muted truncate">
+                                                            {{ transcodeProxy || watermarkEnabled ? 'Proxy/watermark options enabled' : 'Configure proxy qualities and watermarking' }}
+                                                        </p>
+                                                    </div>
+                                                    <ChevronDownIcon class="h-5 w-5 text-muted transition-transform duration-200"
+                                                        :class="open ? 'rotate-180' : ''" />
+                                                </DisclosureButton>
+                                                <DisclosurePanel class="border-t border-default px-3 py-2.5 min-w-0 bg-accent rounded-b-md">
+                                                    <div class="grid grid-cols-3 gap-2.5 items-start">
+                                                        <div class="rounded-md p-2.5 min-w-0">
+                                                            <div class="flex flex-wrap items-center gap-2 min-w-0">
+                                                                <label class="font-semibold sm:whitespace-nowrap" for="transcode-switch">
+                                                                    Use Proxy Files:
+                                                                </label>
+                                                                <Switch id="transcode-switch" v-model="transcodeProxy"
+                                                                    :disabled="transcodeSwitchDisabled"
+                                                                    :title="transcodeSwitchTitle" :class="[
+                                                                        transcodeProxy ? 'bg-secondary' : 'bg-well',
+                                                                        transcodeSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
+                                                                        'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                                    ]">
+                                                                    <span class="sr-only">Toggle proxy file generation</span>
+                                                                    <span aria-hidden="true" :class="[
+                                                                        transcodeProxy ? 'translate-x-5' : 'translate-x-0',
+                                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                                    ]" />
+                                                                </Switch>
+                                                                <span class="text-sm truncate min-w-0 flex-1" :title="transcodeSwitchTitle">
+                                                                    <template v-if="!canTranscodeSelected">(Only for Videos)</template>
+                                                                    <template v-else-if="preflightProxyBlocked">{{ proxyBlockReason }}</template>
+                                                                    <template v-else>
+                                                                        {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share raw files only' }}
+                                                                    </template>
+                                                                </span>
+                                                            </div>
+                                                            <div v-if="canTranscodeSelected && preflightProxyBlocked"
+                                                                class="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                                                                {{ proxyBlockReason }}
+                                                            </div>
+
+                                                            <div class="mt-2" :class="!transcodeProxy ? 'opacity-60' : ''">
+                                                                <label class="font-semibold block mb-2">Proxy Qualities</label>
+                                                                <div class="flex flex-wrap gap-x-3 gap-y-2">
+                                                                    <label class="inline-flex items-center gap-2 text-sm">
+                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="720p"
+                                                                            v-model="proxyQualities"
+                                                                            :disabled="!transcodeProxy" />
+                                                                        <span>720p</span>
+                                                                    </label>
+                                                                    <label class="inline-flex items-center gap-2 text-sm">
+                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="1080p"
+                                                                            v-model="proxyQualities"
+                                                                            :disabled="!transcodeProxy" />
+                                                                        <span>1080p</span>
+                                                                    </label>
+                                                                    <label class="inline-flex items-center gap-2 text-sm">
+                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="original"
+                                                                            v-model="proxyQualities"
+                                                                            :disabled="!transcodeProxy" />
+                                                                        <span>Original</span>
+                                                                    </label>
+                                                                </div>
+                                                                <div class="text-xs text-slate-400 mt-2">
+                                                                    These versions are used for shared links instead of original
+                                                                    files.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="rounded-md p-2.5 min-w-0">
+                                                            <div v-if="hasVideoSelected && transcodeProxy"
+                                                                class="flex flex-wrap items-center gap-2 mb-2">
+                                                                <label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
+                                                                <Switch v-model="watermarkEnabled"
+                                                                    :disabled="watermarkSwitchDisabled"
+                                                                    :title="watermarkSwitchTitle" :class="[
+                                                                        watermarkEnabled ? 'bg-secondary' : 'bg-well',
+                                                                        watermarkSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
+                                                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                                    ]">
+                                                                    <span class="sr-only">Toggle video watermarking</span>
+                                                                    <span aria-hidden="true" :class="[
+                                                                        watermarkEnabled ? 'translate-x-5' : 'translate-x-0',
+                                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                                    ]" />
+                                                                </Switch>
+                                                                <span class="text-sm truncate min-w-0 flex-1" :title="watermarkSwitchTitle">
+                                                                    {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark') }}
+                                                                </span>
+                                                            </div>
+                                                            <div v-else class="text-sm text-muted">
+                                                                Enable proxy files and select a video to use watermark options.
+                                                            </div>
+
+                                                            <div v-if="hasVideoSelected && transcodeProxy && preflightWatermarkBlocked"
+                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                                                                {{ watermarkBlockReason }}
+                                                            </div>
+                                                            <div v-if="hasVideoSelected && watermarkEnabled"
+                                                                class="flex flex-wrap items-center gap-2 mb-2">
+                                                                <button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
+                                                                <span class="text-sm truncate min-w-0"
+                                                                    :title="watermarkFile ? watermarkFile.name : 'No image selected'">
+                                                                    {{ watermarkFile ? watermarkFile.name : 'No image selected' }}
+                                                                </span>                                                       
+                                                            </div>
+                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile"
+                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                                                                Select a watermark image to continue.
+                                                            </div>
+                                                            
+                                                        </div>
+                                                        <div class="rounded-md p-2.5 min-w-0">
+                                                            <div v-if="hasVideoSelected && watermarkEnabled && watermarkFile?.dataUrl"
+                                                                class="mt-1">
+                                                                <div class="flex items-center justify-between gap-2 mb-1">
+                                                                    <div class="text-xs text-slate-400">Preview
+                                                                        (approximate)</div>
+                                                                    <button v-if="watermarkFile"
+                                                                        class="btn btn-danger"
+                                                                        @click="clearWatermark">
+                                                                        Clear Image
+                                                                    </button>
+                                                                </div>
+                                                                <div
+                                                                    class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
+                                                                    <div
+                                                                        class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60">
+                                                                    </div>
+                                                                    <img :src="watermarkFile.dataUrl"
+                                                                        alt="Watermark preview"
+                                                                        class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </DisclosurePanel>
+                                            </Disclosure>
                                         </div>
-                                    </template>
-
-                                    <template #commenters>
-                                        <div class="flex flex-col gap-3 min-w-0">
-                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
-                                                <label class="font-semibold sm:whitespace-nowrap">Restrict Access to
-                                                    Users</label>
-
-                                                <Switch id="restrict-access-switch" v-model="restrictToUsers" :class="[
-                                                    restrictToUsers ? 'bg-secondary' : 'bg-well',
-                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                ]">
-                                                    <span class="sr-only">Toggle user access</span>
-                                                    <span aria-hidden="true" :class="[
-                                                        restrictToUsers ? 'translate-x-5' : 'translate-x-0',
-                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                    ]" />
-                                                </Switch>
-                                            </div>
-
-                                            <div v-if="restrictToUsers" class="flex flex-col gap-2 min-w-0">
-                                                <button type="button" class="btn btn-primary" @click="openUserModal()">
-                                                    Manage Users & Roles
-                                                    <span v-if="accessCount"
-                                                        class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
-                                                        {{ accessCount }}
-                                                    </span>
-                                                </button>
-                                                <p class="text-xs opacity-70">
-                                                    Commenting and download permissions are controlled by roles.
-                                                </p>
-                                            </div>
-
-                                            <div v-else class="flex flex-wrap items-center gap-3 min-w-0">
-                                                <label class="font-semibold sm:whitespace-nowrap">Allow Comments</label>
-
-                                                <Switch id="allow-comments-switch" v-model="allowOpenComments" :class="[
-                                                    allowOpenComments ? 'bg-secondary' : 'bg-well',
-                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                ]">
-                                                    <span class="sr-only">Toggle comments</span>
-                                                    <span aria-hidden="true" :class="[
-                                                        allowOpenComments ? 'translate-x-5' : 'translate-x-0',
-                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                    ]" />
-                                                </Switch>
-                                            </div>
-                                        </div>
-                                    </template>
-
-                                    <template #errorLeft>
-                                        <p v-if="!accessSatisfied" class="text-sm text-red-500">
-                                            At least one user is required when access is restricted.
-                                        </p>
-                                    </template>
-
-                                    <template #errorRight>
-                                        <p v-if="protectWithPassword && !password" class="text-sm text-red-500">
-                                            Password is required when protection is enabled.
-                                        </p>
                                     </template>
                                 </CommonLinkControls>
                             </div>
@@ -379,7 +468,6 @@
                     </template>
 
                     <div v-if="projectSelected" class="flex flex-col min-w-0">
-                        <!-- was: button-group-row + w-full on generate -->
                         <div class="flex flex-wrap gap-2 w-full min-w-0">
                             <button class="btn btn-secondary" :disabled="loading" @click="resetAll">
                                 Reset
@@ -394,10 +482,10 @@
                                 <span v-else>Generate magic link</span>
                             </button>
                         </div>
-                        <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-300 mt-2">
+                        <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
                             A transcode is already running for this selection. Please wait until it finishes, or select a different video to start another.
                         </div>
-                        <div v-if="hasActiveUploadForSelection" class="text-xs text-amber-300 mt-2">
+                        <div v-if="hasActiveUploadForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
                             One or more selected files are still uploading. Wait for upload completion before creating a link (transcodes run after upload completes).
                         </div>
 
@@ -433,8 +521,8 @@ import CommonLinkControls from '../components/CommonLinkControls.vue'
 import CheckPortForwarding from '../components/CheckPortForwarding.vue'
 import type { Commenter } from '../typings/electron'
 import { useHeader } from '../composables/useHeader'
-import { Switch } from '@headlessui/vue'
-import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
+import { Disclosure, DisclosureButton, DisclosurePanel, Switch } from '@headlessui/vue'
+import { ChevronDownIcon, EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { useResilientNav } from '../composables/useResilientNav';
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
@@ -455,29 +543,36 @@ const {
     detecting, detectError, projectRoots, browseMode, loadProjectChoices,
 } = useProjectChoices(showEntireTree)
 const accessUsers = ref<Commenter[]>([])
-const restrictToUsers = ref(false)
+type AccessMode = 'open' | 'open_password' | 'restricted'
+const accessMode = ref<AccessMode>('open')
 const allowOpenComments = ref(true)
-const defaultRestrictToUsers = ref(false)
+const defaultAccessMode = ref<AccessMode>('open')
 const defaultAllowOpenComments = ref(true)
 const defaultUseProxyFiles = ref(false)
 const accessCount = computed(() => accessUsers.value.length)
-const accessSatisfied = computed(() => !restrictToUsers.value || accessCount.value > 0)
+const protectWithPassword = computed({
+    get: () => accessMode.value === 'open_password',
+    set: (v: boolean) => {
+        if (v) accessMode.value = 'open_password'
+        else if (accessMode.value === 'open_password') accessMode.value = 'open'
+    }
+})
+const accessSatisfied = computed(() => accessMode.value !== 'restricted' || accessCount.value > 0)
 const linkTitle = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
 function resetAll() {
     files.value = []
-    showSelected.value = true
+    showSelected.value = false
     expiresValue.value = 7
     expiresUnit.value = 'days'
     usePublicBase.value = defaultUsePublicBase.value
     linkTitle.value = ''
     accessUsers.value = []
-    restrictToUsers.value = defaultRestrictToUsers.value
+    accessMode.value = defaultAccessMode.value
     allowOpenComments.value = defaultAllowOpenComments.value
     password.value = ''
-    protectWithPassword.value = false
     showPassword.value = false
     viewUrl.value = ''
     downloadUrl.value = ''
@@ -518,7 +613,7 @@ const autoRegenerate = ref(false)
 let regenTimer: ReturnType<typeof setTimeout> | null = null
 
 const files = ref<string[]>([])
-const showSelected = ref(true)
+const showSelected = ref(false)
 function clearAll() {
     files.value = []
     resetPreflightState()
@@ -534,24 +629,24 @@ async function loadLinkDefaults() {
         const isInternal = (s?.defaultLinkAccess === "internal");
         defaultUsePublicBase.value = !isInternal;
         usePublicBase.value = defaultUsePublicBase.value;
-        defaultRestrictToUsers.value =
-            typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false;
+        const defaultRestrict = typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false;
+        defaultAccessMode.value = defaultRestrict ? 'restricted' : 'open';
         defaultAllowOpenComments.value =
             typeof s?.defaultAllowComments === 'boolean' ? s.defaultAllowComments : true;
         defaultUseProxyFiles.value =
             typeof s?.defaultUseProxyFiles === 'boolean' ? s.defaultUseProxyFiles : false;
 
-        restrictToUsers.value = defaultRestrictToUsers.value;
+        accessMode.value = defaultAccessMode.value;
         allowOpenComments.value = defaultAllowOpenComments.value;
         transcodeProxy.value = defaultUseProxyFiles.value;
     } catch {
         // Keep current default if settings can't be loaded
         defaultUsePublicBase.value = true;
         usePublicBase.value = true;
-        defaultRestrictToUsers.value = false;
+        defaultAccessMode.value = 'open';
         defaultAllowOpenComments.value = true;
         defaultUseProxyFiles.value = false;
-        restrictToUsers.value = defaultRestrictToUsers.value;
+        accessMode.value = defaultAccessMode.value;
         allowOpenComments.value = defaultAllowOpenComments.value;
         transcodeProxy.value = defaultUseProxyFiles.value;
     }
@@ -648,20 +743,12 @@ watch(showEntireTree, (v) => {
     }
 });
 
-watch(restrictToUsers, (v) => {
-    if (v) {
-        protectWithPassword.value = false
+watch(accessMode, (mode) => {
+    if (mode !== 'open_password') {
         password.value = ''
+        showPassword.value = false
     }
-});
-
-watch(
-    accessUsers,
-    (arr) => {
-        if (arr.length > 0) restrictToUsers.value = true
-    },
-    { deep: true }
-)
+})
 
 function extractJobInfoByVersion(
     data: any
@@ -713,7 +800,6 @@ const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 // const maxDownloads = ref(5)
 
 // password state
-const protectWithPassword = ref(false)
 const password = ref('')
 const showPassword = ref(false)
 
@@ -1169,19 +1255,17 @@ async function generateLink() {
     if (files.value.length === 1) body.filePath = files.value[0]
     else body.filePaths = files.value.slice()
 
-    if (protectWithPassword.value && password.value) {
+    if (accessMode.value === 'open_password' && password.value) {
         body.password = password.value
     }
 
-    body.access_mode = restrictToUsers.value ? 'restricted' : 'open'
-    body.auth_mode = restrictToUsers.value
-        ? 'password'
-        : (protectWithPassword.value ? 'password' : 'none')
-    if (!restrictToUsers.value) {
+    body.access_mode = accessMode.value === 'restricted' ? 'restricted' : 'open'
+    body.auth_mode = accessMode.value === 'open' ? 'none' : 'password'
+    if (accessMode.value !== 'restricted') {
         body.allow_comments = !!allowOpenComments.value
     }
 
-    if (restrictToUsers.value && accessUsers.value.length) {
+    if (accessMode.value === 'restricted' && accessUsers.value.length) {
         (body as any).users = accessUsers.value.map(c => {
             const out: any = {}
             if (c.id != null) out.userId = c.id
@@ -1552,3 +1636,45 @@ function onApplyUsers(
 
 
 </script>
+
+<style scoped>
+.proxy-quality-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid #ffffff;
+    background-color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 0 0 0 transparent;
+}
+
+.proxy-quality-checkbox:checked {
+    background-color: var(--btn-primary-bg);
+    border-color: var(--btn-primary-border);
+}
+
+.proxy-quality-checkbox:checked::after {
+    content: "";
+    display: block;
+    width: 0.25rem;
+    height: 0.5rem;
+    border: 2px solid #fff;
+    border-top: 0;
+    border-left: 0;
+    transform: translate(0.20rem, -0.05rem) rotate(45deg);
+    box-sizing: content-box;
+}
+
+.proxy-quality-checkbox:focus-visible {
+    outline: 2px solid #22c55e;
+    outline-offset: 2px;
+}
+
+.proxy-quality-checkbox:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+</style>

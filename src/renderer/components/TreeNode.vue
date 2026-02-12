@@ -1,105 +1,107 @@
 <template>
-    <!-- Non-root row -->
-    <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer bg-default
-         [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] focus:outline-none"
-        @click="modeIsUpload ? selectFolder() : onRowClick()"
-        @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
-        @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()" role="button" tabindex="0"
-        :aria-expanded="open">
-        <!-- checkbox col: keep spacing, no checkbox for folders -->
-        <div class="px-2 py-1 flex justify-center">
-            <template v-if="modeIsUpload">
-                <button type="button"
-                    class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current"
-                    :aria-checked="isFolderSelected" role="radio" @click.stop="selectFolder()">
-                    <span v-if="isFolderSelected" class="inline-block w-2 h-2 rounded-full bg-current"></span>
-                </button>
-            </template>
-            <template v-else>
-                <span class="inline-block w-4 h-4"></span>
-            </template>
-        </div>
+    <div class="bg-accent">
+        <!-- Non-root row -->
+        <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer 
+            [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] focus:outline-none"
+            @click="modeIsUpload ? selectFolder() : onRowClick()"
+            @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
+            @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()" role="button" tabindex="0"
+            :aria-expanded="open">
+            <!-- checkbox col: keep spacing, no checkbox for folders -->
+            <div class="px-2 py-1 flex justify-center">
+                <template v-if="modeIsUpload">
+                    <button type="button"
+                        class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current"
+                        :aria-checked="isFolderSelected" role="radio" @click.stop="selectFolder()">
+                        <span v-if="isFolderSelected" class="inline-block w-2 h-2 rounded-full bg-current"></span>
+                    </button>
+                </template>
+                <template v-else>
+                    <span class="inline-block w-4 h-4"></span>
+                </template>
+            </div>
 
-        <!-- name -->
-        <div class="px-2 py-1 min-w-0">
-            <div class="flex items-center gap-2"
-                :style="{ '--tw-ps': `${depth * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
-                <!-- arrow (stop to avoid double toggle) -->
-                <button
-                    class="w-4 h-4 rounded border border-current text-[10px] leading-none inline-flex items-center justify-center shrink-0"
-                    @click.stop="toggleOpen" :aria-label="open ? 'Collapse' : 'Expand'">
-                    {{ open ? '▾' : '▸' }}
-                </button>
+            <!-- name -->
+            <div class="px-2 py-1 min-w-0">
+                <div class="flex items-center gap-2"
+                    :style="{ '--tw-ps': `${depth * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
+                    <!-- arrow (stop to avoid double toggle) -->
+                    <button
+                        class="w-4 h-4 rounded border border-current text-[10px] leading-none inline-flex items-center justify-center shrink-0"
+                        @click.stop="toggleOpen" :aria-label="open ? 'Collapse' : 'Expand'">
+                        {{ open ? '▾' : '▸' }}
+                    </button>
 
-                <!-- label (also stops bubbling; the row already handles click) -->
-                <button class="underline truncate" :title="label + '/'"
-                    @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
-                    {{ label }}/
-                </button>
+                    <!-- label (also stops bubbling; the row already handles click) -->
+                    <button class="underline truncate" :title="label + '/'"
+                        @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
+                        {{ label }}/
+                    </button>
+                </div>
+            </div>
+
+            <div class="px-2 py-1">Folder</div>
+            <div class="px-2 py-1">—</div>
+            <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
+                :title="fmtDateFull(entryMtime)">
+                {{ fmtDate(entryMtime) }}
             </div>
         </div>
 
-        <div class="px-2 py-1">Folder</div>
-        <div class="px-2 py-1">—</div>
-        <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
-            :title="fmtDateFull(entryMtime)">
-            {{ fmtDate(entryMtime) }}
-        </div>
-    </div>
+        <!-- children -->
+        <div v-show="isRoot || open" class="">
+            <div v-if="loading" class="opacity-70 text-xs p-2">Loading…</div>
+            <!-- empty directory notice -->
+            <div v-if="!loading && open && !children.length"
+                class="grid auto-rows-[28px] [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] items-center border-b border-default">
+                <!-- keep first col blank like other rows -->
+                <div class="px-2 py-2"></div>
+                <div class="px-2 py-2 text-sm italic opacity-70">Directory is empty</div>
+                <div class="px-2 py-2"></div>
+                <div class="px-2 py-2"></div>
+                <div class="px-2 py-2"></div>
+            </div>
+            <template v-for="ch in children" :key="ch.path" class="">
+                <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase"
+                    :selectedFolder="selectedFolder" :selected="selected" :selectedVersion="selectedVersion"
+                    :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
+                    @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
+                <div v-else :class="[
+                    'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
+                    (!modeIsUpload && selected.has(ch.path))
+                        ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
+                        : ' hover:bg-white/5 dark:hover:bg-white/5',
+                    modeIsUpload ? 'opacity-90 pointer-events-none' : ''
+                ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
+                    @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
+                    :aria-pressed="!modeIsUpload && selected.has(ch.path)" class="focus:outline-none">
+                    <!-- checkbox -->
+                    <div class="px-2 py-1 flex justify-center">
+                        <template v-if="!modeIsUpload">
+                            <input class="input-checkbox h-4 w-4 m-0" type="checkbox" :checked="selected.has(ch.path)"
+                                @click.stop @change="onFileToggle(ch.path)"
+                                :aria-checked="selected.has(ch.path)" />
+                        </template>
+                    </div>
 
-    <!-- children -->
-    <div v-show="isRoot || open" class="">
-        <div v-if="loading" class="opacity-70 text-xs p-2">Loading…</div>
-        <!-- empty directory notice -->
-        <div v-if="!loading && open && !children.length"
-            class="grid auto-rows-[28px] [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] items-center border-b border-default">
-            <!-- keep first col blank like other rows -->
-            <div class="px-2 py-2"></div>
-            <div class="px-2 py-2 text-sm italic opacity-70">Directory is empty</div>
-            <div class="px-2 py-2"></div>
-            <div class="px-2 py-2"></div>
-            <div class="px-2 py-2"></div>
-        </div>
-        <template v-for="ch in children" :key="ch.path">
-            <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase"
-                :selectedFolder="selectedFolder" :selected="selected" :selectedVersion="selectedVersion"
-                :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
-                @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
-            <div v-else :class="[
-                'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
-                (!modeIsUpload && selected.has(ch.path))
-                    ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
-                    : 'bg-default hover:bg-white/5 dark:hover:bg-white/5',
-                modeIsUpload ? 'opacity-90 pointer-events-none' : ''
-            ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
-                @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
-                :aria-pressed="!modeIsUpload && selected.has(ch.path)" class="focus:outline-none">
-                <!-- checkbox -->
-                <div class="px-2 py-1 flex justify-center">
-                    <template v-if="!modeIsUpload">
-                        <input class="input-checkbox h-4 w-4 m-0" type="checkbox" :checked="selected.has(ch.path)"
-                            @click.stop @change="onFileToggle(ch.path)"
-                            :aria-checked="selected.has(ch.path)" />
-                    </template>
-                </div>
+                    <!-- name -->
+                    <div class="px-2 py-1 min-w-0">
+                        <div class="flex items-center gap-2"
+                            :style="{ '--tw-ps': `${(depth + 1) * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
+                            <span class="w-4 h-4 rounded border border-transparent shrink-0"></span>
+                            <span class="truncate" :title="ch.name">{{ ch.name }}</span>
+                        </div>
+                    </div>
 
-                <!-- name -->
-                <div class="px-2 py-1 min-w-0">
-                    <div class="flex items-center gap-2"
-                        :style="{ '--tw-ps': `${(depth + 1) * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
-                        <span class="w-4 h-4 rounded border border-transparent shrink-0"></span>
-                        <span class="truncate" :title="ch.name">{{ ch.name }}</span>
+                    <div class="px-2 py-1">File</div>
+                    <div class="px-2 py-1">{{ fmtBytes(ch.size) }}</div>
+                    <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
+                        :title="fmtDateFull(ch.mtime)">
+                        {{ fmtDate(ch.mtime) }}
                     </div>
                 </div>
-
-                <div class="px-2 py-1">File</div>
-                <div class="px-2 py-1">{{ fmtBytes(ch.size) }}</div>
-                <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
-                    :title="fmtDateFull(ch.mtime)">
-                    {{ fmtDate(ch.mtime) }}
-                </div>
-            </div>
-        </template>
+            </template>
+        </div>
     </div>
 </template>
 

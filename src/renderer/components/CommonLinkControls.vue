@@ -2,7 +2,7 @@
     <section class="clc">
         <div class="clc__grid">
             <!-- Lane 1 -->
-            <div class="clc__lane">
+            <div class="clc__lane bg-accent">
                 <div class="clc__sections">
                     <div class="clc__section">
                         <slot name="expiry" />
@@ -15,7 +15,7 @@
             </div>
 
             <!-- Lane 2 -->
-            <div class="clc__lane">
+            <div class="clc__lane bg-accent">
                 <div class="clc__sections">
                     <div class="clc__section">
                         <slot name="access" />
@@ -28,7 +28,7 @@
             </div>
 
             <!-- Lane 3 -->
-            <div class="clc__lane">
+            <div class="clc__lane bg-accent">
                 <div class="clc__sections">
                     <div v-if="$slots.title" class="clc__section">
                         <slot name="title" />
@@ -75,7 +75,6 @@
     min-width: 0;
     height: 100%;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
     border-radius: 0.6rem;
     padding: 0.75rem;
     overflow: hidden;

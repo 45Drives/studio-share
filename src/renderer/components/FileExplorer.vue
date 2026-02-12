@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-3 max-h-[500px] mt-2">
+  <div class="flex flex-col gap-3 max-h-[500px] mt-2 bg-default rounded-md">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
       <div class="text-muted">Click on files to select or deselect them. <span v-if="viewMode === 'grid'">Double-click
@@ -12,9 +12,9 @@
     </div>
 
     <!-- Table wrapper -->
-    <div class="border rounded overflow-auto max-h-[440px] min-h-[300px]">
+    <div class="bg-accent border border-default rounded overflow-auto max-h-[440px] min-h-[300px] p-1">
       <!-- Small toolbar: List / Grid toggle -->
-      <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10">
+      <div class="sticky top-0 bg-accent border-b border-default px-2 py-1 flex items-center gap-2 z-10">
         <button class="btn btn-secondary" :disabled="!canGoUp" @click="goUpOne" title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
         </button>
@@ -39,7 +39,7 @@
 
 
       <!-- Body -->
-      <div>
+      <div class="rounded-md">
         <!-- List view -->
         <template v-if="viewMode === 'list'">
           <TreeNode :key="'list-'+cwd" :apiFetch="apiFetch" :selected="selectedSet"
