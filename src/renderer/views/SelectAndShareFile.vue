@@ -152,7 +152,7 @@
                                                     {{ proxyBlockReason }}
                                                 </template>
                                                 <template v-else>
-                                                    {{ transcodeProxy ? 'Share raw + proxy files' : 'Share raw files only' }}
+                                                    {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share raw files only' }}
                                                 </template>
                                             </span>
                                         </div>
@@ -199,7 +199,7 @@
 
                                             <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis"
                                                 :title="watermarkSwitchTitle">
-                                                {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? 'Apply watermark' : 'No watermark') }}
+                                                {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark') }}
                                             </span>
                                         </div>
                                         <div v-if="hasVideoSelected && transcodeProxy && preflightWatermarkBlocked" class="text-xs text-amber-300 mb-2">
@@ -732,6 +732,7 @@ const preflightWatermarkBlocked = ref(false)
 const preflightProxyExistingCount = ref(0)
 const preflightWatermarkExistingCount = ref(0)
 const preflightTranscodeInProgressCount = ref(0)
+const preflightVideoCount = ref(0)
 const lastPreflightNoticeKey = ref('')
 let preflightTimer: ReturnType<typeof setTimeout> | null = null
 let preflightReqSeq = 0
@@ -754,9 +755,6 @@ const proxyBlockReason = computed(() => {
     if (preflightTranscodeInProgressCount.value > 0) {
         return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
     }
-    if (preflightProxyExistingCount.value > 0) {
-        return `Proxy output already exists for ${preflightProxyExistingCount.value} selected video(s).`
-    }
     return 'Proxy generation is not available for this selection.'
 })
 
@@ -765,11 +763,24 @@ const watermarkBlockReason = computed(() => {
     if (preflightTranscodeInProgressCount.value > 0) {
         return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
     }
-    if (preflightWatermarkExistingCount.value > 0) {
-        return `Watermark output already exists for ${preflightWatermarkExistingCount.value} selected video(s).`
-    }
     return 'Watermark generation is not available for this selection.'
 })
+
+const allSelectedVideosHaveProxy = computed(() =>
+    preflightVideoCount.value > 0 && preflightProxyExistingCount.value >= preflightVideoCount.value
+)
+
+const allSelectedVideosHaveWatermark = computed(() =>
+    preflightVideoCount.value > 0 && preflightWatermarkExistingCount.value >= preflightVideoCount.value
+)
+
+const usingExistingProxy = computed(() =>
+    !!transcodeProxy.value && allSelectedVideosHaveProxy.value
+)
+
+const usingExistingWatermark = computed(() =>
+    !!watermarkEnabled.value && allSelectedVideosHaveWatermark.value
+)
 
 const transcodeSwitchDisabled = computed(() =>
     !canTranscodeSelected.value || preflightLoading.value || preflightProxyBlocked.value
@@ -796,6 +807,7 @@ function resetPreflightState() {
     preflightLoading.value = false
     preflightProxyBlocked.value = false
     preflightWatermarkBlocked.value = false
+    preflightVideoCount.value = 0
     preflightProxyExistingCount.value = 0
     preflightWatermarkExistingCount.value = 0
     preflightTranscodeInProgressCount.value = 0
@@ -831,8 +843,9 @@ async function runPreflight() {
         if (seq !== preflightReqSeq) return
 
         const summary = data?.summary || {}
-        preflightProxyBlocked.value = !!summary.proxyBlocked
-        preflightWatermarkBlocked.value = !!summary.watermarkBlocked
+        preflightVideoCount.value = Number(summary.videoCount || 0)
+        preflightProxyBlocked.value = Number(summary.transcodeInProgressCount || 0) > 0
+        preflightWatermarkBlocked.value = Number(summary.transcodeInProgressCount || 0) > 0
         preflightProxyExistingCount.value = Number(summary.proxyExistingCount || 0)
         preflightWatermarkExistingCount.value = Number(summary.watermarkExistingCount || 0)
         preflightTranscodeInProgressCount.value = Number(summary.transcodeInProgressCount || 0)
@@ -850,12 +863,6 @@ async function runPreflight() {
             const msgParts: string[] = []
             if (preflightTranscodeInProgressCount.value > 0) {
                 msgParts.push(`Transcode already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`)
-            }
-            if (preflightProxyExistingCount.value > 0) {
-                msgParts.push(`Proxy already exists for ${preflightProxyExistingCount.value} selected video(s).`)
-            }
-            if (preflightWatermarkExistingCount.value > 0) {
-                msgParts.push(`Watermark already exists for ${preflightWatermarkExistingCount.value} selected video(s).`)
             }
             const message = msgParts.length
                 ? msgParts.join(' ')
@@ -973,7 +980,7 @@ const canGenerate = computed(() =>
     (!protectWithPassword.value || !!password.value) &&
     accessSatisfied.value &&
     (!transcodeProxy.value || proxyQualities.value.length > 0) &&
-    (!watermarkEnabled.value || !!watermarkFile.value) &&
+    (!watermarkEnabled.value || !!watermarkFile.value || usingExistingWatermark.value) &&
     !hasActiveTranscodeForSelection.value &&
     !hasActiveUploadForSelection.value
 );
@@ -1122,11 +1129,11 @@ async function generateLink() {
     }
 
     if (watermarkEnabled.value) {
-        if (!watermarkFile.value) {
+        if (!watermarkFile.value && !usingExistingWatermark.value) {
             pushNotification(
                 new Notification(
                     'Watermark Image Required',
-                    'Please choose a watermark image before creating a link.',
+                    'Please choose a watermark image before creating a link (or use files that already have watermark outputs).',
                     'warning',
                     8000
                 )
@@ -1190,6 +1197,7 @@ async function generateLink() {
     body.generateReviewProxy = !!transcodeProxy.value
     if (transcodeProxy.value) {
         body.proxyQualities = proxyQualities.value.slice()
+        if (usingExistingProxy.value) body.keepExistingOutputs = true
     }
     if (overwriteExisting.value) {
         body.overwrite = true
@@ -1198,6 +1206,9 @@ async function generateLink() {
         body.watermark = true
         body.watermarkFile = watermarkFile.value.name
         body.watermarkProxyQualities = proxyQualities.value.slice()
+    } else if (watermarkEnabled.value && usingExistingWatermark.value) {
+        body.watermark = true
+        body.keepExistingOutputs = true
     }
 
     try {
