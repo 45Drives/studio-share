@@ -98,7 +98,9 @@ export function startProgressPolling(opts: {
             if (opts.fileIds) {
                 const ids = opts.fileIds()
                 if (ids.length) {
+                    console.log('[transcode:poll] fileIds request', ids)
                     const items = await fetchProgressBatch(opts.apiFetch, ids)
+                    console.log('[transcode:poll] fileIds response', items)
                     opts.onUpdate(items)
                 } else {
                     opts.onUpdate([])
@@ -106,7 +108,9 @@ export function startProgressPolling(opts: {
             } else if (opts.assetVersionIds) {
                 const ids = opts.assetVersionIds()
                 if (ids.length) {
+                    console.log('[transcode:poll] assetVersionIds request', ids)
                     const items = await fetchProgressVersionsBatch(opts.apiFetch, ids)
+                    console.log('[transcode:poll] assetVersionIds response', items)
                     opts.onUpdate(items)
                 } else {
                     opts.onUpdate([])
@@ -115,6 +119,7 @@ export function startProgressPolling(opts: {
                 opts.onUpdate([])
             }
         } catch (e) {
+            console.log('[transcode:poll] error', e)
             opts.onError?.(e)
         } finally {
             if (!stopped) timer = setTimeout(tick, intervalMs)

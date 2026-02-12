@@ -1289,91 +1289,49 @@ async function generateLink() {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
 
             if (versionIds.length) {
-                const jobInfo = extractJobInfoByVersion(data);
-
-                const proxySplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'proxy_mp4');
-                const hlsSplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'hls');
-
                 const groupId = `link:${data.viewUrl}`;
-                const fileForTask = files.value.length === 1 ? files.value[0] : undefined;
+                const fileRecords = Array.isArray(data?.files) ? data.files : [];
+                const started = new Set<number>();
 
-                // Proxy: only track versions that were actually queued
-                if (transcodeProxy.value) {
-                    if (proxySplit.queued.length) {
+                const getFileLabel = (rec: any) =>
+                    rec?.name || rec?.relPath || rec?.path || rec?.p || 'File';
+
+                if (fileRecords.length) {
+                    for (const rec of fileRecords) {
+                        const recPath = String(rec?.path || rec?.relPath || rec?.p || rec?.name || '')
+                        if (!isVideoPath(recPath)) continue
+                        const assetVersionId = Number(
+                            rec?.assetVersionId ?? rec?.asset_version_id ?? rec?.assetVersion?.id
+                        );
+                        if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) continue;
+                        if (!versionIds.includes(assetVersionId)) continue;
+
+                        started.add(assetVersionId);
                         transfer.startAssetVersionTranscodeTask({
                             apiFetch,
-                            assetVersionIds: proxySplit.queued,
-                            title: 'Generating proxy files',
-                            detail: `Tracking ${proxySplit.queued.length} asset version(s)`,
+                            assetVersionIds: [assetVersionId],
+                            title: `Transcoding: ${getFileLabel(rec)}`,
+                            detail: transcodeProxy.value ? 'Tracking HLS + proxy' : 'Tracking HLS',
                             intervalMs: 1500,
-                            jobKind: 'proxy_mp4',
+                            jobKind: 'any',
                             context: {
                                 source: 'link',
                                 groupId,
                                 linkUrl: data.viewUrl,
                                 linkTitle: linkTitle.value || undefined,
-                                file: fileForTask,
+                                file: rec?.path || rec?.relPath || rec?.p || rec?.name,
                                 files: files.value.slice(),
                             },
                         });
-                    } else if (proxySplit.skipped.length) {
-                        pushNotification(
-                            new Notification(
-                                'Proxy Already Available',
-                                `Proxy generation was skipped for ${proxySplit.skipped.length} item(s) (already exists).`,
-                                'info',
-                                6000
-                            )
-                        );
                     }
                 }
 
-                // HLS: only track versions that were actually queued
-                if (wantsHls) {
-                    if (hlsSplit.queued.length) {
-                        transfer.startAssetVersionTranscodeTask({
-                            apiFetch,
-                            assetVersionIds: hlsSplit.queued,
-                            title: 'Generating adaptive stream',
-                            detail: `Tracking ${hlsSplit.queued.length} asset version(s)`,
-                            intervalMs: 1500,
-                            jobKind: 'hls',
-                            context: {
-                                source: 'link',
-                                groupId,
-                                linkUrl: data.viewUrl,
-                                linkTitle: linkTitle.value || undefined,
-                                file: fileForTask,
-                                files: files.value.slice(),
-                            },
-                        });
-                    } else if (hlsSplit.skipped.length) {
-                        pushNotification(
-                            new Notification(
-                                'Stream Already Available',
-                                `Adaptive stream generation was skipped for ${hlsSplit.skipped.length} item(s) (already exists).`,
-                                'info',
-                                6000
-                            )
-                        );
-                    }
-                }
-
-                if (!overwriteExisting.value && (proxySplit.skipped.length || hlsSplit.skipped.length)) {
-                    pushNotification(
-                        new Notification(
-                            'Existing Outputs Detected',
-                            'Some proxy outputs already exist and were kept.',
-                            'info',
-                            7000
-                        )
-                    );
-                }
+                // No aggregate task when per-file tasks are created.
             } else {
                 // fallback (only if server didn't return transcodes for some reason)
                 const fileIds = extractDbFileIdsFromMagicLinkResponse(data);
 
-                if (fileIds.length) {
+                if (fileIds.length && hasVideoSelected.value) {
                     // NOTE: fileId polling can't separate proxy vs hls unless you also add jobKind support to summarize()
                     // If you want two rows even in fallback mode, you need the deterministic taskId approach or extend startTranscodeTask similarly.
                     transfer.startTranscodeTask({
