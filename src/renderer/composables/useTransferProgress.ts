@@ -14,6 +14,7 @@ export type TransferContext = {
     destDir?: string          // for uploads
     file?: string             // single file for this specific task (preferred for grouping)
     files?: string[]          // optional; avoid using this for per-file grouping
+    proxyQualities?: string[] // requested proxy qualities snapshot for cumulative progress math
 }
 export type TransferTask =
     | {
@@ -54,6 +55,15 @@ export type TransferTask =
         context?: TransferContext
     }
 
+type PlaybackProgressSnapshot = {
+    status?: string
+    progress?: number | null
+    items?: any[]
+    qualityOrder?: string[]
+    activeQuality?: string
+    perQualityProgress?: Record<string, number>
+}
+
 function now() {
     return Date.now()
 }
@@ -64,8 +74,153 @@ function clampPct(n: any) {
     return Math.max(0, Math.min(100, v))
 }
 
+function normalizeProgressPercent(n: any) {
+    const v = Number(n)
+    if (!Number.isFinite(v)) return 0
+    // Some backends report [0..1], others [0..100]
+    const pct = (v > 0 && v <= 1) ? v * 100 : v
+    return clampPct(pct)
+}
+
 function makeId(prefix: string) {
     return `${prefix}_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`
+}
+
+function qualityLabel(q: string) {
+    const s = String(q || '').trim().toLowerCase()
+    if (!s) return ''
+    if (s === 'original') return 'Original'
+    return s
+}
+
+function proxyDetailFromProgress(progress: number, qualities?: string[]) {
+    const list = normalizeQualityList(qualities)
+    if (!list.length) return 'Tracking proxy'
+    const chunk = 100 / list.length
+    const p = clampPct(progress)
+    const idx = Math.min(list.length - 1, Math.floor(p / chunk))
+    const current = qualityLabel(list[idx])
+    return current ? `Tracking proxy (${current})` : 'Tracking proxy'
+}
+
+function proxyDetailFromActiveQuality(activeQuality?: string, progress?: number, qualities?: string[]) {
+    const q = qualityLabel(activeQuality || '')
+    if (q) return `Tracking proxy (${q})`
+    return proxyDetailFromProgress(progress ?? 0, qualities)
+}
+
+function proxyActiveQualityProgress(activeQuality: any, perQualityProgress: any): number | null {
+    const key = String(activeQuality || '').trim().toLowerCase()
+    if (!key || !perQualityProgress || typeof perQualityProgress !== 'object') return null
+    const raw = (perQualityProgress as any)[key]
+    const pct = normalizeProgressPercent(raw)
+    if (!Number.isFinite(pct)) return null
+    return pct
+}
+
+const proxyQualityOrder = ['720p', '1080p', 'original'] as const
+
+function normalizeQualityList(list: unknown): string[] {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const raw of Array.isArray(list) ? list : []) {
+        const q = String(raw || '').trim().toLowerCase()
+        if (!q || seen.has(q)) continue
+        seen.add(q)
+        out.push(q)
+    }
+    out.sort((a, b) => {
+        const ia = proxyQualityOrder.indexOf(a as any)
+        const ib = proxyQualityOrder.indexOf(b as any)
+        const sa = ia === -1 ? Number.MAX_SAFE_INTEGER : ia
+        const sb = ib === -1 ? Number.MAX_SAFE_INTEGER : ib
+        if (sa !== sb) return sa - sb
+        return a.localeCompare(b)
+    })
+    return out
+}
+
+function isProxyJobKind(kind: unknown) {
+    const k = String(kind || '').toLowerCase()
+    return k === 'proxy_mp4' || k.startsWith('proxy_mp4:')
+}
+
+function kindMatchesForSummary(kind: unknown, wanted: 'proxy_mp4' | 'hls' | 'any') {
+    if (wanted === 'any') return true
+    const k = String(kind || '').toLowerCase()
+    if (wanted === 'proxy_mp4') return isProxyJobKind(k)
+    return k === wanted
+}
+
+function proxyQualityFromJob(j: any): string | null {
+    const rawQuality = j?.quality
+        ?? j?.proxyQuality
+        ?? j?.targetQuality
+        ?? j?.outputQuality
+        ?? j?.meta?.quality
+        ?? j?.metadata?.quality
+        ?? j?.payload?.quality
+        ?? j?.params?.quality
+        ?? j?.options?.quality
+        ?? j?.job_data?.quality
+
+    const direct = String(rawQuality || '').trim().toLowerCase()
+    if (direct) return direct
+
+    const kind = String(j?.kind || '').toLowerCase()
+    const m = kind.match(/^proxy_mp4[:_/-]([a-z0-9]+p?|original)$/i)
+    if (m?.[1]) return String(m[1]).toLowerCase()
+
+    return null
+}
+
+function proxyJobProgress(j: any) {
+    const st = String(j?.status || '').toLowerCase()
+    if (st === 'done') return 100
+    return normalizeProgressPercent(j?.progress)
+}
+
+function summarizeProxyCumulativeProgress(jobs: any[], expectedQualities?: string[]) {
+    const proxyJobs = (jobs || []).filter(j => isProxyJobKind(j?.kind))
+    if (!proxyJobs.length) return null
+
+    const expected = normalizeQualityList(expectedQualities)
+    const found = normalizeQualityList(proxyJobs.map(proxyQualityFromJob).filter(Boolean))
+    const qualities = expected.length ? expected : found
+
+    // If the backend doesn't expose quality labels yet, fall back to previous behavior.
+    if (!qualities.length) {
+        const ps = proxyJobs
+            .map(proxyJobProgress)
+            .filter((n: number) => Number.isFinite(n))
+        if (!ps.length) return 0
+        return clampPct(ps.reduce((a: number, b: number) => a + b, 0) / ps.length)
+    }
+
+    const byQuality = new Map<string, number>()
+    for (const q of qualities) byQuality.set(q, 0)
+    let matchedQualityJobs = 0
+
+    for (const j of proxyJobs) {
+        const q = proxyQualityFromJob(j)
+        if (!q || !byQuality.has(q)) continue
+        const next = proxyJobProgress(j)
+        if (next > (byQuality.get(q) || 0)) byQuality.set(q, next)
+        matchedQualityJobs++
+    }
+
+    // Backend may emit one unlabeled proxy job whose progress is already cumulative.
+    if (matchedQualityJobs === 0) {
+        const ps = proxyJobs
+            .map(proxyJobProgress)
+            .filter((n: number) => Number.isFinite(n))
+        if (!ps.length) return 0
+        return clampPct(ps.reduce((a: number, b: number) => a + b, 0) / ps.length)
+    }
+
+    let sum = 0
+    for (const q of qualities) sum += byQuality.get(q) || 0
+    return clampPct(sum / qualities.length)
 }
 
 const _state = reactive({
@@ -325,7 +480,7 @@ export function useTransferProgress() {
 
             // best-effort per-item %: average job.progress where present
             const ps = (it.jobs || [])
-                .map(j => (typeof j.progress === 'number' ? j.progress : null))
+                .map(j => (typeof j.progress === 'number' ? normalizeProgressPercent(j.progress) : null))
                 .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
 
             if (ps.length) {
@@ -345,7 +500,11 @@ export function useTransferProgress() {
         return { status, progress, counts: { failed, running, queued, done } }
     }
 
-    function summarizeVersions(items: VersionProgressItem[], jobKind: 'proxy_mp4' | 'hls' | 'any' = 'any') {
+    function summarizeVersions(
+        items: VersionProgressItem[],
+        jobKind: 'proxy_mp4' | 'hls' | 'any' = 'any',
+        context?: TransferContext
+    ) {
         let failed = 0
         let running = 0
         let queued = 0
@@ -357,8 +516,7 @@ export function useTransferProgress() {
         for (const it of items) {
             // status counts should also respect kind if you want the label to match
             const jobs = (it.jobs || []).filter(j => {
-                if (jobKind === 'any') return true
-                return String(j.kind || '').toLowerCase() === jobKind
+                return kindMatchesForSummary(j?.kind, jobKind)
             })
 
             for (const j of jobs) {
@@ -368,15 +526,43 @@ export function useTransferProgress() {
                 else if (st === 'queued') queued++
                 else if (st === 'done') done++
 
-                const p = Number(j?.progress)
-                if (Number.isFinite(p)) {
-                    sumPct += p
+                if (jobKind !== 'proxy_mp4') {
+                    sumPct += normalizeProgressPercent(j?.progress)
                     pctCount++
                 }
             }
+
+            if (jobKind === 'proxy_mp4') {
+                const cumulative = summarizeProxyCumulativeProgress(it.jobs || [], context?.proxyQualities)
+                if (typeof cumulative === 'number') {
+                    sumPct += cumulative
+                    pctCount++
+                }
+                console.log('[transcode:proxy:summarize:item]', {
+                    assetVersionId: (it as any)?.assetVersionId,
+                    requestedQualities: context?.proxyQualities || [],
+                    allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
+                    filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
+                    filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
+                    filteredProgress: jobs.map((j: any) => j?.progress),
+                    filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
+                    cumulative,
+                })
+            } else if (jobKind === 'hls') {
+                console.log('[transcode:hls:summarize:item]', {
+                    assetVersionId: (it as any)?.assetVersionId,
+                    allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
+                    filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
+                    filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
+                    filteredProgress: jobs.map((j: any) => j?.progress),
+                    filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
+                })
+            }
         }
 
-        const progress = pctCount
+        const progress = (jobKind === 'proxy_mp4' && pctCount)
+            ? clampPct(sumPct / pctCount)
+            : pctCount
             ? clampPct(sumPct / pctCount)
             : (done > 0 && running === 0 && queued === 0 && failed === 0 ? 100 : 0)
 
@@ -384,6 +570,16 @@ export function useTransferProgress() {
         if (failed > 0) status = 'failed'
         else if (running > 0 || queued > 0) status = 'running'
         else if (done > 0) status = 'done'
+
+        if (jobKind === 'proxy_mp4' || jobKind === 'hls') {
+            console.log('[transcode:summarize:result]', {
+                jobKind,
+                status,
+                progress,
+                counts: { failed, running, queued, done },
+                items: items.length,
+            })
+        }
 
         return { status, progress, counts: { failed, running, queued, done } }
     }
@@ -398,7 +594,10 @@ export function useTransferProgress() {
         jobKind?: 'proxy_mp4' | 'hls' | 'any'
         context?: TransferContext
         mode: 'file' | 'version'
-        summarizeItems: (items: TItem[], jobKind: 'proxy_mp4' | 'hls' | 'any') => { status: TranscodeStatus; progress: number }
+        summarizeItems: (
+            items: TItem[],
+            task: Extract<TransferTask, { kind: 'transcode' }>
+        ) => { status: TranscodeStatus; progress: number }
         initialItems: TItem[]
     }) {
         const normalizedIds = Array.from(new Set((opts.ids || [])
@@ -451,9 +650,12 @@ export function useTransferProgress() {
                 const castItems = (items || []) as TItem[]
                 cur.items = castItems as any
 
-                const s = opts.summarizeItems(castItems, cur.jobKind ?? 'any')
+                const s = opts.summarizeItems(castItems, cur)
                 cur.status = s.status
                 cur.progress = s.progress
+                if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
+                    cur.detail = proxyDetailFromProgress(cur.progress, cur.context?.proxyQualities)
+                }
 
                 if (s.status === 'done' || s.status === 'failed') {
                     cur.completedAt = now()
@@ -492,9 +694,123 @@ export function useTransferProgress() {
             jobKind: opts.jobKind,
             context: opts.context,
             mode: 'version',
-            summarizeItems: (items, jobKind) => summarizeVersions(items, jobKind),
+            summarizeItems: (items, task) => summarizeVersions(items, task.jobKind ?? 'any', task.context),
             initialItems: [] as VersionProgressItem[],
         })
+    }
+
+    function startPlaybackTranscodeTask(opts: {
+        title: string
+        detail?: string
+        intervalMs?: number
+        jobKind?: 'proxy_mp4' | 'hls' | 'any'
+        context?: TransferContext
+        fetchSnapshot: () => Promise<PlaybackProgressSnapshot | null>
+    }) {
+        const taskId = makeId('trnP')
+        const t: TransferTask = {
+            taskId,
+            kind: 'transcode',
+            title: opts.title,
+            detail: opts.detail,
+            status: 'queued',
+            progress: 0,
+            error: null,
+            items: [],
+            startedAt: now(),
+            stop: undefined,
+            jobKind: opts.jobKind ?? 'any',
+            context: opts.context,
+        }
+        upsertTask(t)
+
+        let stopped = false
+        let timer: any = null
+        const intervalMs = Math.max(500, opts.intervalMs ?? 1500)
+
+        const normalizePlaybackStatus = (v: any): TranscodeStatus => {
+            const s = String(v || '').toLowerCase()
+            if (s === 'done' || s === 'completed' || s === 'success' || s === 'ready') return 'done'
+            if (s === 'failed' || s === 'error' || s === 'missing_output') return 'failed'
+            if (s === 'queued' || s === 'pending' || s === 'running' || s === 'processing' || s === 'started') return 'running'
+            return 'unknown'
+        }
+
+        const tick = async () => {
+            if (stopped) return
+            try {
+                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+                    | Extract<TransferTask, { kind: 'transcode' }>
+                    | undefined
+                if (!cur) return
+
+                const snap = await opts.fetchSnapshot()
+                if (!snap) {
+                    cur.status = 'unknown'
+                    cur.error = 'no playback snapshot'
+                    return
+                }
+
+                cur.items = Array.isArray(snap.items) ? (snap.items as any) : cur.items
+                cur.status = normalizePlaybackStatus(snap.status)
+                cur.progress = normalizeProgressPercent(snap.progress)
+                if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
+                    const perQ = snap.perQualityProgress
+                    if (perQ && typeof perQ === 'object') {
+                        const qualityOrder = normalizeQualityList(
+                            (Array.isArray(snap.qualityOrder) && snap.qualityOrder.length)
+                                ? snap.qualityOrder
+                                : Object.keys(perQ)
+                        )
+                        if (qualityOrder.length) {
+                            if (!cur.context) cur.context = { source: 'link' }
+                            cur.context.proxyQualities = qualityOrder
+                        }
+                        const jobs = qualityOrder.map((q) => {
+                            const pct = normalizeProgressPercent(perQ[q])
+                            return {
+                                kind: `proxy_mp4:${q}`,
+                                status: pct >= 100 ? 'done' : String(snap.status || 'running'),
+                                progress: pct,
+                                quality: q,
+                            }
+                        })
+                        cur.items = [{ assetVersionId: 0, jobs, summary: { queued: 0, running: 1, done: 0, failed: 0 } }] as any
+                    }
+                    const activePct = proxyActiveQualityProgress(snap.activeQuality, perQ)
+                    if (typeof activePct === 'number') {
+                        // Keep bar/percentage aligned with "Tracking proxy (<quality>)" label.
+                        cur.progress = activePct
+                    }
+                    cur.detail = proxyDetailFromActiveQuality(snap.activeQuality, cur.progress, cur.context?.proxyQualities)
+                }
+
+                if (cur.status === 'done' || cur.status === 'failed') {
+                    cur.completedAt = now()
+                    stopped = true
+                    if (timer) clearTimeout(timer)
+                    return
+                }
+            } catch (e: any) {
+                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+                    | Extract<TransferTask, { kind: 'transcode' }>
+                    | undefined
+                if (cur) {
+                    cur.status = 'unknown'
+                    cur.error = e?.message || String(e)
+                }
+            } finally {
+                if (!stopped) timer = setTimeout(tick, intervalMs)
+            }
+        }
+
+        const stop = () => {
+            stopped = true
+            if (timer) clearTimeout(timer)
+        }
+        ;(t as any).stop = stop
+        tick()
+        return taskId
     }
 
     function startTranscodeTask(opts: {
@@ -539,6 +855,7 @@ export function useTransferProgress() {
         cancelUpload,
 
         startTranscodeTask,
-        startAssetVersionTranscodeTask
+        startAssetVersionTranscodeTask,
+        startPlaybackTranscodeTask,
     }
 }
