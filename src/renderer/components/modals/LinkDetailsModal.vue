@@ -1309,16 +1309,50 @@ function extractDbFileIdsFromLinkFilesResponse(data: any): number[] {
   return Array.from(new Set(ids))
 }
 
+function mapAssetVersionToFileId(data: any): Map<number, number> {
+  const out = new Map<number, number>()
+  const push = (assetVersionId: any, fileId: any) => {
+    const v = Number(assetVersionId)
+    const f = Number(fileId)
+    if (!Number.isFinite(v) || v <= 0) return
+    if (!Number.isFinite(f) || f <= 0) return
+    out.set(v, f)
+  }
+
+  const t = data?.transcodes
+  if (Array.isArray(t)) {
+    for (const rec of t as any[]) {
+      push(rec?.assetVersionId ?? rec?.asset_version_id ?? rec?.assetVersion?.id, rec?.fileId ?? rec?.file_id ?? rec?.file?.id ?? rec?.id)
+    }
+  } else if (t && typeof t === 'object') {
+    for (const k of Object.keys(t)) {
+      const rec = (t as any)[k]
+      push(rec?.assetVersionId ?? rec?.asset_version_id ?? rec?.assetVersion?.id, rec?.fileId ?? rec?.file_id ?? rec?.file?.id ?? rec?.id)
+    }
+  }
+
+  const files = Array.isArray(data?.files) ? data.files : Array.isArray(data?.items) ? data.items : null
+  if (Array.isArray(files)) {
+    for (const f of files) {
+      push(f?.assetVersionId ?? f?.asset_version_id ?? f?.assetVersion?.id, f?.id ?? f?.fileId ?? f?.file_id ?? f?.file?.id)
+    }
+  }
+
+  return out
+}
+
 function startLinkTranscodeTracking(opts: {
   resp: any
   wantsProxy: boolean
   wantsHls: boolean
   addedPaths: string[]
+  proxyQualities?: string[]
 }) {
   if (!opts.wantsProxy && !opts.wantsHls) return
 
   const versionIds = extractAssetVersionIdsFromLinkFilesResponse(opts.resp)
   const linkTitle = (draftTitle.value || props.link?.title || (props.link ? fallbackTitle(props.link) : '') || '').trim()
+  const versionToFileId = mapAssetVersionToFileId(opts.resp)
   const context = {
     source: 'link' as const,
     groupId: props.link?.id != null ? `link:${props.link.id}` : undefined,
@@ -1326,6 +1360,7 @@ function startLinkTranscodeTracking(opts: {
     linkTitle: linkTitle || undefined,
     file: opts.addedPaths.length === 1 ? opts.addedPaths[0] : undefined,
     files: opts.addedPaths.length > 1 ? opts.addedPaths.slice() : undefined,
+    proxyQualities: opts.wantsProxy ? normalizeQualities(opts.proxyQualities) : [],
   }
 
   if (versionIds.length) {
@@ -1338,15 +1373,45 @@ function startLinkTranscodeTracking(opts: {
       const proxyToTrack = proxyActiveSplit.inactive
 
       if (proxyToTrack.length) {
-        transfer.startAssetVersionTranscodeTask({
-          apiFetch: props.apiFetch,
-          assetVersionIds: proxyToTrack,
-          title: 'Generating proxy files',
-          detail: `Tracking ${proxyToTrack.length} asset version(s)`,
-          intervalMs: 1500,
-          jobKind: 'proxy_mp4',
-          context,
-        })
+        const fallbackIds: number[] = []
+        for (const assetVersionId of proxyToTrack) {
+          const fileId = versionToFileId.get(assetVersionId)
+          if (detailsToken.value && fileId) {
+            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+            transfer.startPlaybackTranscodeTask({
+              title: 'Generating proxy files',
+              detail: `Tracking asset version ${assetVersionId}`,
+              intervalMs: 1500,
+              jobKind: 'proxy_mp4',
+              context,
+              fetchSnapshot: async () => {
+                const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+                const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
+                return {
+                  status: j?.status ?? payload?.proxyStatus ?? payload?.status,
+                  progress: j?.progress ?? payload?.proxyProgress ?? 0,
+                  qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
+                  activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
+                  perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
+                }
+              },
+            })
+          } else {
+            fallbackIds.push(assetVersionId)
+          }
+        }
+
+        if (fallbackIds.length) {
+          transfer.startAssetVersionTranscodeTask({
+            apiFetch: props.apiFetch,
+            assetVersionIds: fallbackIds,
+            title: 'Generating proxy files',
+            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            intervalMs: 1500,
+            jobKind: 'proxy_mp4',
+            context,
+          })
+        }
       }
 
       const proxyInProgressIds = Array.from(new Set([
@@ -1382,15 +1447,42 @@ function startLinkTranscodeTracking(opts: {
       const hlsToTrack = hlsActiveSplit.inactive
 
       if (hlsToTrack.length) {
-        transfer.startAssetVersionTranscodeTask({
-          apiFetch: props.apiFetch,
-          assetVersionIds: hlsToTrack,
-          title: 'Generating adaptive stream',
-          detail: `Tracking ${hlsToTrack.length} asset version(s)`,
-          intervalMs: 1500,
-          jobKind: 'hls',
-          context,
-        })
+        const fallbackIds: number[] = []
+        for (const assetVersionId of hlsToTrack) {
+          const fileId = versionToFileId.get(assetVersionId)
+          if (detailsToken.value && fileId) {
+            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+            transfer.startPlaybackTranscodeTask({
+              title: 'Generating adaptive stream',
+              detail: `Tracking asset version ${assetVersionId}`,
+              intervalMs: 1500,
+              jobKind: 'hls',
+              context,
+              fetchSnapshot: async () => {
+                const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+                const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
+                return {
+                  status: j?.status ?? payload?.hlsStatus ?? payload?.status,
+                  progress: j?.progress ?? payload?.hlsProgress ?? 0,
+                }
+              },
+            })
+          } else {
+            fallbackIds.push(assetVersionId)
+          }
+        }
+
+        if (fallbackIds.length) {
+          transfer.startAssetVersionTranscodeTask({
+            apiFetch: props.apiFetch,
+            assetVersionIds: fallbackIds,
+            title: 'Generating adaptive stream',
+            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            intervalMs: 1500,
+            jobKind: 'hls',
+            context,
+          })
+        }
       }
 
       const hlsInProgressIds = Array.from(new Set([
@@ -1945,6 +2037,7 @@ async function saveAll() {
         wantsProxy,
         wantsHls,
         addedPaths,
+        proxyQualities: wantsProxy ? nextProxyQualities : [],
       })
     }
 

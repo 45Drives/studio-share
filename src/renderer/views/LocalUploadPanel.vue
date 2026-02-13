@@ -544,6 +544,7 @@ function waitForIngestAndStartTranscode(opts: {
 						groupId: opts.groupId,
 						destDir: opts.destDir,
 						file: opts.destFileAbs,
+						proxyQualities: opts.wantProxy ? proxyQualities.value.slice() : [],
 					},
 				});
 			} else {
@@ -559,6 +560,7 @@ function waitForIngestAndStartTranscode(opts: {
 						groupId: opts.groupId,
 						destDir: opts.destDir,
 						file: opts.destFileAbs,
+						proxyQualities: opts.wantProxy ? proxyQualities.value.slice() : [],
 					},
 				});
 			}
@@ -579,6 +581,7 @@ function waitForIngestAndStartTranscode(opts: {
 						groupId: opts.groupId,
 						destDir: opts.destDir,
 						file: opts.destFileAbs,
+						proxyQualities: proxyQualities.value.slice(),
 					},
 				});
 			} else {
@@ -594,6 +597,7 @@ function waitForIngestAndStartTranscode(opts: {
 						groupId: opts.groupId,
 						destDir: opts.destDir,
 						file: opts.destFileAbs,
+						proxyQualities: proxyQualities.value.slice(),
 					},
 				});
 			}

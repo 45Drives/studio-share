@@ -490,6 +490,41 @@
                         <div v-if="hasActiveUploadForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
                             One or more selected files are still uploading. Wait for upload completion before creating a link (transcodes run after upload completes).
                         </div>
+                        <div v-if="selectionProgressRows.length" class="mt-3 rounded-md border border-default bg-accent p-3">
+                            <div class="text-sm font-semibold mb-2">Transcode progress</div>
+                            <div v-for="row in selectionProgressRows" :key="row.taskId" class="border-t border-default first:border-t-0 pt-2 first:pt-0 mt-2 first:mt-0">
+                                <div class="text-xs font-semibold truncate" :title="row.fileLabel">
+                                    {{ row.fileLabel }}
+                                </div>
+                                <div class="text-[11px] opacity-70 mt-0.5">{{ row.kindLabel }}</div>
+
+                                <div v-if="row.showHls" class="mt-2">
+                                    <div class="flex items-center justify-between text-xs opacity-80">
+                                        <span>HLS</span>
+                                        <span>{{ row.hlsProgress }}%</span>
+                                    </div>
+                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden bg-default" :value="row.hlsProgress" max="100" />
+                                </div>
+
+                                <div v-if="row.showProxy && row.proxyQualities.length" class="mt-2">
+                                    <div class="flex items-center justify-between text-xs opacity-80">
+                                        <span>Proxy (cumulative)</span>
+                                        <span>{{ row.proxyCumulativeProgress }}%</span>
+                                    </div>
+                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden bg-default" :value="row.proxyCumulativeProgress" max="100" />
+
+                                    <div class="mt-2 space-y-1">
+                                        <div v-for="q in row.proxyQualities" :key="`${row.taskId}:${q.quality}`">
+                                            <div class="flex items-center justify-between text-[11px] opacity-80">
+                                                <span>{{ q.label }}</span>
+                                                <span>{{ q.progress }}%</span>
+                                            </div>
+                                            <progress class="mt-1 w-full h-1.5 rounded-lg overflow-hidden bg-default" :value="q.progress" max="100" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         <div v-if="viewUrl" class="p-3 border rounded flex flex-col items-center mt-1 min-w-0">
                             <code class="max-w-full break-all">{{ viewUrl }}</code>
@@ -1151,6 +1186,177 @@ const hasActiveUploadForSelection = computed(() => {
     })
 })
 
+function fileLabelFromPath(p?: string) {
+    const s = String(p || '')
+    if (!s) return 'File'
+    const idx = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+    return idx >= 0 ? s.slice(idx + 1) : s
+}
+
+function qualityLabel(q: string) {
+    if (q === 'original') return 'Original'
+    return q
+}
+
+function normalizeQualities(list: unknown): string[] {
+    const seen = new Set<string>()
+    const out: string[] = []
+    const order = ['720p', '1080p', 'original']
+
+    for (const raw of Array.isArray(list) ? list : []) {
+        const q = String(raw || '').trim().toLowerCase()
+        if (!q || seen.has(q)) continue
+        seen.add(q)
+        out.push(q)
+    }
+
+    out.sort((a, b) => {
+        const ia = order.indexOf(a)
+        const ib = order.indexOf(b)
+        const sa = ia === -1 ? Number.MAX_SAFE_INTEGER : ia
+        const sb = ib === -1 ? Number.MAX_SAFE_INTEGER : ib
+        if (sa !== sb) return sa - sb
+        return a.localeCompare(b)
+    })
+
+    return out
+}
+
+function isProxyJob(j: any) {
+    const k = String(j?.kind || '').toLowerCase()
+    return k === 'proxy_mp4' || k.startsWith('proxy_mp4:')
+}
+
+function isHlsJob(j: any) {
+    return String(j?.kind || '').toLowerCase() === 'hls'
+}
+
+function jobProgressPercent(j: any) {
+    const st = String(j?.status || '').toLowerCase()
+    if (st === 'done') return 100
+    const p = Number(j?.progress)
+    if (!Number.isFinite(p)) return 0
+    const pct = (p > 0 && p <= 1) ? (p * 100) : p
+    return Math.max(0, Math.min(100, pct))
+}
+
+function proxyQualityFromJob(j: any) {
+    const rawQuality = j?.quality
+        ?? j?.proxyQuality
+        ?? j?.targetQuality
+        ?? j?.outputQuality
+        ?? j?.meta?.quality
+        ?? j?.metadata?.quality
+        ?? j?.payload?.quality
+        ?? j?.params?.quality
+        ?? j?.options?.quality
+        ?? j?.job_data?.quality
+    const direct = String(rawQuality || '').trim().toLowerCase()
+    if (direct) return direct
+    const kind = String(j?.kind || '').toLowerCase()
+    const m = kind.match(/^proxy_mp4[:_/-]([a-z0-9]+p?|original)$/i)
+    return m?.[1] ? String(m[1]).toLowerCase() : ''
+}
+
+function expandQualitiesFromCumulative(cumulative: number, qualities: string[]) {
+    const count = qualities.length || 1
+    const chunk = 100 / count
+    return qualities.map((q, idx) => {
+        const start = idx * chunk
+        const end = start + chunk
+        let progress = 0
+        if (cumulative >= end) progress = 100
+        else if (cumulative > start) progress = ((cumulative - start) / chunk) * 100
+        return {
+            quality: q,
+            label: qualityLabel(q),
+            progress: Math.round(Math.max(0, Math.min(100, progress))),
+        }
+    })
+}
+
+function taskProgressRows(task: any) {
+    const items = Array.isArray(task?.items) ? task.items : []
+    const jobs = items.flatMap((it: any) => (Array.isArray(it?.jobs) ? it.jobs : []))
+    const jk = String(task?.jobKind || 'any').toLowerCase()
+    const showHls = jk === 'any' || jk === 'hls'
+    const showProxy = jk === 'any' || jk === 'proxy_mp4'
+
+    const hlsJobs = jobs.filter(isHlsJob)
+    const hlsProgress = hlsJobs.length
+        ? Math.round(hlsJobs.reduce((sum: number, j: any) => sum + jobProgressPercent(j), 0) / hlsJobs.length)
+        : 0
+
+    const proxyJobs = jobs.filter(isProxyJob)
+    const requestedQualities = normalizeQualities(task?.context?.proxyQualities)
+    const discoveredQualities = normalizeQualities(proxyJobs.map(proxyQualityFromJob).filter(Boolean))
+    const qualities = requestedQualities.length ? requestedQualities : discoveredQualities
+
+    let proxyCumulativeProgress = 0
+    if (qualities.length) {
+        const byQuality = new Map<string, number>()
+        let matchedQualityJobs = 0
+        for (const q of qualities) byQuality.set(q, 0)
+        for (const j of proxyJobs) {
+            const q = proxyQualityFromJob(j)
+            if (!q || !byQuality.has(q)) continue
+            const p = jobProgressPercent(j)
+            if (p > (byQuality.get(q) || 0)) byQuality.set(q, p)
+            matchedQualityJobs++
+        }
+
+        if (matchedQualityJobs === 0) {
+            proxyCumulativeProgress = Math.round(
+                Math.max(
+                    0,
+                    Math.min(100, proxyJobs.reduce((sum: number, j: any) => sum + jobProgressPercent(j), 0) / proxyJobs.length)
+                )
+            )
+        } else {
+            let sum = 0
+            for (const q of qualities) sum += byQuality.get(q) || 0
+            proxyCumulativeProgress = Math.round(Math.max(0, Math.min(100, sum / qualities.length)))
+        }
+    } else if (proxyJobs.length) {
+        proxyCumulativeProgress = Math.round(
+            Math.max(
+                0,
+                Math.min(100, proxyJobs.reduce((sum: number, j: any) => sum + jobProgressPercent(j), 0) / proxyJobs.length)
+            )
+        )
+    }
+
+    const proxyQualities = requestedQualities.length
+        ? expandQualitiesFromCumulative(proxyCumulativeProgress, requestedQualities)
+        : []
+
+    return {
+        taskId: String(task.taskId),
+        fileLabel: fileLabelFromPath(task?.context?.file),
+        kindLabel: jk === 'hls' ? 'HLS' : (jk === 'proxy_mp4' ? 'Proxy' : 'Transcode'),
+        showHls,
+        showProxy,
+        hlsProgress,
+        proxyCumulativeProgress,
+        proxyQualities,
+    }
+}
+
+const selectionProgressRows = computed(() => {
+    const selected = new Set(files.value.map(normServerPath))
+    if (!selected.size) return []
+
+    return transfer.state.tasks
+        .filter((t: any) => {
+            if (t.kind !== 'transcode') return false
+            if (!['queued', 'running', 'unknown'].includes(t.status)) return false
+            if (t.context?.source !== 'link') return false
+            const file = normServerPath(String(t.context?.file || ''))
+            return !!file && selected.has(file)
+        })
+        .map(taskProgressRows)
+})
+
 watch(hasActiveUploadForSelection, (active, wasActive) => {
     if (active && !wasActive) {
         pushNotification(
@@ -1238,6 +1444,22 @@ function extractDbFileIdsFromMagicLinkResponse(data: any): number[] {
     }
 
     return Array.from(new Set(ids));
+}
+
+function extractLinkTokenFromResponse(data: any): string {
+    const direct = String(data?.token || data?.link?.token || '').trim()
+    if (direct) return direct
+    const u = String(data?.viewUrl || '').trim()
+    if (!u) return ''
+    try {
+        const parsed = new URL(u)
+        const parts = parsed.pathname.split('/').filter(Boolean)
+        const idx = parts.findIndex(p => p.toLowerCase() === 'token')
+        if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim()
+        return String(parts[parts.length - 1] || '').trim()
+    } catch {
+        return ''
+    }
 }
 
 async function generateLink() {
@@ -1455,6 +1677,7 @@ async function generateLink() {
                 const groupId = `link:${data.viewUrl}`;
                 const fileRecords = Array.isArray(data?.files) ? data.files : [];
                 const started = new Set<number>();
+                const token = extractLinkTokenFromResponse(data)
 
                 const getFileLabel = (rec: any) =>
                     rec?.name || rec?.relPath || rec?.path || rec?.p || 'File';
@@ -1470,22 +1693,81 @@ async function generateLink() {
                         if (!versionIds.includes(assetVersionId)) continue;
 
                         started.add(assetVersionId);
-                        transfer.startAssetVersionTranscodeTask({
-                            apiFetch,
-                            assetVersionIds: [assetVersionId],
-                            title: `Transcoding: ${getFileLabel(rec)}`,
-                            detail: transcodeProxy.value ? 'Tracking HLS + proxy' : 'Tracking HLS',
-                            intervalMs: 1500,
-                            jobKind: 'any',
-                            context: {
-                                source: 'link',
-                                groupId,
-                                linkUrl: data.viewUrl,
-                                linkTitle: linkTitle.value || undefined,
-                                file: rec?.path || rec?.relPath || rec?.p || rec?.name,
-                                files: files.value.slice(),
-                            },
-                        });
+                        const context = {
+                            source: 'link' as const,
+                            groupId,
+                            linkUrl: data.viewUrl,
+                            linkTitle: linkTitle.value || undefined,
+                            file: rec?.path || rec?.relPath || rec?.p || rec?.name,
+                            files: files.value.slice(),
+                            proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
+                        }
+                        const fileId = Number(rec?.id ?? rec?.fileId ?? rec?.file_id ?? rec?.file?.id)
+                        const canUsePlayback = !!token && Number.isFinite(fileId) && fileId > 0
+                        const playbackPath = canUsePlayback
+                            ? `/api/token/${encodeURIComponent(token)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+                            : ''
+
+                        if (canUsePlayback) {
+                            transfer.startPlaybackTranscodeTask({
+                                title: `Transcoding: ${getFileLabel(rec)}`,
+                                detail: 'Tracking HLS',
+                                intervalMs: 1500,
+                                jobKind: 'hls',
+                                context,
+                                fetchSnapshot: async () => {
+                                    const payload = await apiFetch(playbackPath, { suppressAuthRedirect: true })
+                                    const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
+                                    return {
+                                        status: j?.status ?? payload?.hlsStatus ?? payload?.status,
+                                        progress: j?.progress ?? payload?.hlsProgress ?? 0,
+                                    }
+                                }
+                            })
+                        } else {
+                            transfer.startAssetVersionTranscodeTask({
+                                apiFetch,
+                                assetVersionIds: [assetVersionId],
+                                title: `Transcoding: ${getFileLabel(rec)}`,
+                                detail: 'Tracking HLS',
+                                intervalMs: 1500,
+                                jobKind: 'hls',
+                                context,
+                            });
+                        }
+
+                        if (transcodeProxy.value) {
+                            if (canUsePlayback) {
+                                transfer.startPlaybackTranscodeTask({
+                                    title: `Transcoding: ${getFileLabel(rec)}`,
+                                    detail: 'Tracking proxy',
+                                    intervalMs: 1500,
+                                    jobKind: 'proxy_mp4',
+                                    context,
+                                    fetchSnapshot: async () => {
+                                        const payload = await apiFetch(playbackPath, { suppressAuthRedirect: true })
+                                        const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
+                                        return {
+                                            status: j?.status ?? payload?.proxyStatus ?? payload?.status,
+                                            progress: j?.progress ?? payload?.proxyProgress ?? 0,
+                                            qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
+                                            activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
+                                            perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
+                                        }
+                                    }
+                                })
+                            } else {
+                                transfer.startAssetVersionTranscodeTask({
+                                    apiFetch,
+                                    assetVersionIds: [assetVersionId],
+                                    title: `Transcoding: ${getFileLabel(rec)}`,
+                                    detail: 'Tracking proxy',
+                                    intervalMs: 1500,
+                                    jobKind: 'proxy_mp4',
+                                    context,
+                                });
+                            }
+                        }
                     }
                 }
 
