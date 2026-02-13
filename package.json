@@ -13,7 +13,9 @@
     "build:win": "yarn build:common && node scripts/build.js && electron-builder --win --config electron-builder.json",
     "build:mac": "yarn build:common && node scripts/build.js && electron-builder --mac",
     "build:linux": "yarn build:common && node scripts/build.js && electron-builder --linux",
-    "test": "vitest run"
+    "test": "vitest run",
+    "mac:dir:arm64": "yarn build:common && node scripts/build.js && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 electron-builder --mac --arm64 --dir",
+    "mac:dir:universal": "yarn build:common && node scripts/build.js && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 electron-builder --mac --universal --dir"
   },
   "repository": "https://github.com/45Drives/studio-share",
   "author": {
