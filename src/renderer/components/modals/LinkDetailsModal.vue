@@ -33,7 +33,7 @@
               <div class="font-semibold text-default truncate">Primary Link</div>
               <button class="text-blue-500 hover:underline text-xs shrink-0" @click="copy(primaryUrl)">Copy</button>
             </div>
-            <a :href="primaryUrl" target="_blank" rel="noopener" class="hover:underline break-all block">
+            <a :href="primaryUrl" target="_blank" rel="noopener" class="hover:underline block">
               {{ primaryUrl || '—' }}
             </a>
 
@@ -42,7 +42,7 @@
                 <div class="font-semibold text-default truncate">Download Link</div>
                 <button class="text-blue-500 hover:underline text-xs shrink-0" @click="copy(downloadUrl)">Copy</button>
               </div>
-              <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline break-all block mt-1">
+              <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline block mt-1">
                 {{ downloadUrl }}
               </a>
             </div>
@@ -238,7 +238,7 @@
                       </thead>
                       <tbody>
                         <tr v-for="u in access" :key="u.user_id" class="border-t border-default">
-                          <td class="px-3 py-2 border border-default break-all">
+                          <td class="px-3 py-2 border border-default">
                             <div class="flex items-center gap-2">
                               <span>{{ u.name || '—' }}</span>
                               <span v-if="u.is_disabled"
@@ -248,8 +248,8 @@
                               </span>
                             </div>
                           </td>
-                          <td class="px-3 py-2 border border-default break-all">{{ u.user_name || '—' }}</td>
-                          <td class="px-3 py-2 border border-default break-all">
+                          <td class="px-3 py-2 border border-default">{{ u.user_name || '—' }}</td>
+                          <td class="px-3 py-2 border border-default">
                             {{ u.role_name || u.role?.name || '—' }}
                           </td>
                           <td class="px-3 py-2 border border-default">
@@ -358,7 +358,7 @@
                 <div v-if="draftFilePaths.length"
                   class="rounded border border-default bg-default/30 max-h-40 overflow-auto">
                   <div v-for="(p, i) in draftFilePaths" :key="p + ':' + i"
-                    class="px-3 py-2 border-b border-default break-all last:border-b-0">
+                    class="px-3 py-2 border-b border-default last:border-b-0">
                     <code>{{ p }}</code>
                   </div>
                 </div>
@@ -416,7 +416,7 @@
               Loaded from link summary because detailed file rows are currently unavailable.
             </div>
             <div class="overflow-x-auto max-h-[18rem] overflow-y-auto overscroll-y-contain rounded-lg border border-default">
-              <table class="min-w-full text-sm border-separate border-spacing-0">
+              <table class="min-w-full text-sm border-separate border-spacing-0 whitespace-nowrap">
                 <thead>
                   <tr class="bg-default text-gray-300">
                     <th class="text-left px-3 py-2 border border-default">Name</th>
@@ -430,8 +430,8 @@
                 </thead>
                 <tbody>
                   <tr v-for="f in displayFiles" :key="f.key" class="border-t border-default">
-                    <td class="px-3 py-2 break-all border border-default">{{ f.name }}</td>
-                    <!-- <td v-if="link?.type === 'upload'" class="px-3 py-2 break-all border border-default">
+                    <td class="px-3 py-2 border border-default">{{ f.name }}</td>
+                    <!-- <td v-if="link?.type === 'upload'" class="px-3 py-2 border border-default">
                       {{ f.saved_as || '—' }}
                     </td> -->
                     <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(f.size) }}</td>
@@ -486,14 +486,14 @@
               <tbody>
                 <tr v-for="(a, idx) in filteredAuditActivity" :key="`${a.ts_ms}:${a.type}:${idx}`" class="border-t border-default align-top">
                   <td class="px-3 py-2 border border-default whitespace-nowrap">{{ formatTs(a.ts_ms) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ activityTypeLabel(a.type) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ actorLabel(a) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ sourceLabel(a) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">
+                  <td class="px-3 py-2 border border-default">{{ activityTypeLabel(a.type) }}</td>
+                  <td class="px-3 py-2 border border-default">{{ actorLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default">{{ sourceLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default">
                     <div>{{ activitySummary(a) }}</div>
                     <details v-if="hasActivityDetails(a)" class="mt-1">
                       <summary class="cursor-pointer opacity-80">Details</summary>
-                      <pre class="mt-1 text-xs whitespace-pre-wrap break-all">{{ activityDetailsPretty(a) }}</pre>
+                      <pre class="mt-1 text-xs whitespace-pre-wrap">{{ activityDetailsPretty(a) }}</pre>
                     </details>
                   </td>
                 </tr>
