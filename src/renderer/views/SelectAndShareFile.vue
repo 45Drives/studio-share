@@ -1771,7 +1771,26 @@ async function generateLink() {
                     }
                 }
 
-                // No aggregate task when per-file tasks are created.
+                // Fallback: if version IDs exist but no per-file task could be started,
+                // create an aggregate tracker so the Transfers panel still reflects server work.
+                if (!started.size) {
+                    transfer.startAssetVersionTranscodeTask({
+                        apiFetch,
+                        assetVersionIds: versionIds,
+                        title: "Generating transcodes",
+                        detail: `Tracking ${versionIds.length} version(s)`,
+                        intervalMs: 1500,
+                        jobKind: 'any',
+                        context: {
+                            source: 'link',
+                            groupId: `link:${data.viewUrl}`,
+                            linkUrl: data.viewUrl,
+                            linkTitle: linkTitle.value || undefined,
+                            files: files.value.slice(),
+                            proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
+                        },
+                    });
+                }
             } else {
                 // fallback (only if server didn't return transcodes for some reason)
                 const fileIds = extractDbFileIdsFromMagicLinkResponse(data);
