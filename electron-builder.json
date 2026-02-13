@@ -35,7 +35,8 @@
       ".*/[A-Za-z_]+\\.lproj/.*$",
       ".*/Electron Framework\\.framework/Versions/A/Resources/.*$",
       ".*/assets/.*"
-    ]
+    ],
+    "icon": "icon.icns"
   },
   "win": {
     "target": "nsis",
@@ -103,5 +104,9 @@
       "filter": ["**/*"]
     }
   ],
-  "asar": false
+  "asar": true,
+  "asarUnpack": [
+    "**/*.node",
+    "**/*.dylib"
+  ]
 }

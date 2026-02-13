@@ -19,38 +19,53 @@ cd "$ROOT_DIR"
 VERSION="$(node -p "require('./package.json').version")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BUNDLE_TAG="mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}"
-LOCAL_STAGE="${ROOT_DIR}/dist/sign-stage/${BUNDLE_TAG}"
 
-echo "Building macOS app dir on ARM: kind=${MAC_BUILD_KIND}, version=${VERSION}"
+REMOTE_DIR="${SIGN_INBOX}/${BUNDLE_TAG}"
 
-mkdir -p "$LOCAL_STAGE"
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o PreferredAuthentications=publickey
+  -o PasswordAuthentication=no
+  -o KbdInteractiveAuthentication=no
+  -o ControlMaster=auto
+  -o ControlPersist=5m
+  -o ControlPath="$HOME/.ssh/cm-%r@%h:%p"
+)
+
+SSH=(ssh "${SSH_OPTS[@]}")
+RSYNC_SSH=(ssh "${SSH_OPTS[@]}")
+
+echo "Build tag: $BUNDLE_TAG"
+echo "Building macOS (${MAC_BUILD_KIND}) unsigned..."
+
+rm -rf dist/mac-universal dist/mac-arm64 dist/mac-x64 dist/sign-stage || true
 
 if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
-  yarn mac:dir:universal
+  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:universal
+  APP_PATH="${ROOT_DIR}/dist/mac-universal/${APP_PRODUCT_FILENAME}.app"
 elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
-  yarn mac:dir:arm64
+  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:arm64
+  APP_PATH="${ROOT_DIR}/dist/mac-arm64/${APP_PRODUCT_FILENAME}.app"
 else
   echo "MAC_BUILD_KIND must be 'arm64' or 'universal'" >&2
   exit 1
 fi
 
-# Find the produced .app (electron-builder --dir outputs into dist/mac*/ by default)
-APP_PATH="$(find "${ROOT_DIR}/dist" -maxdepth 4 -type d -name "*.app" | head -n 1 || true)"
-if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
-  echo "Could not find .app under dist/. Build failed?" >&2
-  exit 1
-fi
+test -d "$APP_PATH" || { echo "Missing app bundle: $APP_PATH" >&2; exit 1; }
 
-echo "Found app bundle: $APP_PATH"
-rsync -a --delete "$APP_PATH" "${LOCAL_STAGE}/"
+echo "Shipping to signing Mac: ${SIGN_USER}@${SIGN_HOST}:${REMOTE_DIR}"
+"${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" "mkdir -p '$REMOTE_DIR'"
 
-echo "Shipping to signing Mac..."
-REMOTE_DIR="${SIGN_INBOX}/${BUNDLE_TAG}"
-ssh "${SIGN_USER}@${SIGN_HOST}" "mkdir -p '${REMOTE_DIR}'"
-rsync -a --delete "${LOCAL_STAGE}/" "${SIGN_USER}@${SIGN_HOST}:${REMOTE_DIR}/"
+rsync -a --delete -e "${RSYNC_SSH[*]}" \
+  "$APP_PATH" \
+  "${SIGN_USER}@${SIGN_HOST}:${REMOTE_DIR}/"
 
-echo "Trigger signing on Intel..."
-ssh "${SIGN_USER}@${SIGN_HOST}" "bash -lc 'cd \"${REMOTE_DIR}\" && \"${SIGN_INBOX}/sign-mac-on-intel.sh\" \"${BUNDLE_TAG}\"'"
+rsync -a -e "${RSYNC_SSH[*]}" \
+  "${ROOT_DIR}/${ENTITLEMENTS_FILE}" \
+  "${SIGN_USER}@${SIGN_HOST}:${SIGN_INBOX}/${ENTITLEMENTS_FILE}"
 
-echo "Done."
-echo "Signing inbox on Intel: ${REMOTE_DIR}"
+echo "Trigger signing/notarization on Intel..."
+"${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" \
+  "bash -lc '\"${SIGN_INBOX}/sign-mac-on-intel.sh\" \"$BUNDLE_TAG\"'"
+
+echo "Done. Artifacts are on Intel Mac under: ${SIGN_OUTPUT_DIR}/${BUNDLE_TAG}"
