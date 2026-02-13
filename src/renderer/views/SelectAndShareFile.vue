@@ -1018,16 +1018,28 @@ function rootOfServerPath(p: string) {
     return first ? `/${first}` : '/'
 }
 
-function resolveWatermarkUploadDir() {
+function resolveWatermarkStorageRoot() {
     const base = String(projectBase.value || '').trim()
     const root = base || rootOfServerPath(files.value[0] || '')
-    const cleanRoot = root === '/' ? '' : root.replace(/\/+$/, '')
+    let abs = String(root || '/').replace(/\\/g, '/').trim()
+    if (!abs) abs = '/'
+    if (!abs.startsWith('/')) abs = '/' + abs
+    abs = abs.replace(/\/+$/, '') || '/'
+    const rel = abs === '/' ? '' : abs.replace(/^\/+/, '')
+    return { abs, rel }
+}
+
+function resolveWatermarkUploadDir() {
+    const { abs } = resolveWatermarkStorageRoot()
+    const cleanRoot = abs === '/' ? '' : abs
     return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
 }
 
 function resolveWatermarkRelPath() {
     const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
-    return name ? `flow45studio-watermarks/${name}` : ''
+    if (!name) return ''
+    const { rel } = resolveWatermarkStorageRoot()
+    return `${rel ? rel + '/' : ''}flow45studio-watermarks/${name}`
 }
 
 async function uploadWatermarkToProject() {
@@ -1091,6 +1103,13 @@ const canGenerate = computed(() =>
     !hasActiveTranscodeForSelection.value &&
     !hasActiveUploadForSelection.value
 );
+
+function hasRequestedExistingOutputs() {
+    if (!hasVideoSelected.value) return false
+    if (transcodeProxy.value && preflightProxyExistingCount.value > 0) return true
+    if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0) return true
+    return false
+}
 
 function sameSelection(a: string[], b: string[]) {
     if (a.length !== b.length) return false
@@ -1266,6 +1285,36 @@ async function generateLink() {
     viewUrl.value = ''
     downloadUrl.value = ''
 
+    let keepExistingOutputs = false
+    let forceOverwrite = false
+
+    if (hasRequestedExistingOutputs()) {
+        const action = await confirmOutputsExistOverwrite()
+        if (action === 'close') {
+            loading.value = false
+            return
+        }
+        if (action === 'overwrite') {
+            if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0 && !watermarkFile.value?.name) {
+                pushNotification(
+                    new Notification(
+                        'Watermark Image Required',
+                        'Choose a new watermark image to overwrite existing watermark outputs.',
+                        'warning',
+                        8000
+                    )
+                )
+                loading.value = false
+                return
+            }
+            forceOverwrite = true
+            overwriteExisting.value = true
+        } else {
+            keepExistingOutputs = true
+            overwriteExisting.value = false
+        }
+    }
+
     const body: any = {
         expiresInSeconds: expiresSec.value,
         projectBase: projectBase.value || undefined,
@@ -1302,19 +1351,23 @@ async function generateLink() {
     body.generateReviewProxy = !!transcodeProxy.value
     if (transcodeProxy.value) {
         body.proxyQualities = proxyQualities.value.slice()
-        if (usingExistingProxy.value) body.keepExistingOutputs = true
     }
-    if (overwriteExisting.value) {
+    if (forceOverwrite || overwriteExisting.value) {
         body.overwrite = true
+    }
+    if (keepExistingOutputs) {
+        body.keepExistingOutputs = true
     }
     const useExistingWatermarkOnly =
         watermarkEnabled.value && !watermarkFile.value?.name && usingExistingWatermark.value
 
-    if (watermarkEnabled.value && watermarkFile.value?.name) {
+    const keepExistingWatermark = keepExistingOutputs && watermarkEnabled.value && preflightWatermarkExistingCount.value > 0
+
+    if (watermarkEnabled.value && watermarkFile.value?.name && !keepExistingWatermark) {
         body.watermark = true
         body.watermarkFile = resolveWatermarkRelPath() || watermarkFile.value.name
         body.watermarkProxyQualities = proxyQualities.value.slice()
-    } else if (useExistingWatermarkOnly) {
+    } else if (useExistingWatermarkOnly || keepExistingWatermark) {
         body.watermark = true
         body.keepExistingOutputs = true
         body.allowExistingOutputs = true
@@ -1322,7 +1375,7 @@ async function generateLink() {
     }
 
     try {
-        if (watermarkEnabled.value && watermarkFile.value) {
+        if (watermarkEnabled.value && watermarkFile.value && !keepExistingWatermark) {
             const up = await uploadWatermarkToProject()
             if (!up.ok) {
                 pushNotification(

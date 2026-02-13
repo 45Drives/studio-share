@@ -400,21 +400,32 @@ function rootOfServerPath(p: string) {
 	return first ? `/${first}` : '/'
 }
 
-function resolveWatermarkUploadDir() {
+function resolveWatermarkStorageRoot() {
 	const base = String(projectBase.value || '').trim()
 	const root = base || rootOfServerPath(normalizedDest.value)
-	const cleanRoot = root === '/' ? '' : root.replace(/\/+$/, '')
+	let abs = String(root || '/').replace(/\\/g, '/').trim()
+	if (!abs) abs = '/'
+	if (!abs.startsWith('/')) abs = '/' + abs
+	abs = abs.replace(/\/+$/, '') || '/'
+	const rel = abs === '/' ? '' : abs.replace(/^\/+/, '')
+	return { abs, rel }
+}
+
+function resolveWatermarkUploadDir() {
+	const { abs } = resolveWatermarkStorageRoot()
+	const cleanRoot = abs === '/' ? '' : abs
 	return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
 }
 
 function resolveWatermarkRelPath() {
 	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
-	return name ? `flow45studio-watermarks/${name}` : ''
+	if (!name) return ''
+	const { rel } = resolveWatermarkStorageRoot()
+	return `${rel ? rel + '/' : ''}flow45studio-watermarks/${name}`
 }
 
 function resolveWatermarkProjectRoot() {
-	const base = String(projectBase.value || '').trim()
-	return base || rootOfServerPath(normalizedDest.value)
+	return resolveWatermarkStorageRoot().abs
 }
 
 function resolveCandidateServerWatermarkRelPath() {
@@ -426,8 +437,9 @@ function resolveCandidateServerWatermarkRelPath() {
 	if (!root.startsWith('/')) root = '/' + root
 
 	if (root !== '/' && (selectedPath === root || selectedPath.startsWith(root + '/'))) {
-		const rel = selectedPath.slice(root.length).replace(/^\/+/, '')
-		return rel
+		const tail = selectedPath.slice(root.length).replace(/^\/+/, '')
+		const rootRel = root.replace(/^\/+/, '')
+		return tail ? `${rootRel}/${tail}` : rootRel
 	}
 
 	if (root === '/' && selectedPath.startsWith('/')) {
@@ -591,8 +603,8 @@ function waitForIngestAndStartTranscode(opts: {
 		const handler = async (_e: any, payload: any) => {
 			try {
 				if (!payload?.ok) {
-					if (payload?.error === 'outputs_exist') {
-						const msg = 'Proxy outputs already exist for this file. Overwrite them?';
+					if (payload?.error === 'outputs_exist' || payload?.error === 'hls_exists') {
+						const msg = 'Transcode outputs already exist for this file. Overwrite them?';
 						const proceed = window.confirm(msg);
 						if (proceed) {
 							const params = new URLSearchParams();
