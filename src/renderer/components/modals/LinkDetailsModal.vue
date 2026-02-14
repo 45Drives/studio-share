@@ -33,7 +33,7 @@
               <div class="font-semibold text-default truncate">Primary Link</div>
               <button class="text-blue-500 hover:underline text-xs shrink-0" @click="copy(primaryUrl)">Copy</button>
             </div>
-            <a :href="primaryUrl" target="_blank" rel="noopener" class="hover:underline break-all block">
+            <a :href="primaryUrl" target="_blank" rel="noopener" class="hover:underline block">
               {{ primaryUrl || '—' }}
             </a>
 
@@ -42,7 +42,7 @@
                 <div class="font-semibold text-default truncate">Download Link</div>
                 <button class="text-blue-500 hover:underline text-xs shrink-0" @click="copy(downloadUrl)">Copy</button>
               </div>
-              <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline break-all block mt-1">
+              <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline block mt-1">
                 {{ downloadUrl }}
               </a>
             </div>
@@ -238,7 +238,7 @@
                       </thead>
                       <tbody>
                         <tr v-for="u in access" :key="u.user_id" class="border-t border-default">
-                          <td class="px-3 py-2 border border-default break-all">
+                          <td class="px-3 py-2 border border-default">
                             <div class="flex items-center gap-2">
                               <span>{{ u.name || '—' }}</span>
                               <span v-if="u.is_disabled"
@@ -248,8 +248,8 @@
                               </span>
                             </div>
                           </td>
-                          <td class="px-3 py-2 border border-default break-all">{{ u.user_name || '—' }}</td>
-                          <td class="px-3 py-2 border border-default break-all">
+                          <td class="px-3 py-2 border border-default">{{ u.user_name || '—' }}</td>
+                          <td class="px-3 py-2 border border-default">
                             {{ u.role_name || u.role?.name || '—' }}
                           </td>
                           <td class="px-3 py-2 border border-default">
@@ -358,7 +358,7 @@
                 <div v-if="draftFilePaths.length"
                   class="rounded border border-default bg-default/30 max-h-40 overflow-auto">
                   <div v-for="(p, i) in draftFilePaths" :key="p + ':' + i"
-                    class="px-3 py-2 border-b border-default break-all last:border-b-0">
+                    class="px-3 py-2 border-b border-default last:border-b-0">
                     <code>{{ p }}</code>
                   </div>
                 </div>
@@ -416,7 +416,7 @@
               Loaded from link summary because detailed file rows are currently unavailable.
             </div>
             <div class="overflow-x-auto max-h-[18rem] overflow-y-auto overscroll-y-contain rounded-lg border border-default">
-              <table class="min-w-full text-sm border-separate border-spacing-0">
+              <table class="min-w-full text-sm border-separate border-spacing-0 whitespace-nowrap">
                 <thead>
                   <tr class="bg-default text-gray-300">
                     <th class="text-left px-3 py-2 border border-default">Name</th>
@@ -430,8 +430,8 @@
                 </thead>
                 <tbody>
                   <tr v-for="f in displayFiles" :key="f.key" class="border-t border-default">
-                    <td class="px-3 py-2 break-all border border-default">{{ f.name }}</td>
-                    <!-- <td v-if="link?.type === 'upload'" class="px-3 py-2 break-all border border-default">
+                    <td class="px-3 py-2 border border-default">{{ f.name }}</td>
+                    <!-- <td v-if="link?.type === 'upload'" class="px-3 py-2 border border-default">
                       {{ f.saved_as || '—' }}
                     </td> -->
                     <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(f.size) }}</td>
@@ -486,14 +486,14 @@
               <tbody>
                 <tr v-for="(a, idx) in filteredAuditActivity" :key="`${a.ts_ms}:${a.type}:${idx}`" class="border-t border-default align-top">
                   <td class="px-3 py-2 border border-default whitespace-nowrap">{{ formatTs(a.ts_ms) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ activityTypeLabel(a.type) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ actorLabel(a) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">{{ sourceLabel(a) }}</td>
-                  <td class="px-3 py-2 border border-default break-all">
+                  <td class="px-3 py-2 border border-default">{{ activityTypeLabel(a.type) }}</td>
+                  <td class="px-3 py-2 border border-default">{{ actorLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default">{{ sourceLabel(a) }}</td>
+                  <td class="px-3 py-2 border border-default">
                     <div>{{ activitySummary(a) }}</div>
                     <details v-if="hasActivityDetails(a)" class="mt-1">
                       <summary class="cursor-pointer opacity-80">Details</summary>
-                      <pre class="mt-1 text-xs whitespace-pre-wrap break-all">{{ activityDetailsPretty(a) }}</pre>
+                      <pre class="mt-1 text-xs whitespace-pre-wrap">{{ activityDetailsPretty(a) }}</pre>
                     </details>
                   </td>
                 </tr>
@@ -1309,16 +1309,50 @@ function extractDbFileIdsFromLinkFilesResponse(data: any): number[] {
   return Array.from(new Set(ids))
 }
 
+function mapAssetVersionToFileId(data: any): Map<number, number> {
+  const out = new Map<number, number>()
+  const push = (assetVersionId: any, fileId: any) => {
+    const v = Number(assetVersionId)
+    const f = Number(fileId)
+    if (!Number.isFinite(v) || v <= 0) return
+    if (!Number.isFinite(f) || f <= 0) return
+    out.set(v, f)
+  }
+
+  const t = data?.transcodes
+  if (Array.isArray(t)) {
+    for (const rec of t as any[]) {
+      push(rec?.assetVersionId ?? rec?.asset_version_id ?? rec?.assetVersion?.id, rec?.fileId ?? rec?.file_id ?? rec?.file?.id ?? rec?.id)
+    }
+  } else if (t && typeof t === 'object') {
+    for (const k of Object.keys(t)) {
+      const rec = (t as any)[k]
+      push(rec?.assetVersionId ?? rec?.asset_version_id ?? rec?.assetVersion?.id, rec?.fileId ?? rec?.file_id ?? rec?.file?.id ?? rec?.id)
+    }
+  }
+
+  const files = Array.isArray(data?.files) ? data.files : Array.isArray(data?.items) ? data.items : null
+  if (Array.isArray(files)) {
+    for (const f of files) {
+      push(f?.assetVersionId ?? f?.asset_version_id ?? f?.assetVersion?.id, f?.id ?? f?.fileId ?? f?.file_id ?? f?.file?.id)
+    }
+  }
+
+  return out
+}
+
 function startLinkTranscodeTracking(opts: {
   resp: any
   wantsProxy: boolean
   wantsHls: boolean
   addedPaths: string[]
+  proxyQualities?: string[]
 }) {
   if (!opts.wantsProxy && !opts.wantsHls) return
 
   const versionIds = extractAssetVersionIdsFromLinkFilesResponse(opts.resp)
   const linkTitle = (draftTitle.value || props.link?.title || (props.link ? fallbackTitle(props.link) : '') || '').trim()
+  const versionToFileId = mapAssetVersionToFileId(opts.resp)
   const context = {
     source: 'link' as const,
     groupId: props.link?.id != null ? `link:${props.link.id}` : undefined,
@@ -1326,6 +1360,7 @@ function startLinkTranscodeTracking(opts: {
     linkTitle: linkTitle || undefined,
     file: opts.addedPaths.length === 1 ? opts.addedPaths[0] : undefined,
     files: opts.addedPaths.length > 1 ? opts.addedPaths.slice() : undefined,
+    proxyQualities: opts.wantsProxy ? normalizeQualities(opts.proxyQualities) : [],
   }
 
   if (versionIds.length) {
@@ -1338,15 +1373,45 @@ function startLinkTranscodeTracking(opts: {
       const proxyToTrack = proxyActiveSplit.inactive
 
       if (proxyToTrack.length) {
-        transfer.startAssetVersionTranscodeTask({
-          apiFetch: props.apiFetch,
-          assetVersionIds: proxyToTrack,
-          title: 'Generating proxy files',
-          detail: `Tracking ${proxyToTrack.length} asset version(s)`,
-          intervalMs: 1500,
-          jobKind: 'proxy_mp4',
-          context,
-        })
+        const fallbackIds: number[] = []
+        for (const assetVersionId of proxyToTrack) {
+          const fileId = versionToFileId.get(assetVersionId)
+          if (detailsToken.value && fileId) {
+            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+            transfer.startPlaybackTranscodeTask({
+              title: 'Generating proxy files',
+              detail: `Tracking asset version ${assetVersionId}`,
+              intervalMs: 1500,
+              jobKind: 'proxy_mp4',
+              context,
+              fetchSnapshot: async () => {
+                const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+                const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
+                return {
+                  status: j?.status ?? payload?.proxyStatus ?? payload?.status,
+                  progress: j?.progress ?? payload?.proxyProgress ?? 0,
+                  qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
+                  activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
+                  perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
+                }
+              },
+            })
+          } else {
+            fallbackIds.push(assetVersionId)
+          }
+        }
+
+        if (fallbackIds.length) {
+          transfer.startAssetVersionTranscodeTask({
+            apiFetch: props.apiFetch,
+            assetVersionIds: fallbackIds,
+            title: 'Generating proxy files',
+            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            intervalMs: 1500,
+            jobKind: 'proxy_mp4',
+            context,
+          })
+        }
       }
 
       const proxyInProgressIds = Array.from(new Set([
@@ -1382,15 +1447,42 @@ function startLinkTranscodeTracking(opts: {
       const hlsToTrack = hlsActiveSplit.inactive
 
       if (hlsToTrack.length) {
-        transfer.startAssetVersionTranscodeTask({
-          apiFetch: props.apiFetch,
-          assetVersionIds: hlsToTrack,
-          title: 'Generating adaptive stream',
-          detail: `Tracking ${hlsToTrack.length} asset version(s)`,
-          intervalMs: 1500,
-          jobKind: 'hls',
-          context,
-        })
+        const fallbackIds: number[] = []
+        for (const assetVersionId of hlsToTrack) {
+          const fileId = versionToFileId.get(assetVersionId)
+          if (detailsToken.value && fileId) {
+            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+            transfer.startPlaybackTranscodeTask({
+              title: 'Generating adaptive stream',
+              detail: `Tracking asset version ${assetVersionId}`,
+              intervalMs: 1500,
+              jobKind: 'hls',
+              context,
+              fetchSnapshot: async () => {
+                const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+                const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
+                return {
+                  status: j?.status ?? payload?.hlsStatus ?? payload?.status,
+                  progress: j?.progress ?? payload?.hlsProgress ?? 0,
+                }
+              },
+            })
+          } else {
+            fallbackIds.push(assetVersionId)
+          }
+        }
+
+        if (fallbackIds.length) {
+          transfer.startAssetVersionTranscodeTask({
+            apiFetch: props.apiFetch,
+            assetVersionIds: fallbackIds,
+            title: 'Generating adaptive stream',
+            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            intervalMs: 1500,
+            jobKind: 'hls',
+            context,
+          })
+        }
       }
 
       const hlsInProgressIds = Array.from(new Set([
@@ -1945,6 +2037,7 @@ async function saveAll() {
         wantsProxy,
         wantsHls,
         addedPaths,
+        proxyQualities: wantsProxy ? nextProxyQualities : [],
       })
     }
 
