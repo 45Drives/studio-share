@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${ROOT_DIR}/scripts/.env.release"
+ENV_FILE="${ENV_FILE:-${ROOT_DIR}/scripts/.env.release}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing $ENV_FILE (copy from scripts/.env.release.example)" >&2
@@ -18,7 +18,7 @@ cd "$ROOT_DIR"
 
 VERSION="$(node -p "require('./package.json').version")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-BUNDLE_TAG="mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}"
+BUNDLE_TAG="${BUNDLE_TAG_OVERRIDE:-mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}}"
 
 REMOTE_DIR="${SIGN_INBOX}/${BUNDLE_TAG}"
 
@@ -36,6 +36,7 @@ SSH=(ssh "${SSH_OPTS[@]}")
 RSYNC_SSH=(ssh "${SSH_OPTS[@]}")
 
 echo "Build tag: $BUNDLE_TAG"
+echo "BUNDLE_TAG=$BUNDLE_TAG"
 echo "Building macOS (${MAC_BUILD_KIND}) unsigned..."
 
 rm -rf dist/mac-universal dist/mac-arm64 dist/mac-x64 dist/sign-stage || true

@@ -1,6 +1,6 @@
 {
   "name": "flow-by-45studio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Client app allowing users to create/manage collaborator user accounts and send magic links to collaborators allowing them to view/interact/comment on multimedia files for review.",
   "main": "main/src/main/main.js",
   "workspaces": [
@@ -13,6 +13,8 @@
     "build:win": "yarn build:common && node scripts/build.js && electron-builder --win --config electron-builder.json",
     "build:mac": "yarn build:common && node scripts/build.js && electron-builder --mac",
     "build:linux": "yarn build:common && node scripts/build.js && electron-builder --linux",
+    "release:gen-yml": "node scripts/release/generate-update-yml.mjs",
+    "release:orchestrate": "bash scripts/release/orchestrate-release.sh",
     "test": "vitest run",
     "mac:dir:arm64": "yarn build:common && node scripts/build.js && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 electron-builder --mac --arm64 --dir",
     "mac:dir:universal": "yarn build:common && node scripts/build.js && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 electron-builder --mac --universal --dir"
@@ -55,6 +57,7 @@
     "@fortawesome/vue-fontawesome": "^3.1.2",
     "asar": "^3.2.0",
     "electron-log": "^5.4.1",
+    "electron-updater": "6.7.3",
     "eventsource": "^2",
     "monet": "^0.9.3",
     "multicast-dns": "^7.2.5",

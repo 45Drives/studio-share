@@ -42,7 +42,7 @@
     "target": "nsis",
     "compression": "maximum",
     "icon": "icon.ico",
-    "signAndEditExecutable": false
+    "signAndEditExecutable": true
   },
 
   "files": [

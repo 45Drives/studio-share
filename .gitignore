@@ -8,6 +8,7 @@ builds
 
 .env
 .env*
+!scripts/release/.env.orchestrator.example
 
 scripts/test-pkg.sh
 .yarn/install-state.gz

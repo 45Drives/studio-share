@@ -19,6 +19,14 @@
                     </button>
                 </div>
 
+                <div v-if="canCheckUpdates" class="mb-2 text-center items-center">
+                    <p class="text-xs text-default mb-1">Application</p>
+                    <button class="btn btn-secondary wizard-btn w-full mb-1" :disabled="updateBusy"
+                        @click="checkForUpdates">
+                        {{ updateBusy ? 'Checking...' : 'Check for Updates' }}
+                    </button>
+                </div>
+
                 <!-- Themes -->
                 <!-- <div class="mb-2 text-center items-center">
                     <p class="text-xs text-default mb-1">Themes</p>
@@ -54,7 +62,7 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Bars3Icon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
-import { toggleDarkMode, useDarkModeState } from '@45drives/houston-common-ui'
+import { toggleDarkMode, useDarkModeState, pushNotification, Notification } from '@45drives/houston-common-ui'
 import { useThemeFromAlias } from '../composables/useThemeFromAlias'
 import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
 import { useResilientNav } from '../composables/useResilientNav'
@@ -77,6 +85,8 @@ const show = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const menuButton = ref<HTMLElement | null>(null)
 const menuPosition = ref({ top: 0, left: 0 })
+const canCheckUpdates = ref(false)
+const updateBusy = ref(false)
 
 const toggle = async () => {
     show.value = !show.value
@@ -98,6 +108,10 @@ const handleKeydown = (event: KeyboardEvent) => { if (event.key === 'Escape') sh
 onMounted(() => {
     document.addEventListener('click', handleClickOutside)
     document.addEventListener('keydown', handleKeydown)
+
+    window.electron?.ipcRenderer.invoke<boolean>('is-dev')
+        .then((isDev) => { canCheckUpdates.value = !isDev })
+        .catch(() => { canCheckUpdates.value = false })
 })
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside)
@@ -122,6 +136,20 @@ function gotoHome() {
     // router.push(target)
     to(target);
     show.value = false
+}
+
+async function checkForUpdates() {
+    if (updateBusy.value) return
+    updateBusy.value = true
+    try {
+        pushNotification(new Notification('Updater', 'Checking for updates...', 'info', 5000))
+        await window.electron?.ipcRenderer.invoke('update:check')
+        show.value = false
+    } catch (err: any) {
+        pushNotification(new Notification('Updater Error', err?.message || 'Unable to check updates', 'error', 8000))
+    } finally {
+        updateBusy.value = false
+    }
 }
 
 const isActive = (name: string) => route.name === name

@@ -9,60 +9,51 @@ function initLogging(resolvedLogDir: string) {
     if (typeof info?.level === 'string') return String(info.level).toLowerCase();
     return 'info';
   };
+
   const getPayload = (info: any): Record<string, any> => {
     const msg = info?.message;
+
     if (msg && typeof msg === 'object') {
       if (msg.data && typeof msg.data === 'object') return msg.data;
       const clone = { ...msg };
       delete (clone as any).event;
       return clone;
     }
+
+    // fallback: use root object fields (common with jl('info', event, extra))
+    if (info && typeof info === 'object') {
+      const clone = { ...info };
+      delete (clone as any).event;
+      delete (clone as any).level;
+      delete (clone as any).timestamp;
+      delete (clone as any).message;
+      return clone;
+    }
+
     return {};
   };
 
-  const noisyInfoEvents = new Set([
-    'mdns.client.created',
-    'mdns.upsert',
-    'mdns.response',
-    'window.created',
-    'renderer.ready',
-    'sse.attach.attempt',
-    'sse.attach.url',
-    'sse.open',
-    'sse.status',
-    'sse.detach',
-    'sse.reconnect.schedule',
-    'ipc.scan-network-fallback.start',
-    'ipc.scan-network-fallback.done',
-    'fallback.scan.start',
-    'fallback.scan.done',
-    'fallback.scan.port-open',
-    'fallback.scan.https-ok',
-    'ipc.probe-health.start',
-    'ipc.probe-health.ok',
-    'ipc.remote-check-broadcaster.start',
-    'ipc.remote-check-broadcaster.ok',
-    'ssh.ensureKeyPair.exists',
-    'ensure-ssh-ready.agent.try',
-    'ensure-ssh-ready.agent.fail',
-    'preflight',
-    'login.resolveApiBase',
-  ]);
 
-  const dropNoisyEvents = format((info) => {
+  const policy = createLogPolicy();
+
+  const applyPolicy = format((info) => {
     const event = getEventName(info);
     const level = getLevel(info);
     const payload = getPayload(info);
-    const url = String(payload?.url || '');
 
-    // Keep warning/error events by default for troubleshooting.
-    if (level === 'warn' || level === 'error') return info;
-    if (event && noisyInfoEvents.has(event)) return false;
-    if (event === 'rsync.out.stdout') return false; // transfer progress is too noisy for logfile/UI
-    if ((event === 'api.request' || event === 'api.response') && url.includes('/api/expand-paths')) return false;
-    if ((event === 'api.request' || event === 'api.response') && url.includes('/api/jobs/status')) return false;
+    // If no event name, treat as normal
+    if (!event) return info;
+
+    const d = policy.decide(event, level, payload);
+    if (d.drop) return false;
+
+    if (d.forceLevel) {
+      info.level = d.forceLevel;
+    }
+
     return info;
   });
+
 
   const scrubFormat = format((info) => {
     // scrub the main message
@@ -92,6 +83,7 @@ function initLogging(resolvedLogDir: string) {
     format: format.combine(
       format.timestamp(),
       scrubFormat(),
+      applyPolicy(),
       format((info) => {
         if (
           typeof info.message === 'string' &&
@@ -111,7 +103,7 @@ function initLogging(resolvedLogDir: string) {
         level: 'info',
         format: format.combine(
           scrubFormat(),
-          dropNoisyEvents(),
+          applyPolicy(),
           format.json()
         )
       })
@@ -152,6 +144,228 @@ const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
   });
 }
 
+type PolicyDecision = { drop?: boolean; forceLevel?: 'debug' | 'info' | 'warn' | 'error' };
+
+function createLogPolicy() {
+  // Rate limit store: key -> { windowStart, count }
+  const rl = new Map<string, { t0: number; n: number }>();
+  // State-change store: key -> lastValue
+  const last = new Map<string, string>();
+  // Simple counters for sampling (deterministic per process)
+  const ctr = new Map<string, number>();
+
+  const now = () => Date.now();
+
+  function rateLimit(key: string, maxPerWindow: number, windowMs: number): boolean {
+    const t = now();
+    const cur = rl.get(key);
+    if (!cur || (t - cur.t0) > windowMs) {
+      rl.set(key, { t0: t, n: 1 });
+      return true;
+    }
+    cur.n += 1;
+    return cur.n <= maxPerWindow;
+  }
+
+  function onlyOnChange(key: string, value: string): boolean {
+    const prev = last.get(key);
+    if (prev === value) return false;
+    last.set(key, value);
+    return true;
+  }
+
+  function sample(key: string, keepEvery: number): boolean {
+    const n = (ctr.get(key) || 0) + 1;
+    ctr.set(key, n);
+    return (n % keepEvery) === 1;
+  }
+
+  function isTruthy(v: any) {
+    return v === true || v === 1 || v === '1' || v === 'true';
+  }
+
+  function decide(event: string, level: string, payload: Record<string, any>): PolicyDecision {
+    const e = String(event || '');
+
+    // 0) Always keep warn/error, but avoid floods of identical lines
+    if (level === 'warn' || level === 'error') {
+      const errSig = String(
+        payload?.error ||
+        payload?.err ||
+        payload?.reason ||
+        payload?.code ||
+        payload?.status ||
+        payload?.message ||
+        ''
+      ).slice(0, 140);
+
+      // include ip/host when present so different targets don’t suppress each other
+      const target = String(payload?.ip || payload?.host || payload?.hostname || '');
+      const sig = `${e}|${level}|${target}|${errSig}`;
+
+      // allow a handful per minute per signature
+      return rateLimit(`we:${sig}`, 8, 60_000) ? {} : { drop: true };
+    }
+
+    // 1) Hard-drop extremely spammy progress streams
+    if (e === 'rsync.out.stdout') return { drop: true };
+
+    // 2) mDNS policy
+    if (e === 'mdns.interval.query') return { drop: true };
+
+    if (e === 'mdns.client.created') {
+      // log once per run; if it somehow repeats, keep at most 1/hour
+      return rateLimit('mdns.client.created', 1, 60 * 60_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    if (e === 'mdns.response') {
+      // keep 1/25 responses as breadcrumb (debug)
+      return sample('mdns.response', 25) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    if (e === 'mdns.upsert') {
+      const ip = String(payload?.ip || '');
+      const changed = payload?.changed === true || isTruthy(payload?.changed);
+
+      if (changed) {
+        // keep changes, but don’t let one device flap spam you
+        return rateLimit(`mdns.upsert.changed:${ip}`, 10, 60_000) ? { forceLevel: 'info' } : { drop: true };
+      }
+
+      // unchanged: allow 1/min per ip at debug
+      return rateLimit(`mdns.upsert.unchanged:${ip}`, 1, 60_000) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    // 3) SSE policy
+    if (e === 'sse.status') {
+      const ip = String(payload?.ip || '');
+      const status = String(payload?.status || 'unknown');
+      // only keep when status changes per ip
+      return onlyOnChange(`sse.status:${ip}`, status) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    if (e === 'sse.attach.attempt' || e === 'sse.attach.url') {
+      const ip = String(payload?.ip || '');
+      // breadcrumbs only: 1 per 30s per ip
+      return rateLimit(`${e}:${ip}`, 1, 30_000) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    if (e === 'sse.open') {
+      const ip = String(payload?.ip || '');
+      // important transition: keep but don’t spam if called repeatedly
+      return rateLimit(`sse.open:${ip}`, 3, 60_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    if (e === 'sse.detach' || e === 'sse.detach.all') {
+      // transitions: keep at info, but rate-limit per target
+      const ip = String(payload?.ip || '');
+      const key = ip ? `${e}:${ip}` : e;
+      return rateLimit(key, 6, 60_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    if (e === 'sse.reconnect.schedule') {
+      const ip = String(payload?.ip || '');
+      // keep 1 per 30s per ip at info
+      return rateLimit(`sse.reconnect:${ip}`, 1, 30_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    // 4) IPC patterns (your file has a lot of start/ok/done)
+    // For start/ok/done: sample and downgrade to debug. Errors are already warn/error above.
+    if (e.startsWith('ipc.')) {
+      if (e.endsWith('.start') || e.endsWith('.ok') || e.endsWith('.done') || e.endsWith('.result')) {
+        // keep 1 in 10 per event name
+        return sample(`ipc:${e}`, 10) ? { forceLevel: 'debug' } : { drop: true };
+      }
+      return {}; // keep other ipc.* at their given levels
+    }
+
+    // 5) Fallback scan / cleanup ticks
+    if (e.startsWith('fallback.scan.')) {
+      if (e === 'fallback.scan.start') return { forceLevel: 'info' };
+      if (e === 'fallback.scan.done') return { forceLevel: 'info' };
+      // port-open/https-ok are very spammy: keep 1/50 as breadcrumb
+      if (e === 'fallback.scan.port-open' || e === 'fallback.scan.https-ok') {
+        return sample(`fallback:${e}`, 50) ? { forceLevel: 'debug' } : { drop: true };
+      }
+    }
+
+    if (e === 'servers.cleanup.tick') {
+      // keep 1/60 ticks (about once every ~5 minutes at 5s interval)
+      return sample('servers.cleanup.tick', 60) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    // 6) SSH readiness – keep important transitions, sample noisy ones
+    if (e.startsWith('ensure-ssh-ready.')) {
+      // These are useful when troubleshooting, but noisy during normal runs
+      if (e.endsWith('.start')) return sample(`ssh:${e}`, 5) ? { forceLevel: 'debug' } : { drop: true };
+      if (e.includes('.agent.try')) return sample(`ssh:${e}`, 10) ? { forceLevel: 'debug' } : { drop: true };
+      if (e.includes('.agent.ok')) return { forceLevel: 'info' };
+      if (e.includes('.plant.') || e.includes('.verify.ok')) return { forceLevel: 'info' };
+      // verify failures are warn/error already handled above
+      return {};
+    }
+
+    if (e === 'ssh.ensureKeyPair.exists') {
+      // keep rarely; it’s a routine check
+      return sample('ssh.ensureKeyPair.exists', 50) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    // 7) Upload + ingest
+    if (e.startsWith('upload.')) {
+      // Keep start/done/cancel at info, sample progress-ish
+      if (e === 'upload.start' || e === 'upload.done' || e.startsWith('upload.cancel')) return { forceLevel: 'info' };
+      if (e.endsWith('.denied')) return { forceLevel: 'warn' }; // though your code logs warn already
+      return {};
+    }
+
+    if (e.startsWith('ingest.')) {
+      if (e === 'ingest.dest.normalize') return sample('ingest.dest.normalize', 5) ? { forceLevel: 'debug' } : { drop: true };
+      if (e === 'ingest.register') {
+        // this can be noisy if you do retries; keep 1/5 at debug
+        return sample('ingest.register', 5) ? { forceLevel: 'debug' } : { drop: true };
+      }
+      return {};
+    }
+
+    if (e === 'rsync.close') return { forceLevel: 'info' };
+
+    // 8) API request/response from renderer (you already drop GET/HEAD/OPTIONS earlier)
+    if (e === 'api.request' || e === 'api.response') {
+      const url = String(payload?.url || '');
+      // Keep most at debug sampled, but allow non-noisy ones through when useful
+      if (url.includes('/api/expand-paths') || url.includes('/api/jobs/status')) {
+        return sample(`api:${e}:${url}`, 50) ? { forceLevel: 'debug' } : { drop: true };
+      }
+      // other api.*: keep 1/10 at debug (unless renderer already filtered)
+      return sample(`api:${e}`, 10) ? { forceLevel: 'debug' } : { drop: true };
+    }
+
+    // 9) UI lifecycle
+    if (e === 'window.created' || e === 'renderer.ready' || e === 'app.ready' || e === 'app.activate') {
+      // keep these, but only occasionally if they repeat
+      return rateLimit(`lifecycle:${e}`, 5, 60_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    // 10) Certificate verification
+    if (e === 'cert.verify.start') {
+      // can spam on lots of internal requests; keep 1/30 per host
+      const host = String(payload?.hostname || '');
+      return rateLimit(`cert.verify.start:${host}`, 1, 30_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    // 11) Notifications (these can leak user content into logs; keep but rate-limit)
+    if (e === 'notify.push') {
+      return rateLimit('notify.push', 10, 60_000) ? { forceLevel: 'info' } : { drop: true };
+    }
+
+    // Default: keep
+    return {};
+  }
+
+  return { decide };
+}
+
+
 // requires yarn add electron-updater (not added/implmemented yet)
 // import { autoUpdater } from 'electron-updater';
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron';
@@ -178,6 +392,7 @@ import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
 import { runRsync } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
+import { initAutoUpdates } from './updates'
 
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
@@ -1000,6 +1215,7 @@ function getSubnetBase(ip: string): string {
   return `${parts[0]}.${parts[1]}.${parts[2]}`;
 }
 
+let mainWindowRef: BrowserWindow | null = null
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -1017,6 +1233,7 @@ function createWindow() {
       allowRunningInsecureContent: false, // Prevents HTTP inside HTTPS
     }
   });
+  mainWindowRef = mainWindow
 
   function safeSend(channel: string, payload?: any) {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1566,6 +1783,8 @@ function createWindow() {
       app.quit();
     }
   });
+
+  return mainWindow
 }
 
 app.on('web-contents-created', (_event, contents) => {
@@ -1639,57 +1858,6 @@ app.whenReady().then(() => {
       else cb(-2);
     });
   });
-  // ─────────────────────────────────────────────────────────────────────────────
-  // AUTO-UPDATE DISABLED (commented out to avoid noisy logs / not implemented yet)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // autoUpdater.logger = log;
-  // (autoUpdater.logger as typeof log).transports.file.level = 'info';
-
-  // autoUpdater.on('checking-for-update', () => {
-  //   // log.info(' Checking for update...');
-  // });
-
-  // autoUpdater.on('update-available', (info) => {
-  //   // log.info(' Update available:', info);
-
-  //   if (process.platform === 'linux') {
-  //     // Notify renderer that a manual download is needed
-  //     const url = 'https://github.com/45Drives/houston-client-manager/releases/latest';
-  //     const win = BrowserWindow.getAllWindows()[0];
-  //     win?.webContents.send('update-available-linux', url);
-  //   }
-  // });
-
-  // autoUpdater.on('update-not-available', (info) => {
-  //   // log.info(' No update available:', info);
-  // });
-
-  // autoUpdater.on('error', (err) => {
-  //   // log.error(' Update error:', err);
-  // });
-
-  // autoUpdater.on('download-progress', (progressObj) => {
-  //   const logMsg = ` Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(
-  //     1
-  //   )}% (${progressObj.transferred}/${progressObj.total})`;
-  //   // log.info(logMsg);
-  // });
-
-  // if (process.platform !== 'linux') {
-  //   autoUpdater.on('update-downloaded', (info) => {
-  //     // log.info(' Update downloaded. Will install on quit:', info);
-  //     // autoUpdater.quitAndInstall(); // Optional
-  //   });
-
-  //   autoUpdater.checkForUpdatesAndNotify();
-  // } else {
-  //   autoUpdater.checkForUpdates(); // Only checks, doesn't download
-  // }
-
-  // // Automatically check for updates and notify user if one is downloaded
-  // autoUpdater.checkForUpdatesAndNotify();
-  // ─────────────────────────────────────────────────────────────────────────────
 
   ipcMain.handle("is-dev", async () => process.env.NODE_ENV === 'development');
 
@@ -1712,12 +1880,8 @@ app.whenReady().then(() => {
   });
   jl('info', 'window.created');
 
-
+  initAutoUpdates(() => (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : null)
 });
-
-// ipcMain.on('check-for-updates', () => {
-//   autoUpdater.checkForUpdatesAndNotify();
-// });
 
 ipcMain.handle('dialog:pickFiles', async () => {
   jl('debug', 'dialog.pickFiles.open');
