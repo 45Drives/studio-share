@@ -110,6 +110,8 @@ The repo now includes:
 - `scripts/release/orchestrate-release.sh`
 - `scripts/release/.env.orchestrator.example`
 - `yarn release:orchestrate`
+- `yarn release:win:stage`
+- `yarn release:win:finalize`
 
 Run:
 
@@ -125,10 +127,22 @@ yarn release:orchestrate -- /absolute/path/to/.env.orchestrator
 
 For the Windows two-host flow in env:
 
-1. Build host variables: `WIN_BUILD_HOST`, `WIN_BUILD_USER`, `WIN_BUILD_GIT_PULL_CMD`, `WIN_BUILD_CMD`, `WIN_BUILD_EXE_GLOB`.
-2. Sign host variables: `WIN_SIGN_HOST`, `WIN_SIGN_USER`, `WIN_SIGN_REMOTE_DIR`, `WIN_SIGN_WIN_DIR`, `WIN_SIGN_CMD`.
-3. If SignTool prompts interactively, set `WIN_SIGN_INTERACTIVE=1`.
-4. In `WIN_SIGN_CMD`, use placeholders like `__INPUT_WIN__` / `__INPUT_POSIX__`.
+1. Build host variables: `WIN_BUILD_HOST`, `WIN_BUILD_USER`, `WIN_BUILD_GIT_PULL_CMD`, `WIN_BUILD_CMD`, `WIN_BUILD_DIST_DIR`.
+2. To prevent build-host signing attempts, keep `WIN_BUILD_DISABLE_SIGN=1`.
+3. Sign host variables: `WIN_SIGN_HOST`, `WIN_SIGN_USER`, `WIN_SIGN_REMOTE_DIR`, `WIN_SIGN_WIN_DIR`, `WIN_SIGN_CMD`.
+4. If sign host shell is Windows `cmd`, set `WIN_SIGN_REMOTE_OS=windows` (default).
+5. If needed, override folder creation with `WIN_SIGN_MKDIR_CMD`.
+6. In `WIN_SIGN_CMD`, use placeholders like `__INPUT_WIN__` / `__INPUT_POSIX__`.
+7. Use `WIN_PHASE=stage` to stop after uploading unsigned EXE for manual GUI signing.
+8. After manual signing, rerun with `WIN_PHASE=finalize` to fetch signed EXE and generate `latest.yml`.
+
+Convenience wrappers (no env editing required during stage/finalize):
+
+```bash
+yarn release:win:stage
+# sign manually on Windows sign host (GUI PIN prompt)
+yarn release:win:finalize
+```
 
 The orchestrator can:
 

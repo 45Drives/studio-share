@@ -27,12 +27,17 @@ WIN_BUILD_REMOTE_DIR="${WIN_BUILD_REMOTE_DIR:-${WIN_REMOTE_DIR:-studio-share}}"
 WIN_BUILD_PREPARE_CMD="${WIN_BUILD_PREPARE_CMD:-${WIN_PREPARE_CMD:-}}"
 WIN_BUILD_CMD="${WIN_BUILD_CMD:-cd ${WIN_BUILD_REMOTE_DIR} && yarn install && yarn build:win}"
 WIN_BUILD_EXE_GLOB="${WIN_BUILD_EXE_GLOB:-${WIN_EXE_GLOB:-${WIN_BUILD_REMOTE_DIR}/dist/*-win-*.exe}}"
+WIN_BUILD_DIST_DIR="${WIN_BUILD_DIST_DIR:-${WIN_BUILD_REMOTE_DIR%/}/dist/}"
+WIN_BUILD_DISABLE_SIGN="${WIN_BUILD_DISABLE_SIGN:-1}"
+WIN_BUILD_NO_SIGN_PREFIX="${WIN_BUILD_NO_SIGN_PREFIX:-set CSC_IDENTITY_AUTO_DISCOVERY=false&& set CSC_LINK=&& set CSC_KEY_PASSWORD=&& set WIN_CSC_LINK=&& set WIN_CSC_KEY_PASSWORD=&& set CSC_NAME=&& set WIN_CSC_NAME=&& }"
+WIN_BUILD_NO_SIGN_PREFIX_POSIX="${WIN_BUILD_NO_SIGN_PREFIX_POSIX:-CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= WIN_CSC_LINK= WIN_CSC_KEY_PASSWORD= CSC_NAME= WIN_CSC_NAME= }"
 
 WIN_SIGN_HOST="${WIN_SIGN_HOST:-$WIN_BUILD_HOST}"
 WIN_SIGN_PORT="${WIN_SIGN_PORT:-$WIN_BUILD_PORT}"
 WIN_SIGN_USER="${WIN_SIGN_USER:-$WIN_BUILD_USER}"
 WIN_SIGN_PASSWORD="${WIN_SIGN_PASSWORD:-$WIN_BUILD_PASSWORD}"
 WIN_SIGN_REMOTE_DIR="${WIN_SIGN_REMOTE_DIR:-$WIN_BUILD_REMOTE_DIR}"
+WIN_SIGN_REMOTE_OS="${WIN_SIGN_REMOTE_OS:-windows}" # windows | posix
 
 truthy() {
   local v="${1:-}"
@@ -87,15 +92,6 @@ ssh_run() {
   fi
 }
 
-ssh_run_tty() {
-  local host="$1" user="$2" pass="$3" port="$4" cmd="$5"
-  if [[ -n "$pass" ]]; then
-    sshpass -p "$pass" ssh -tt "${SSH_STRICT_OPTS[@]}" -p "$port" -l "$user" "$host" "$cmd"
-  else
-    ssh -tt "${SSH_STRICT_OPTS[@]}" -p "$port" -l "$user" "$host" "$cmd"
-  fi
-}
-
 rsync_to() {
   local host="$1" user="$2" pass="$3" port="$4" src="$5" dest="$6"
   local excludes="${RSYNC_EXCLUDES:-}"
@@ -144,6 +140,43 @@ replace_sign_tokens() {
   printf '%s' "$cmd"
 }
 
+fetch_signed_windows_exe() {
+  local signed_dir="$STAGING_DIR/windows/signed"
+  mkdir -p "$signed_dir"
+
+  # Avoid stale picks across runs/phases.
+  shopt -s nullglob
+  old_signed=("$signed_dir/"*.exe)
+  if [[ "${#old_signed[@]}" -gt 0 ]]; then
+    rm -f -- "${old_signed[@]}"
+  fi
+  shopt -u nullglob
+
+  local fetch_path="${WIN_SIGN_FETCH_PATH:-${WIN_SIGN_REMOTE_DIR%/}/}"
+
+  set +e
+  rsync_from "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$fetch_path" "$signed_dir/"
+  fetch_code=$?
+  set -e
+
+  if [[ "$fetch_code" -ne 0 ]]; then
+    echo "Failed to fetch signed Windows EXE from sign host." >&2
+    echo "Tried WIN_SIGN_FETCH_PATH='${fetch_path}'." >&2
+    return 1
+  fi
+
+  shopt -s nullglob
+  win_signed_exes=("$signed_dir/"*.exe)
+  shopt -u nullglob
+  if [[ "${#win_signed_exes[@]}" -eq 0 ]]; then
+    echo "No signed Windows EXE found in $signed_dir" >&2
+    return 1
+  fi
+
+  WIN_PRIMARY_EXE="$(ls -1t -- "${win_signed_exes[@]}" | head -n1)"
+  export WIN_PRIMARY_EXE
+}
+
 echo "Release version: $VERSION"
 echo "Release tag: $RELEASE_TAG"
 echo "Staging dir: $STAGING_DIR"
@@ -165,10 +198,31 @@ fi
 
 if truthy "${RUN_WINDOWS_BUILD:-1}"; then
   echo "== Windows build/sign =="
-  : "${WIN_BUILD_HOST:?WIN_BUILD_HOST is required when RUN_WINDOWS_BUILD=1}"
-  : "${WIN_BUILD_USER:?WIN_BUILD_USER is required when RUN_WINDOWS_BUILD=1}"
+  WIN_PHASE="${WIN_PHASE:-stage}" # stage | finalize
+  case "$WIN_PHASE" in
+    stage|finalize) ;;
+    auto)
+      echo "WIN_PHASE=auto is deprecated; using WIN_PHASE=stage (manual signing flow)." >&2
+      WIN_PHASE="stage"
+      ;;
+    *)
+      echo "WIN_PHASE must be one of: stage, finalize (got '$WIN_PHASE')" >&2
+      exit 1
+      ;;
+  esac
+
   : "${WIN_SIGN_HOST:?WIN_SIGN_HOST is required when RUN_WINDOWS_BUILD=1}"
   : "${WIN_SIGN_USER:?WIN_SIGN_USER is required when RUN_WINDOWS_BUILD=1}"
+  if [[ "$WIN_PHASE" != "finalize" ]]; then
+    : "${WIN_BUILD_HOST:?WIN_BUILD_HOST is required when WIN_PHASE is '$WIN_PHASE'}"
+    : "${WIN_BUILD_USER:?WIN_BUILD_USER is required when WIN_PHASE is '$WIN_PHASE'}"
+  fi
+
+  if [[ "$WIN_PHASE" == "stage" ]] && (truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}"); then
+    echo "WIN_PHASE=stage cannot run with GH upload/publish enabled." >&2
+    echo "Disable GH_UPLOAD_RELEASE/GH_PUBLISH_RELEASE or run WIN_PHASE=finalize." >&2
+    exit 1
+  fi
 
   WIN_BUILD_MODE="${WIN_BUILD_MODE:-git}" # git | rsync
   WIN_BUILD_GIT_PULL_CMD="${WIN_BUILD_GIT_PULL_CMD:-cd ${WIN_BUILD_REMOTE_DIR} && git pull --ff-only}"
@@ -177,94 +231,92 @@ if truthy "${RUN_WINDOWS_BUILD:-1}"; then
 
   mkdir -p "$STAGING_DIR/windows/unsigned" "$STAGING_DIR/windows/signed"
 
-  if [[ "$WIN_BUILD_MODE" == "rsync" ]]; then
-    if [[ -n "${WIN_BUILD_PREPARE_CMD:-}" ]]; then
-      ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_PREPARE_CMD"
-    fi
-    RSYNC_EXCLUDES="--exclude=.git --exclude=dist --exclude=builds --exclude=node_modules --exclude=.env*"
-    RSYNC_DELETE=1
-    rsync_to "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "${ROOT_DIR}/" "${WIN_BUILD_REMOTE_DIR}/"
-    RSYNC_DELETE=0
-  else
-    ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_GIT_PULL_CMD"
-  fi
-
-  ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_CMD"
-
-  set +e
-  rsync_from "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_EXE_GLOB" "$STAGING_DIR/windows/unsigned/"
-  rsync_code=$?
-  set -e
-  if [[ "$rsync_code" -ne 0 ]]; then
-    echo "Failed to fetch unsigned Windows EXE using WIN_BUILD_EXE_GLOB=$WIN_BUILD_EXE_GLOB" >&2
-    exit 1
-  fi
-
-  shopt -s nullglob
-  win_unsigned_exes=("$STAGING_DIR/windows/unsigned/"*.exe)
-  shopt -u nullglob
-  if [[ "${#win_unsigned_exes[@]}" -eq 0 ]]; then
-    echo "No unsigned Windows EXE found in $STAGING_DIR/windows/unsigned" >&2
-    exit 1
-  fi
-  WIN_UNSIGNED_EXE="$(ls -1t -- "${win_unsigned_exes[@]}" | head -n1)"
-  WIN_SIGN_BASENAME="$(basename "$WIN_UNSIGNED_EXE")"
-
-  WIN_SIGN_INPUT_POSIX="${WIN_SIGN_REMOTE_DIR%/}/${WIN_SIGN_BASENAME}"
-  if [[ -n "${WIN_SIGN_WIN_DIR:-}" ]]; then
-    WIN_SIGN_INPUT_WIN="${WIN_SIGN_WIN_DIR%\\}\\${WIN_SIGN_BASENAME}"
-  else
-    WIN_SIGN_INPUT_WIN="$WIN_SIGN_INPUT_POSIX"
-  fi
-  WIN_SIGN_OUTPUT_POSIX="${WIN_SIGN_OUTPUT_POSIX:-$WIN_SIGN_INPUT_POSIX}"
-  WIN_SIGN_OUTPUT_WIN="${WIN_SIGN_OUTPUT_WIN:-$WIN_SIGN_INPUT_WIN}"
-
-  ssh_run "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "mkdir -p '${WIN_SIGN_REMOTE_DIR}'"
-  RSYNC_EXCLUDES=""
-  RSYNC_DELETE=0
-  rsync_to "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_UNSIGNED_EXE" "${WIN_SIGN_INPUT_POSIX}"
-
-  WIN_SIGN_CMD="${WIN_SIGN_CMD:-}"
-  if [[ -n "$WIN_SIGN_CMD" ]]; then
-    WIN_SIGN_CMD_RESOLVED="$(replace_sign_tokens "$WIN_SIGN_CMD")"
-    if truthy "${WIN_SIGN_INTERACTIVE:-0}"; then
-      ssh_run_tty "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_CMD_RESOLVED"
+  if [[ "$WIN_PHASE" != "finalize" ]]; then
+    if [[ "$WIN_BUILD_MODE" == "rsync" ]]; then
+      if [[ -n "${WIN_BUILD_PREPARE_CMD:-}" ]]; then
+        ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_PREPARE_CMD"
+      fi
+      RSYNC_EXCLUDES="--exclude=.git --exclude=dist --exclude=builds --exclude=node_modules --exclude=.env*"
+      RSYNC_DELETE=1
+      rsync_to "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "${ROOT_DIR}/" "${WIN_BUILD_REMOTE_DIR}/"
+      RSYNC_DELETE=0
     else
-      ssh_run "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_CMD_RESOLVED"
+      ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_GIT_PULL_CMD"
     fi
-  else
-    echo "WIN_SIGN_CMD is empty. Skipping remote sign command; expecting signed file to already exist."
-  fi
 
-  WIN_SIGN_FETCH_PATH="${WIN_SIGN_FETCH_PATH:-$WIN_SIGN_OUTPUT_POSIX}"
-  set +e
-  rsync_from "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_FETCH_PATH" "$STAGING_DIR/windows/signed/"
-  signed_fetch_code=$?
-  set -e
-  if [[ "$signed_fetch_code" -ne 0 ]]; then
-    WIN_SIGN_FETCH_GLOB="${WIN_SIGN_FETCH_GLOB:-${WIN_SIGN_REMOTE_DIR%/}/*-win-*.exe}"
+    WIN_BUILD_CMD_EFFECTIVE="$WIN_BUILD_CMD"
+    if truthy "${WIN_BUILD_DISABLE_SIGN:-1}"; then
+      if [[ "$WIN_BUILD_CMD" =~ ^[[:space:]]*cmd\.exe[[:space:]]+/c[[:space:]]+\"(.*)\"[[:space:]]*$ ]]; then
+        WIN_BUILD_CMD_INNER="${BASH_REMATCH[1]}"
+        WIN_BUILD_CMD_EFFECTIVE="cmd.exe /c \"${WIN_BUILD_NO_SIGN_PREFIX}${WIN_BUILD_CMD_INNER}\""
+      else
+        WIN_BUILD_CMD_EFFECTIVE="${WIN_BUILD_NO_SIGN_PREFIX_POSIX}${WIN_BUILD_CMD}"
+      fi
+    fi
+    ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_CMD_EFFECTIVE"
+
     set +e
-    rsync_from "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_FETCH_GLOB" "$STAGING_DIR/windows/signed/"
-    signed_fetch_code=$?
+    rsync_from "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_DIST_DIR" "$STAGING_DIR/windows/unsigned/"
+    rsync_code=$?
     set -e
-    if [[ "$signed_fetch_code" -ne 0 ]]; then
-      echo "Failed to fetch signed Windows EXE. Checked WIN_SIGN_FETCH_PATH and WIN_SIGN_FETCH_GLOB." >&2
+    if [[ "$rsync_code" -ne 0 ]]; then
+      echo "Failed to fetch unsigned Windows artifacts from WIN_BUILD_DIST_DIR=$WIN_BUILD_DIST_DIR" >&2
       exit 1
     fi
+
+    shopt -s nullglob
+    win_unsigned_exes=("$STAGING_DIR/windows/unsigned/"*.exe)
+    shopt -u nullglob
+    if [[ "${#win_unsigned_exes[@]}" -eq 0 ]]; then
+      echo "No unsigned Windows EXE found in $STAGING_DIR/windows/unsigned" >&2
+      exit 1
+    fi
+    WIN_UNSIGNED_EXE="$(ls -1t -- "${win_unsigned_exes[@]}" | head -n1)"
+    WIN_SIGN_BASENAME="$(basename "$WIN_UNSIGNED_EXE")"
+
+    WIN_SIGN_INPUT_POSIX="${WIN_SIGN_REMOTE_DIR%/}/${WIN_SIGN_BASENAME}"
+    if [[ -n "${WIN_SIGN_WIN_DIR:-}" ]]; then
+      WIN_SIGN_INPUT_WIN="${WIN_SIGN_WIN_DIR%\\}\\${WIN_SIGN_BASENAME}"
+    else
+      WIN_SIGN_INPUT_WIN="$WIN_SIGN_INPUT_POSIX"
+    fi
+    WIN_SIGN_OUTPUT_POSIX="${WIN_SIGN_OUTPUT_POSIX:-$WIN_SIGN_INPUT_POSIX}"
+    WIN_SIGN_OUTPUT_WIN="${WIN_SIGN_OUTPUT_WIN:-$WIN_SIGN_INPUT_WIN}"
+
+    if [[ -n "${WIN_SIGN_MKDIR_CMD:-}" ]]; then
+      WIN_SIGN_MKDIR_CMD_EFFECTIVE="$WIN_SIGN_MKDIR_CMD"
+    elif [[ "${WIN_SIGN_REMOTE_OS:-windows}" == "windows" ]]; then
+      WIN_SIGN_MKDIR_CMD_EFFECTIVE="cmd.exe /c \"if not exist \\\"${WIN_SIGN_REMOTE_DIR}\\\" mkdir \\\"${WIN_SIGN_REMOTE_DIR}\\\"\""
+    else
+      WIN_SIGN_MKDIR_CMD_EFFECTIVE="mkdir -p '${WIN_SIGN_REMOTE_DIR}'"
+    fi
+    ssh_run "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_MKDIR_CMD_EFFECTIVE"
+    RSYNC_EXCLUDES=""
+    RSYNC_DELETE=0
+    rsync_to "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_UNSIGNED_EXE" "${WIN_SIGN_REMOTE_DIR%/}/"
   fi
 
-  shopt -s nullglob
-  win_signed_exes=("$STAGING_DIR/windows/signed/"*.exe)
-  shopt -u nullglob
-  if [[ "${#win_signed_exes[@]}" -eq 0 ]]; then
-    echo "No signed Windows EXE found in $STAGING_DIR/windows/signed" >&2
-    exit 1
+  if [[ "$WIN_PHASE" == "stage" ]]; then
+    WIN_SIGN_CMD="${WIN_SIGN_CMD:-}"
+    echo "Windows stage complete. Unsigned EXE uploaded to sign host."
+    echo "Sign manually on the sign host, then rerun with WIN_PHASE=finalize."
+    echo "Expected input path:"
+    echo "  POSIX: ${WIN_SIGN_INPUT_POSIX}"
+    echo "  WIN:   ${WIN_SIGN_INPUT_WIN}"
+    if [[ -n "$WIN_SIGN_CMD" ]]; then
+      WIN_SIGN_CMD_RESOLVED="$(replace_sign_tokens "$WIN_SIGN_CMD")"
+      echo "Manual signing command template:"
+      echo "  $WIN_SIGN_CMD_RESOLVED"
+    fi
   fi
-  WIN_PRIMARY_EXE="$(ls -1t -- "${win_signed_exes[@]}" | head -n1)"
-  yarn release:gen-yml \
-    --version "$VERSION" \
-    --output "$STAGING_DIR/windows/latest.yml" \
-    --file "$WIN_PRIMARY_EXE"
+
+  if [[ "$WIN_PHASE" != "stage" ]]; then
+    fetch_signed_windows_exe
+    yarn release:gen-yml \
+      --version "$VERSION" \
+      --output "$STAGING_DIR/windows/latest.yml" \
+      --file "$WIN_PRIMARY_EXE"
+  fi
 fi
 
 if truthy "${RUN_MAC_BUILD:-1}"; then

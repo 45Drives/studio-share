@@ -16,6 +16,30 @@ set +a
 
 cd "$ROOT_DIR"
 
+# Ensure node exists in non-interactive SSH shells (nvm/homebrew/common paths)
+if ! command -v node >/dev/null 2>&1; then
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/.nvm/nvm.sh"
+    nvm use --silent >/dev/null 2>&1 || true
+  fi
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  for p in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    if [[ -x "$p" ]]; then
+      export PATH="$(dirname "$p"):$PATH"
+      break
+    fi
+  done
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "node: command not found on mac build host" >&2
+  echo "Install Node or make it available in PATH for non-interactive shells." >&2
+  exit 1
+fi
+
 VERSION="$(node -p "require('./package.json').version")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BUNDLE_TAG="${BUNDLE_TAG_OVERRIDE:-mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}}"
