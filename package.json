@@ -14,6 +14,7 @@
     "build:mac": "yarn build:common && node scripts/build.js && electron-builder --mac",
     "build:linux": "yarn build:common && node scripts/build.js && electron-builder --linux",
     "release:gen-yml": "node scripts/release/generate-update-yml.mjs",
+    "release:publish-from-builds": "bash scripts/release/publish-from-builds.sh",
     "release:orchestrate": "bash scripts/release/orchestrate-release.sh",
     "release:win:stage": "RUN_LINUX_BUILD=0 RUN_MAC_BUILD=0 RUN_WINDOWS_BUILD=1 WIN_PHASE=stage GH_CREATE_DRAFT=0 GH_UPLOAD_RELEASE=0 GH_PUBLISH_RELEASE=0 bash scripts/release/orchestrate-release.sh",
     "release:win:finalize": "RUN_LINUX_BUILD=0 RUN_MAC_BUILD=0 RUN_WINDOWS_BUILD=1 WIN_PHASE=finalize GH_CREATE_DRAFT=0 GH_UPLOAD_RELEASE=0 GH_PUBLISH_RELEASE=0 bash scripts/release/orchestrate-release.sh",

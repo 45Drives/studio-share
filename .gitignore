@@ -14,3 +14,5 @@ scripts/test-pkg.sh
 .yarn/install-state.gz
 .DS_Store
 buildMac.sh
+
+/release-builds 

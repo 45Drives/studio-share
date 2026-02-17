@@ -173,3 +173,66 @@ This avoids partial live releases and keeps one source of truth for uploaded ass
 3. Windows download + install works from `latest.yml`.
 4. macOS download + install works from `latest-mac.yml` (zip path).
 5. Linux update behavior validated on target distros for your package format.
+
+## Fast path: publish from prebuilt signed artifacts
+
+If all final signed artifacts are already in one folder (example `/release-builds`), use:
+
+```bash
+RELEASE_DIR=/release-builds \
+RELEASE_VERSION=1.0.1 \
+RELEASE_TAG=v1.0.1 \
+GH_REPO=45Drives/studio-share \
+GH_CREATE_DRAFT=1 \
+GH_UPLOAD_RELEASE=1 \
+GH_PUBLISH_RELEASE=0 \
+yarn release:publish-from-builds
+```
+
+You can also pass an env file:
+
+```bash
+yarn release:publish-from-builds -- /absolute/path/to/.env.release-publish
+```
+
+The script also supports selecting platforms:
+
+- `PUBLISH_WINDOWS=1|0`
+- `PUBLISH_MAC=1|0`
+- `PUBLISH_LINUX=1|0`
+
+Example: test only Windows + Linux while macOS is still building:
+
+```bash
+RELEASE_DIR=/release-builds \
+RELEASE_VERSION=1.0.1 \
+RELEASE_TAG=v1.0.1 \
+GH_REPO=45Drives/studio-share \
+PUBLISH_WINDOWS=1 \
+PUBLISH_MAC=0 \
+PUBLISH_LINUX=1 \
+GH_CREATE_DRAFT=1 \
+GH_UPLOAD_RELEASE=1 \
+GH_PUBLISH_RELEASE=0 \
+yarn release:publish-from-builds
+```
+
+This does:
+
+1. Detect platform artifacts in `RELEASE_DIR`.
+2. Generate `latest.yml`, `latest-mac.yml`, `latest-linux.yml` from those exact files.
+3. Create draft release if missing.
+4. Upload binaries + YAML metadata to the release.
+
+Then publish when ready:
+
+```bash
+RELEASE_DIR=/release-builds \
+RELEASE_VERSION=1.0.1 \
+RELEASE_TAG=v1.0.1 \
+GH_REPO=45Drives/studio-share \
+GH_CREATE_DRAFT=0 \
+GH_UPLOAD_RELEASE=0 \
+GH_PUBLISH_RELEASE=1 \
+yarn release:publish-from-builds
+```
