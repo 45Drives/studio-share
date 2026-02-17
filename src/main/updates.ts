@@ -1,9 +1,16 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { autoUpdater } from 'electron-updater'
 
 export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
     // Never run auto-update in dev
     if (!app.isPackaged) return
+
+    let autoUpdater: any
+    try {
+        ;({ autoUpdater } = require('electron-updater'))
+    } catch (e) {
+        console.warn('[updates] electron-updater is unavailable; auto-update disabled.', e)
+        return
+    }
 
     // Optional: safer UX defaults
     autoUpdater.autoDownload = true

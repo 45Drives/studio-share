@@ -37,15 +37,6 @@
               {{ primaryUrl || '—' }}
             </a>
 
-            <div v-if="downloadUrl" class="pt-2 border-t border-default/70">
-              <div class="flex items-center justify-between gap-2 min-w-0">
-                <div class="font-semibold text-default truncate">Download Link</div>
-                <button class="text-blue-500 hover:underline text-xs shrink-0" @click="copy(downloadUrl)">Copy</button>
-              </div>
-              <a :href="downloadUrl" target="_blank" rel="noopener" class="hover:underline block mt-1">
-                {{ downloadUrl }}
-              </a>
-            </div>
 
             <div class="pt-2 border-t border-default/70 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
               <div>
@@ -334,6 +325,25 @@
                   <p class="text-xs opacity-70">
                     Use an existing file name already available on the server.
                   </p>
+                  <div class="flex flex-wrap items-center gap-2 mt-1">
+                    <button type="button" class="btn btn-secondary" @click="pickLocalWatermark">
+                      Choose Local Image
+                    </button>
+                    <span class="text-xs opacity-80">
+                      {{ draftWatermarkLocalFile ? draftWatermarkLocalFile.name : 'No local file selected' }}
+                    </span>
+                    <button
+                      v-if="draftWatermarkLocalFile"
+                      type="button"
+                      class="btn btn-danger px-2 py-1 text-xs"
+                      @click="clearLocalWatermark"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <p v-if="draftWatermarkLocalFile" class="text-xs opacity-70">
+                    Selected local file will be uploaded on save and used as watermark.
+                  </p>
                 </div>
               </div>
               <div v-else-if="!editMode && currentWatermarkFile" class="text-xs opacity-70">
@@ -583,7 +593,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import AddUsersModal from './AddUsersModal.vue'
 import EditLinkFilesModal from './EditLinkFilesModal.vue'
 import PathInput from '../PathInput.vue'
@@ -591,6 +601,7 @@ import type { LinkItem, LinkType, AccessRow, Status, ExistingUser } from '../../
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { Switch } from '@headlessui/vue'
 import { useTransferProgress } from '../../composables/useTransferProgress'
+import { connectionMetaInjectionKey } from '../../keys/injection-keys'
 
 const props = defineProps<{
   modelValue: boolean
@@ -604,6 +615,7 @@ const emit = defineEmits<{
 }>()
 
 const transfer = useTransferProgress()
+const connectionMeta = inject(connectionMetaInjectionKey, null)
 
 const detailsLoading = ref(false)
 const files = ref<any[]>([])
@@ -657,6 +669,8 @@ const draftGenerateReviewProxy = ref(false)
 const draftProxyQualities = ref<string[]>([])
 const draftWatermarkEnabled = ref(false)
 const draftWatermarkFile = ref('')
+type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
+const draftWatermarkLocalFile = ref<LocalFile | null>(null)
 
 const filesEditorOpen = ref(false)
 const draftFilePaths = ref<string[]>([])
@@ -759,6 +773,7 @@ const mediaSettingsDirty = computed(() => {
   if (!sameValues(normalizeQualities(draftProxyQualities.value), currentProxyQualities.value)) return true
   if (!!draftWatermarkEnabled.value !== currentWatermark.value) return true
   if ((draftWatermarkFile.value || '').trim() !== currentWatermarkFile.value) return true
+  if (draftWatermarkLocalFile.value) return true
   return false
 })
 
@@ -833,6 +848,73 @@ function isVideoishFile(f: any) {
   return ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', '3g2'].includes(ext)
 }
 
+function isJobActiveish(status: any) {
+  const s = String(status || '').toLowerCase()
+  return s === 'queued' || s === 'running' || s === 'processing' || s === 'pending' || s === 'started'
+}
+
+async function analyzeMediaNeedsForPaths(opts: {
+  paths: string[]
+  wantsProxy: boolean
+  wantsHls: boolean
+  proxyQualities: string[]
+}) {
+  const missingPaths: string[] = []
+  const trackingPaths: string[] = []
+  if (!detailsToken.value) {
+    return { missingPaths: opts.paths.slice(), trackingPaths: opts.paths.slice() }
+  }
+
+  const byPath = new Map<string, any>()
+  for (const f of files.value) {
+    const p = normalizeAbs(String(f?.relPath ?? f?.path ?? f?.p ?? ''))
+    if (p) byPath.set(p, f)
+  }
+
+  for (const absPath of opts.paths) {
+    const f = byPath.get(normalizeAbs(absPath))
+    const fileId = toNumericFileId(f?.id)
+    if (!fileId) {
+      missingPaths.push(absPath)
+      trackingPaths.push(absPath)
+      continue
+    }
+    try {
+      const playback = await props.apiFetch(
+        `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback?prefer=auto&audit=0`,
+        { suppressAuthRedirect: true }
+      )
+
+      const tx = playback?.transcodes || {}
+      const proxyNode = tx?.proxy_mp4 ?? tx?.proxy ?? null
+      const hlsNode = tx?.hls ?? tx?.HLS ?? null
+
+      const hasProxy = !!(playback?.hasProxy || proxyNode?.status === 'done')
+      const hasHls = !!(playback?.hasHls || hlsNode?.status === 'done')
+      const proxyActive = isJobActiveish(proxyNode?.status)
+      const hlsActive = isJobActiveish(hlsNode?.status)
+
+      const existingQualities = new Set(normalizeQualities(playback?.proxyQualities))
+      const requiredProxyReady = !opts.wantsProxy || opts.proxyQualities.every((q) => existingQualities.has(q))
+
+      const needsProxy = opts.wantsProxy && !requiredProxyReady && !proxyActive
+      const needsHls = opts.wantsHls && !hasHls && !hlsActive
+
+      if (needsProxy || needsHls) missingPaths.push(absPath)
+      if (needsProxy || needsHls || proxyActive || hlsActive) trackingPaths.push(absPath)
+    } catch {
+      // If playback probe fails, be conservative and request/track processing.
+      missingPaths.push(absPath)
+      trackingPaths.push(absPath)
+    }
+  }
+
+  return {
+    missingPaths: Array.from(new Set(missingPaths)),
+    trackingPaths: Array.from(new Set(trackingPaths)),
+  }
+}
+
 async function hydrateMediaSettingsFromArtifacts() {
   if (!props.link) return
   if (!detailsToken.value) return
@@ -893,6 +975,74 @@ function seedDraftMediaSettings() {
     : (draftGenerateReviewProxy.value ? ['720p'] : [])
   draftWatermarkEnabled.value = currentWatermark.value
   draftWatermarkFile.value = currentWatermarkFile.value
+  draftWatermarkLocalFile.value = null
+}
+
+function pickLocalWatermark() {
+  window.electron.pickWatermark().then((f) => {
+    if (!f) return
+    draftWatermarkLocalFile.value = f
+    draftWatermarkFile.value = f.name
+  })
+}
+
+function clearLocalWatermark() {
+  draftWatermarkLocalFile.value = null
+}
+
+function rootOfServerPath(p: string) {
+  const clean = String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  if (!clean) return '/'
+  const first = clean.split('/').filter(Boolean)[0] || ''
+  return first ? `/${first}` : '/'
+}
+
+function resolveWatermarkStorageRootForEdit() {
+  const fromDraft = draftFilePaths.value[0] || ''
+  const fromOriginal = originalFilePaths.value[0] || ''
+  const fromFiles = String(files.value[0]?.relPath ?? files.value[0]?.path ?? files.value[0]?.p ?? '')
+  const root = rootOfServerPath(fromDraft || fromOriginal || fromFiles)
+  let abs = String(root || '/').replace(/\\/g, '/').trim()
+  if (!abs) abs = '/'
+  if (!abs.startsWith('/')) abs = '/' + abs
+  abs = abs.replace(/\/+$/, '') || '/'
+  const rel = abs === '/' ? '' : abs.replace(/^\/+/, '')
+  return { abs, rel }
+}
+
+function resolveWatermarkUploadDirForEdit() {
+  const { abs } = resolveWatermarkStorageRootForEdit()
+  const cleanRoot = abs === '/' ? '' : abs
+  return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+}
+
+function resolveWatermarkRelPathForEdit(name: string) {
+  const cleanName = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+  if (!cleanName) return ''
+  const { rel } = resolveWatermarkStorageRootForEdit()
+  return `${rel ? rel + '/' : ''}flow45studio-watermarks/${cleanName}`
+}
+
+async function uploadDraftLocalWatermark() {
+  if (!draftWatermarkLocalFile.value) return { ok: false, error: 'no local watermark selected' as string }
+  const ssh = connectionMeta?.value?.ssh
+  const host = ssh?.server
+  const user = ssh?.username
+  if (!host || !user) return { ok: false, error: 'missing ssh connection info' as string }
+
+  const destDir = resolveWatermarkUploadDirForEdit()
+  const { done } = await window.electron.rsyncStart({
+    host,
+    user,
+    src: draftWatermarkLocalFile.value.path,
+    destDir,
+    port: 22,
+    keyPath: undefined,
+    noIngest: true,
+  })
+  const res = await done
+  if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' as string }
+  return { ok: true, relPath: resolveWatermarkRelPathForEdit(draftWatermarkLocalFile.value.name) }
 }
 
 function computeAddedPaths(next: string[], prev: string[]) {
@@ -1309,6 +1459,24 @@ function extractDbFileIdsFromLinkFilesResponse(data: any): number[] {
   return Array.from(new Set(ids))
 }
 
+function extractPlaybackFileRecords(data: any): Array<{ fileId: number; path?: string; name?: string; mime?: string }> {
+  const out: Array<{ fileId: number; path?: string; name?: string; mime?: string }> = []
+  const files = Array.isArray(data?.files) ? data.files : Array.isArray(data?.items) ? data.items : null
+  if (!Array.isArray(files)) return out
+
+  for (const f of files) {
+    const fileId = Number(f?.id ?? f?.fileId ?? f?.file_id ?? f?.file?.id)
+    if (!Number.isFinite(fileId) || fileId <= 0) continue
+    out.push({
+      fileId,
+      path: String(f?.path ?? f?.relPath ?? f?.p ?? '').trim() || undefined,
+      name: String(f?.name ?? '').trim() || undefined,
+      mime: String(f?.mime ?? '').trim() || undefined,
+    })
+  }
+  return out
+}
+
 function mapAssetVersionToFileId(data: any): Map<number, number> {
   const out = new Map<number, number>()
   const push = (assetVersionId: any, fileId: any) => {
@@ -1353,6 +1521,27 @@ function startLinkTranscodeTracking(opts: {
   const versionIds = extractAssetVersionIdsFromLinkFilesResponse(opts.resp)
   const linkTitle = (draftTitle.value || props.link?.title || (props.link ? fallbackTitle(props.link) : '') || '').trim()
   const versionToFileId = mapAssetVersionToFileId(opts.resp)
+  const fileLabelById = new Map<number, string>()
+  const allPaths = (opts.addedPaths || []).map((p) => normalizeAbs(p)).filter(Boolean)
+  for (const f of files.value) {
+    const id = toNumericFileId(f?.id)
+    if (!id) continue
+    const name = String(f?.name || '').trim()
+    const rel = normalizeAbs(String(f?.relPath ?? f?.path ?? f?.p ?? ''))
+    if (name) fileLabelById.set(id, name)
+    else if (rel) fileLabelById.set(id, rel)
+  }
+  function fallbackFileLabel(assetVersionId: number): string {
+    if (allPaths.length === 1) return allPaths[0]
+    const fid = versionToFileId.get(assetVersionId)
+    if (fid && fileLabelById.has(fid)) return String(fileLabelById.get(fid))
+    return `asset version ${assetVersionId}`
+  }
+  function fallbackManyLabel(assetVersionIds: number[]): string {
+    if (assetVersionIds.length === 1) return fallbackFileLabel(assetVersionIds[0])
+    if (allPaths.length === 1) return allPaths[0]
+    return `${assetVersionIds.length} file(s)`
+  }
   const context = {
     source: 'link' as const,
     groupId: props.link?.id != null ? `link:${props.link.id}` : undefined,
@@ -1375,15 +1564,16 @@ function startLinkTranscodeTracking(opts: {
       if (proxyToTrack.length) {
         const fallbackIds: number[] = []
         for (const assetVersionId of proxyToTrack) {
-          const fileId = versionToFileId.get(assetVersionId)
-          if (detailsToken.value && fileId) {
-            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
-            transfer.startPlaybackTranscodeTask({
-              title: 'Generating proxy files',
-              detail: `Tracking asset version ${assetVersionId}`,
-              intervalMs: 1500,
-              jobKind: 'proxy_mp4',
-              context,
+            const fileId = versionToFileId.get(assetVersionId)
+            if (detailsToken.value && fileId) {
+              const detailLabel = fileLabelById.get(fileId) || fallbackFileLabel(assetVersionId)
+              const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+              transfer.startPlaybackTranscodeTask({
+                title: 'Generating proxy files',
+                detail: `Tracking ${detailLabel}`,
+                intervalMs: 1500,
+                jobKind: 'proxy_mp4',
+                context,
               fetchSnapshot: async () => {
                 const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
                 const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
@@ -1406,7 +1596,7 @@ function startLinkTranscodeTracking(opts: {
             apiFetch: props.apiFetch,
             assetVersionIds: fallbackIds,
             title: 'Generating proxy files',
-            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            detail: `Tracking ${fallbackManyLabel(fallbackIds)}`,
             intervalMs: 1500,
             jobKind: 'proxy_mp4',
             context,
@@ -1449,15 +1639,16 @@ function startLinkTranscodeTracking(opts: {
       if (hlsToTrack.length) {
         const fallbackIds: number[] = []
         for (const assetVersionId of hlsToTrack) {
-          const fileId = versionToFileId.get(assetVersionId)
-          if (detailsToken.value && fileId) {
-            const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
-            transfer.startPlaybackTranscodeTask({
-              title: 'Generating adaptive stream',
-              detail: `Tracking asset version ${assetVersionId}`,
-              intervalMs: 1500,
-              jobKind: 'hls',
-              context,
+            const fileId = versionToFileId.get(assetVersionId)
+            if (detailsToken.value && fileId) {
+              const detailLabel = fileLabelById.get(fileId) || fallbackFileLabel(assetVersionId)
+              const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
+              transfer.startPlaybackTranscodeTask({
+                title: 'Generating adaptive stream',
+                detail: `Tracking ${detailLabel}`,
+                intervalMs: 1500,
+                jobKind: 'hls',
+                context,
               fetchSnapshot: async () => {
                 const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
                 const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
@@ -1477,7 +1668,7 @@ function startLinkTranscodeTracking(opts: {
             apiFetch: props.apiFetch,
             assetVersionIds: fallbackIds,
             title: 'Generating adaptive stream',
-            detail: `Tracking ${fallbackIds.length} asset version(s)`,
+            detail: `Tracking ${fallbackManyLabel(fallbackIds)}`,
             intervalMs: 1500,
             jobKind: 'hls',
             context,
@@ -1514,8 +1705,103 @@ function startLinkTranscodeTracking(opts: {
     return
   }
 
-  const fileIds = extractDbFileIdsFromLinkFilesResponse(opts.resp)
-  if (!fileIds.length) return
+  let fileIds = extractDbFileIdsFromLinkFilesResponse(opts.resp)
+  if (!fileIds.length && detailsToken.value) {
+    const byPath = new Map<string, number>()
+    for (const f of files.value) {
+      const id = toNumericFileId(f?.id)
+      if (!id) continue
+      const p = normalizeAbs(String(f?.relPath ?? f?.path ?? f?.p ?? ''))
+      if (p) byPath.set(p, id)
+    }
+    const resolved = opts.addedPaths
+      .map((p) => byPath.get(normalizeAbs(p)))
+      .filter((n): n is number => Number.isFinite(n as number) && (n as number) > 0)
+    fileIds = Array.from(new Set(resolved))
+    console.log('[link-details:tracking] resolved fileIds from paths fallback', {
+      addedPaths: opts.addedPaths,
+      resolvedFileIds: fileIds,
+    })
+  }
+  if (!fileIds.length) {
+    console.log('[link-details:tracking] no fileIds available for tracking', {
+      responseKeys: Object.keys(opts.resp || {}),
+      addedPaths: opts.addedPaths,
+    })
+    return
+  }
+
+  if (detailsToken.value) {
+    const records = extractPlaybackFileRecords(opts.resp)
+    const recById = new Map(records.map(r => [r.fileId, r] as const))
+    for (const f of files.value) {
+      const id = toNumericFileId(f?.id)
+      if (!id || recById.has(id)) continue
+      recById.set(id, {
+        fileId: id,
+        path: String(f?.relPath ?? f?.path ?? f?.p ?? '').trim() || undefined,
+        name: String(f?.name ?? '').trim() || undefined,
+        mime: String(f?.mime ?? '').trim() || undefined,
+      })
+    }
+    const idsToTrack = fileIds.filter((id) => {
+      const rec = recById.get(id)
+      if (!rec) return true
+      const sample = { id: rec.fileId, relPath: rec.path, name: rec.name, mime: rec.mime }
+      return isVideoishFile(sample)
+    })
+    if (!idsToTrack.length) return
+
+    for (const fileId of idsToTrack) {
+      const rec = recById.get(fileId)
+      const filePath = rec?.path || rec?.name
+      const baseContext = {
+        ...context,
+        file: filePath || context.file,
+      }
+      const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback?prefer=auto&audit=0`
+
+      if (opts.wantsProxy) {
+        transfer.startPlaybackTranscodeTask({
+          title: 'Generating proxy files',
+          detail: filePath ? `Tracking ${filePath}` : `Tracking file ${fileId}`,
+          intervalMs: 1500,
+          jobKind: 'proxy_mp4',
+          context: baseContext,
+          fetchSnapshot: async () => {
+            const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+            const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
+            return {
+              status: j?.status ?? payload?.proxyStatus ?? payload?.status,
+              progress: j?.progress ?? payload?.proxyProgress ?? 0,
+              qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
+              activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
+              perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
+            }
+          },
+        })
+      }
+
+      if (opts.wantsHls) {
+        transfer.startPlaybackTranscodeTask({
+          title: 'Generating adaptive stream',
+          detail: filePath ? `Tracking ${filePath}` : `Tracking file ${fileId}`,
+          intervalMs: 1500,
+          jobKind: 'hls',
+          context: baseContext,
+          fetchSnapshot: async () => {
+            const payload = await props.apiFetch(playbackPath, { suppressAuthRedirect: true })
+            const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
+            return {
+              status: j?.status ?? payload?.hlsStatus ?? payload?.status,
+              progress: j?.progress ?? payload?.hlsProgress ?? 0,
+            }
+          },
+        })
+      }
+    }
+    return
+  }
 
   const jobKind = opts.wantsProxy && !opts.wantsHls
     ? 'proxy_mp4'
@@ -1877,6 +2163,87 @@ async function saveAll() {
     return e?.message || e?.error || String(e || 'Request failed')
   }
 
+  function parseApiConflictPayload(e: any): any | null {
+    if (!e) return null
+    if (typeof e?.payload === 'object' && e.payload) return e.payload
+    if (typeof e?.response === 'object' && e.response) return e.response
+    if (typeof e?.data === 'object' && e.data) return e.data
+    if (typeof e?.message === 'string' && e.message.trim()) {
+      try {
+        return JSON.parse(e.message)
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+
+  async function resolveOutputsConflictAction(payload: any): Promise<'overwrite' | 'keep' | 'cancel'> {
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings : []
+    const lines: string[] = []
+    lines.push('Existing generated outputs were found for one or more selected files.')
+    lines.push('')
+    if (warnings.length) {
+      const preview = warnings
+        .slice(0, 3)
+        .map((w: any) => `${w?.kind || 'output'}: ${String(w?.filePath || '').trim() || 'unknown file'}`)
+      for (const p of preview) lines.push(`- ${p}`)
+      if (warnings.length > 3) lines.push(`- ...and ${warnings.length - 3} more`)
+      lines.push('')
+    }
+    lines.push('Press OK to overwrite existing outputs and regenerate.')
+    lines.push('Press Cancel for more options.')
+    const overwrite = confirm(lines.join('\n'))
+    if (overwrite) return 'overwrite'
+
+    const keep = confirm(
+      'Keep existing outputs and continue saving without regeneration?\n\n' +
+      'Press OK to keep existing outputs.\n' +
+      'Press Cancel to abort save.'
+    )
+    if (keep) return 'keep'
+    return 'cancel'
+  }
+
+  async function apiFetchWithOutputConflictRetry(
+    url: string,
+    init: { method: string; body: string },
+    label: string
+  ) {
+    const baseBody = JSON.parse(init.body || '{}')
+    try {
+      return await props.apiFetch(url, init)
+    } catch (e: any) {
+      const payload = parseApiConflictPayload(e)
+      const errCode = String(payload?.error || '')
+      if (e?.status !== 409 || !/^(outputs_exist|hls_exists|watermark_exists)$/.test(errCode)) {
+        throw e
+      }
+      console.log('[link-details:save] conflict 409', { label, payload })
+      const action = await resolveOutputsConflictAction(payload)
+      if (action === 'cancel') {
+        const canceled: any = new Error('save canceled')
+        canceled.conflictCanceled = true
+        throw canceled
+      }
+
+      const retryBody = {
+        ...baseBody,
+        overwrite: action === 'overwrite',
+        keepExistingOutputs: action === 'keep',
+        allowExistingOutputs: action === 'keep',
+      }
+      console.log(`[link-details:save] retry ${label} after conflict`, {
+        action,
+        retryBody,
+      })
+      return await props.apiFetch(url, {
+        ...init,
+        body: JSON.stringify(retryBody),
+      })
+    }
+  }
+
   // Track what we actually attempted (for better messaging)
   const did = {
     details: false,
@@ -1917,11 +2284,34 @@ async function saveAll() {
       titleChanged || notesChanged || accessModeChanged || allowCommentsChanged || authModeChanged || passwordChanged || mediaSettingsDirty.value
     const shouldUpdateFiles = isDownloadish.value && filesDirty.value
     const shouldUpdateUploadDest = props.link.type === 'upload' && uploadDirDirty.value
+    const wantsMediaProcessing = !!draftGenerateReviewProxy.value || !!draftWatermarkEnabled.value
+    const shouldTriggerMediaProcessing =
+      isDownloadish.value &&
+      !shouldUpdateFiles &&
+      mediaSettingsDirty.value &&
+      wantsMediaProcessing &&
+      draftFilePaths.value.length > 0
 
     const addedPaths = computeAddedPaths(draftFilePaths.value, originalFilePaths.value)
     const wantsHls = addedPaths.length > 0
     const wantsProxy = wantsHls && draftGenerateReviewProxy.value
     const nextProxyQualities = normalizeQualities(draftProxyQualities.value)
+
+    if (draftWatermarkEnabled.value && draftWatermarkLocalFile.value) {
+      const up = await uploadDraftLocalWatermark()
+      if (!up.ok) {
+        pushNotification(
+          new Notification(
+            'Watermark Upload Failed',
+            up.error || 'Unable to upload local watermark file.',
+            'error',
+            8000
+          )
+        )
+        return
+      }
+      draftWatermarkFile.value = up.relPath || draftWatermarkFile.value
+    }
 
     if (draftWatermarkEnabled.value && !draftGenerateReviewProxy.value) {
       pushNotification(
@@ -1958,6 +2348,7 @@ async function saveAll() {
     }
 
     // 1) Title/notes
+    let detailsResp: any | null = null
     if (shouldUpdateDetails) {
       const body: any = {
         title: draftTitle.value || null,
@@ -1976,6 +2367,7 @@ async function saveAll() {
       }
       if (mediaSettingsDirty.value) {
         body.generateReviewProxy = !!draftGenerateReviewProxy.value
+        body.adaptiveHls = !!draftGenerateReviewProxy.value || !!draftWatermarkEnabled.value
         body.proxyQualities = draftGenerateReviewProxy.value ? nextProxyQualities : []
         body.watermark = !!draftWatermarkEnabled.value
         body.watermarkFile = draftWatermarkEnabled.value ? draftWatermarkFile.value.trim() : null
@@ -1983,12 +2375,26 @@ async function saveAll() {
       }
 
       try {
-        await props.apiFetch(`/api/links/${id}`, {
+        console.log('[link-details:save] PATCH /api/links/:id request', {
+          id,
+          body,
+          mediaSettingsDirty: mediaSettingsDirty.value,
+          draftGenerateReviewProxy: draftGenerateReviewProxy.value,
+          draftProxyQualities: draftProxyQualities.value.slice(),
+        })
+        detailsResp = await apiFetchWithOutputConflictRetry(`/api/links/${id}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
+        }, 'PATCH /api/links/:id')
+        console.log('[link-details:save] PATCH /api/links/:id response', {
+          id,
+          hasTranscodes: Array.isArray(detailsResp?.transcodes) || !!detailsResp?.transcodes,
+          keys: Object.keys(detailsResp || {}),
+          response: detailsResp,
         })
         did.details = true
       } catch (e: any) {
+        if (e?.conflictCanceled) return
         const msg = apiErrMsg(e)
         pushNotification(
           new Notification(
@@ -2012,12 +2418,26 @@ async function saveAll() {
       }
 
       try {
-        filesResp = await props.apiFetch(`/api/links/${id}/files`, {
+        console.log('[link-details:save] PUT /api/links/:id/files request', {
+          id,
+          body,
+          addedPaths,
+          wantsHls,
+          wantsProxy,
+        })
+        filesResp = await apiFetchWithOutputConflictRetry(`/api/links/${id}/files`, {
           method: 'PUT',
           body: JSON.stringify(body),
+        }, 'PUT /api/links/:id/files')
+        console.log('[link-details:save] PUT /api/links/:id/files response', {
+          id,
+          hasTranscodes: Array.isArray(filesResp?.transcodes) || !!filesResp?.transcodes,
+          keys: Object.keys(filesResp || {}),
+          response: filesResp,
         })
         did.files = true
       } catch (e: any) {
+        if (e?.conflictCanceled) return
         const msg = apiErrMsg(e)
         pushNotification(
           new Notification(
@@ -2031,13 +2451,70 @@ async function saveAll() {
       }
     }
 
+    let trackingResp: any | null = null
+    let trackingPaths: string[] = []
+    let trackingWantsHls = false
+    let trackingWantsProxy = false
+
     if (shouldUpdateFiles && filesResp && (wantsHls || wantsProxy)) {
+      trackingResp = filesResp
+      trackingPaths = addedPaths.slice()
+      trackingWantsHls = wantsHls
+      trackingWantsProxy = wantsProxy
+    } else if (shouldTriggerMediaProcessing) {
+      const mediaPlan = await analyzeMediaNeedsForPaths({
+        paths: draftFilePaths.value.slice(),
+        wantsProxy: !!draftGenerateReviewProxy.value,
+        wantsHls: true,
+        proxyQualities: nextProxyQualities,
+      })
+      const pathsToTrack = mediaPlan.trackingPaths.length ? mediaPlan.trackingPaths : draftFilePaths.value.slice()
+      console.log('[link-details:save] media trigger via PATCH only (no PUT /files)', {
+        shouldTriggerMediaProcessing,
+        missingPaths: mediaPlan.missingPaths,
+        pathsToTrack,
+        nextProxyQualities,
+      })
+      if (pathsToTrack.length && detailsResp) {
+        trackingResp = detailsResp
+        trackingPaths = pathsToTrack
+        trackingWantsHls = true
+        trackingWantsProxy = !!draftGenerateReviewProxy.value
+      }
+    } else if (!shouldUpdateFiles) {
+      console.log('[link-details:save] no files update and no media trigger', {
+        shouldUpdateFiles,
+        shouldTriggerMediaProcessing,
+        mediaSettingsDirty: mediaSettingsDirty.value,
+        draftGenerateReviewProxy: draftGenerateReviewProxy.value,
+        draftWatermarkEnabled: draftWatermarkEnabled.value,
+      })
+    }
+
+    if (trackingResp && (trackingWantsHls || trackingWantsProxy)) {
+      console.log('[link-details:save] start tracking from response', {
+        trackingWantsHls,
+        trackingWantsProxy,
+        trackingPaths,
+      })
       startLinkTranscodeTracking({
-        resp: filesResp,
-        wantsProxy,
-        wantsHls,
-        addedPaths,
-        proxyQualities: wantsProxy ? nextProxyQualities : [],
+        resp: trackingResp,
+        wantsProxy: trackingWantsProxy,
+        wantsHls: trackingWantsHls,
+        addedPaths: trackingPaths,
+        proxyQualities: trackingWantsProxy ? nextProxyQualities : [],
+      })
+    } else if (!shouldUpdateFiles && detailsResp && wantsMediaProcessing) {
+      // Last resort: try details response if server included transcode info there.
+      console.log('[link-details:save] fallback tracking attempt from details response', {
+        hasDetailsResp: !!detailsResp,
+      })
+      startLinkTranscodeTracking({
+        resp: detailsResp,
+        wantsProxy: !!draftGenerateReviewProxy.value,
+        wantsHls: true,
+        addedPaths: draftFilePaths.value.slice(),
+        proxyQualities: draftGenerateReviewProxy.value ? nextProxyQualities : [],
       })
     }
 
@@ -2224,6 +2701,7 @@ watch(
       draftProxyQualities.value = []
       draftWatermarkEnabled.value = false
       draftWatermarkFile.value = ''
+      draftWatermarkLocalFile.value = null
     }
   }
 )
@@ -2233,6 +2711,7 @@ watch(
   (v) => {
     if (!v) {
       draftWatermarkFile.value = ''
+      draftWatermarkLocalFile.value = null
     }
   }
 )
