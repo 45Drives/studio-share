@@ -91,6 +91,6 @@ rsync -a -e "${RSYNC_SSH[*]}" \
 
 echo "Trigger signing/notarization on Intel..."
 "${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" \
-  "bash -lc '\"${SIGN_INBOX}/sign-mac-on-intel.sh\" \"$BUNDLE_TAG\"'"
+  "bash -lc '\"${SIGN_INBOX}/scripts/sign-mac-on-intel.sh\" \"$BUNDLE_TAG\"'"
 
 echo "Done. Artifacts are on Intel Mac under: ${SIGN_OUTPUT_DIR}/${BUNDLE_TAG}"

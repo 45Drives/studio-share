@@ -3,7 +3,8 @@ set -euo pipefail
 
 BUNDLE_TAG="${1:?bundle tag required}"
 
-ENV_FILE="$HOME/scripts/.env.release"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env.release"
 
 # --- Load env (export everything) ---
 if [[ -f "$ENV_FILE" ]]; then
@@ -175,4 +176,5 @@ echo "Artifacts complete:"
 /bin/ls -la "$OUT_DIR"
 echo "ZIP: $ZIP_PATH"
 echo "DMG: $DMG_PATH"
+
 
