@@ -392,7 +392,7 @@ import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
 import { runRsync } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
-import { initAutoUpdates } from './updates'
+// import { initAutoUpdates } from './updates'
 
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
@@ -1880,7 +1880,7 @@ app.whenReady().then(() => {
   });
   jl('info', 'window.created');
 
-  initAutoUpdates(() => (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : null)
+  // initAutoUpdates(() => (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : null)
 });
 
 ipcMain.handle('dialog:pickFiles', async () => {

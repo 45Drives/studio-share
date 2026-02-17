@@ -19,7 +19,7 @@
     "synopsis": "Share and review media via magic links",
     "vendor": "45Drives",
     "maintainer": "Jordan Keough <jkeough@45drives.com>",
-    "icon": "icon.png"
+    "icon": "assets/icons/linux"
   },
 
   "mac": {
