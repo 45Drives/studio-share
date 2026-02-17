@@ -3,7 +3,7 @@ set -euo pipefail
 
 BUNDLE_TAG="${1:?bundle tag required}"
 
-ENV_FILE="$HOME/signing-inbox/.env.release"
+ENV_FILE="$HOME/scripts/.env.release"
 
 # --- Load env (export everything) ---
 if [[ -f "$ENV_FILE" ]]; then
