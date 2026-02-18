@@ -2163,8 +2163,12 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         ]);
         return videoExts.has(ext);
       })();
+      const wantsProxyForFile = wantsProxy && isVideo
+      const wantsWatermarkForFile = wantsWatermark && isVideo
+      const wantsHlsForFile = isVideo
+
       const watermarkCandidates: string[] = (() => {
-        if (!(wantsWatermark && isVideo)) return ['']
+        if (!wantsWatermarkForFile) return ['']
         const out: string[] = []
         const seen = new Set<string>()
         const add = (v: string) => {
@@ -2194,10 +2198,10 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         params.set('dest', destRel)
         params.set('name', fileName)
         params.set('uploader', os.userInfo().username)
-        params.set('hls', '1')
-        if (wantsProxy) params.set('proxy', '1')
-        if (proxyQualities.length) params.set('proxyQualities', proxyQualities.join(','))
-        if (wantsWatermark && isVideo && watermarkFileCandidate) {
+        if (wantsHlsForFile) params.set('hls', '1')
+        if (wantsProxyForFile) params.set('proxy', '1')
+        if (wantsProxyForFile && proxyQualities.length) params.set('proxyQualities', proxyQualities.join(','))
+        if (wantsWatermarkForFile && watermarkFileCandidate) {
           params.set('watermark', '1')
           params.set('watermarkFile', watermarkFileCandidate)
           if (watermarkProxyQualities.length) {
@@ -2244,8 +2248,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
             const errText = String(j?.error || '').toLowerCase()
             const watermarkMissing = /watermark.*not found/.test(errText)
             const canRetryWatermark =
-              wantsWatermark &&
-              isVideo &&
+              wantsWatermarkForFile &&
               watermarkMissing &&
               i < watermarkCandidates.length - 1
 

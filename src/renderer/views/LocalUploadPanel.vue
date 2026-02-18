@@ -498,6 +498,7 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
+	isVideo: boolean
 	wantProxy: boolean
 	groupId: string
 	destDir: string
@@ -530,7 +531,7 @@ function waitForIngestAndStartTranscode(opts: {
 		const useAssetVersion = Number.isFinite(assetVersionId) && assetVersionId > 0;
 
 		// HLS
-		if (shouldTrack('hls')) {
+		if (opts.isVideo && shouldTrack('hls')) {
 			if (useAssetVersion) {
 				transfer.startAssetVersionTranscodeTask({
 					apiFetch,
@@ -567,7 +568,7 @@ function waitForIngestAndStartTranscode(opts: {
 		}
 
 		// Proxy (only if user asked)
-		if (opts.wantProxy && shouldTrack('proxy_mp4')) {
+		if (opts.isVideo && opts.wantProxy && shouldTrack('proxy_mp4')) {
 			if (useAssetVersion) {
 				transfer.startAssetVersionTranscodeTask({
 					apiFetch,
@@ -614,11 +615,13 @@ function waitForIngestAndStartTranscode(opts: {
 							const params = new URLSearchParams();
 							if (payload?.destRel) params.set('dest', String(payload.destRel));
 							if (payload?.name) params.set('name', String(payload.name));
-							params.set('hls', '1');
-							if (opts.wantProxy) params.set('proxy', '1');
-							if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
+							if (opts.isVideo) {
+								params.set('hls', '1');
+								if (opts.wantProxy) params.set('proxy', '1');
+								if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
+							}
 
-							if (watermarkAfterUpload.value) {
+							if (opts.isVideo && watermarkAfterUpload.value) {
 								const wmRel = String(opts.watermarkRelPath || resolveWatermarkRelPath() || watermarkFile.value?.name || '').trim()
 								if (wmRel) {
 									params.set('watermark', '1');
@@ -705,6 +708,7 @@ const hasVideoSelected = computed(() =>
 
 watch(selected, () => {
 	if (!hasVideoSelected.value) {
+		transcodeProxyAfterUpload.value = false
 		watermarkAfterUpload.value = false
 		watermarkFile.value = null
 	}
@@ -1057,6 +1061,7 @@ async function startUploads() {
 		const stopIngestListener = waitForIngestAndStartTranscode({
 			uploadId: id,
 			rowName: row.name,
+			isVideo: videoExts.has(String(row.name || '').toLowerCase().split('.').pop() || ''),
 			wantProxy: transcodeProxyAfterUpload.value,
 			groupId,
 			destDir: destDirAbs,

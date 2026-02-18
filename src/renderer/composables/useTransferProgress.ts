@@ -538,25 +538,25 @@ export function useTransferProgress() {
                     sumPct += cumulative
                     pctCount++
                 }
-                console.log('[transcode:proxy:summarize:item]', {
-                    assetVersionId: (it as any)?.assetVersionId,
-                    requestedQualities: context?.proxyQualities || [],
-                    allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
-                    filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
-                    filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
-                    filteredProgress: jobs.map((j: any) => j?.progress),
-                    filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
-                    cumulative,
-                })
+                // console.log('[transcode:proxy:summarize:item]', {
+                //     assetVersionId: (it as any)?.assetVersionId,
+                //     requestedQualities: context?.proxyQualities || [],
+                //     allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
+                //     filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
+                //     filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
+                //     filteredProgress: jobs.map((j: any) => j?.progress),
+                //     filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
+                //     cumulative,
+                // })
             } else if (jobKind === 'hls') {
-                console.log('[transcode:hls:summarize:item]', {
-                    assetVersionId: (it as any)?.assetVersionId,
-                    allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
-                    filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
-                    filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
-                    filteredProgress: jobs.map((j: any) => j?.progress),
-                    filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
-                })
+                // console.log('[transcode:hls:summarize:item]', {
+                //     assetVersionId: (it as any)?.assetVersionId,
+                //     allKinds: (it.jobs || []).map((j: any) => String(j?.kind || '')),
+                //     filteredKinds: jobs.map((j: any) => String(j?.kind || '')),
+                //     filteredStatuses: jobs.map((j: any) => String(j?.status || '')),
+                //     filteredProgress: jobs.map((j: any) => j?.progress),
+                //     filteredProgressPct: jobs.map((j: any) => normalizeProgressPercent(j?.progress)),
+                // })
             }
         }
 
@@ -572,13 +572,13 @@ export function useTransferProgress() {
         else if (done > 0) status = 'done'
 
         if (jobKind === 'proxy_mp4' || jobKind === 'hls') {
-            console.log('[transcode:summarize:result]', {
-                jobKind,
-                status,
-                progress,
-                counts: { failed, running, queued, done },
-                items: items.length,
-            })
+            // console.log('[transcode:summarize:result]', {
+            //     jobKind,
+            //     status,
+            //     progress,
+            //     counts: { failed, running, queued, done },
+            //     items: items.length,
+            // })
         }
 
         return { status, progress, counts: { failed, running, queued, done } }

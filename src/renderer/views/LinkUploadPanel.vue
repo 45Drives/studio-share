@@ -450,7 +450,7 @@ async function generateLink() {
 			})
 		}
 
-		console.log('[create-upload-link] request body', JSON.stringify(body))
+		// console.log('[create-upload-link] request body', JSON.stringify(body))
 		const resp = await apiFetch('/api/create-upload-link', {
 			method: 'POST',
 			body: JSON.stringify(body),

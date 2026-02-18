@@ -1721,16 +1721,16 @@ function startLinkTranscodeTracking(opts: {
       .map((p) => byPath.get(normalizeAbs(p)))
       .filter((n): n is number => Number.isFinite(n as number) && (n as number) > 0)
     fileIds = Array.from(new Set(resolved))
-    console.log('[link-details:tracking] resolved fileIds from paths fallback', {
-      addedPaths: opts.addedPaths,
-      resolvedFileIds: fileIds,
-    })
+    // console.log('[link-details:tracking] resolved fileIds from paths fallback', {
+    //   addedPaths: opts.addedPaths,
+    //   resolvedFileIds: fileIds,
+    // })
   }
   if (!fileIds.length) {
-    console.log('[link-details:tracking] no fileIds available for tracking', {
-      responseKeys: Object.keys(opts.resp || {}),
-      addedPaths: opts.addedPaths,
-    })
+    // console.log('[link-details:tracking] no fileIds available for tracking', {
+    //   responseKeys: Object.keys(opts.resp || {}),
+    //   addedPaths: opts.addedPaths,
+    // })
     return
   }
 
@@ -2222,7 +2222,7 @@ async function saveAll() {
       if (e?.status !== 409 || !/^(outputs_exist|hls_exists|watermark_exists)$/.test(errCode)) {
         throw e
       }
-      console.log('[link-details:save] conflict 409', { label, payload })
+      // console.log('[link-details:save] conflict 409', { label, payload })
       const action = await resolveOutputsConflictAction(payload)
       if (action === 'cancel') {
         const canceled: any = new Error('save canceled')
@@ -2378,23 +2378,23 @@ async function saveAll() {
       }
 
       try {
-        console.log('[link-details:save] PATCH /api/links/:id request', {
-          id,
-          body,
-          mediaSettingsDirty: mediaSettingsDirty.value,
-          draftGenerateReviewProxy: draftGenerateReviewProxy.value,
-          draftProxyQualities: draftProxyQualities.value.slice(),
-        })
+        // console.log('[link-details:save] PATCH /api/links/:id request', {
+        //   id,
+        //   body,
+        //   mediaSettingsDirty: mediaSettingsDirty.value,
+        //   draftGenerateReviewProxy: draftGenerateReviewProxy.value,
+        //   draftProxyQualities: draftProxyQualities.value.slice(),
+        // })
         detailsResp = await apiFetchWithOutputConflictRetry(`/api/links/${id}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
         }, 'PATCH /api/links/:id')
-        console.log('[link-details:save] PATCH /api/links/:id response', {
-          id,
-          hasTranscodes: Array.isArray(detailsResp?.transcodes) || !!detailsResp?.transcodes,
-          keys: Object.keys(detailsResp || {}),
-          response: detailsResp,
-        })
+        // console.log('[link-details:save] PATCH /api/links/:id response', {
+        //   id,
+        //   hasTranscodes: Array.isArray(detailsResp?.transcodes) || !!detailsResp?.transcodes,
+        //   keys: Object.keys(detailsResp || {}),
+        //   response: detailsResp,
+        // })
         did.details = true
       } catch (e: any) {
         if (e?.conflictCanceled) return
@@ -2421,23 +2421,23 @@ async function saveAll() {
       }
 
       try {
-        console.log('[link-details:save] PUT /api/links/:id/files request', {
-          id,
-          body,
-          addedPaths,
-          wantsHls,
-          wantsProxy,
-        })
+        // console.log('[link-details:save] PUT /api/links/:id/files request', {
+        //   id,
+        //   body,
+        //   addedPaths,
+        //   wantsHls,
+        //   wantsProxy,
+        // })
         filesResp = await apiFetchWithOutputConflictRetry(`/api/links/${id}/files`, {
           method: 'PUT',
           body: JSON.stringify(body),
         }, 'PUT /api/links/:id/files')
-        console.log('[link-details:save] PUT /api/links/:id/files response', {
-          id,
-          hasTranscodes: Array.isArray(filesResp?.transcodes) || !!filesResp?.transcodes,
-          keys: Object.keys(filesResp || {}),
-          response: filesResp,
-        })
+        // console.log('[link-details:save] PUT /api/links/:id/files response', {
+        //   id,
+        //   hasTranscodes: Array.isArray(filesResp?.transcodes) || !!filesResp?.transcodes,
+        //   keys: Object.keys(filesResp || {}),
+        //   response: filesResp,
+        // })
         did.files = true
       } catch (e: any) {
         if (e?.conflictCanceled) return
@@ -2472,12 +2472,12 @@ async function saveAll() {
         proxyQualities: nextProxyQualities,
       })
       const pathsToTrack = mediaPlan.trackingPaths.length ? mediaPlan.trackingPaths : draftFilePaths.value.slice()
-      console.log('[link-details:save] media trigger via PATCH only (no PUT /files)', {
-        shouldTriggerMediaProcessing,
-        missingPaths: mediaPlan.missingPaths,
-        pathsToTrack,
-        nextProxyQualities,
-      })
+      // console.log('[link-details:save] media trigger via PATCH only (no PUT /files)', {
+      //   shouldTriggerMediaProcessing,
+      //   missingPaths: mediaPlan.missingPaths,
+      //   pathsToTrack,
+      //   nextProxyQualities,
+      // })
       if (pathsToTrack.length && detailsResp) {
         trackingResp = detailsResp
         trackingPaths = pathsToTrack
@@ -2485,21 +2485,21 @@ async function saveAll() {
         trackingWantsProxy = !!draftGenerateReviewProxy.value
       }
     } else if (!shouldUpdateFiles) {
-      console.log('[link-details:save] no files update and no media trigger', {
-        shouldUpdateFiles,
-        shouldTriggerMediaProcessing,
-        mediaSettingsDirty: mediaSettingsDirty.value,
-        draftGenerateReviewProxy: draftGenerateReviewProxy.value,
-        draftWatermarkEnabled: draftWatermarkEnabled.value,
-      })
+      // console.log('[link-details:save] no files update and no media trigger', {
+      //   shouldUpdateFiles,
+      //   shouldTriggerMediaProcessing,
+      //   mediaSettingsDirty: mediaSettingsDirty.value,
+      //   draftGenerateReviewProxy: draftGenerateReviewProxy.value,
+      //   draftWatermarkEnabled: draftWatermarkEnabled.value,
+      // })
     }
 
     if (trackingResp && (trackingWantsHls || trackingWantsProxy)) {
-      console.log('[link-details:save] start tracking from response', {
-        trackingWantsHls,
-        trackingWantsProxy,
-        trackingPaths,
-      })
+      // console.log('[link-details:save] start tracking from response', {
+      //   trackingWantsHls,
+      //   trackingWantsProxy,
+      //   trackingPaths,
+      // })
       startLinkTranscodeTracking({
         resp: trackingResp,
         wantsProxy: trackingWantsProxy,
@@ -2509,9 +2509,9 @@ async function saveAll() {
       })
     } else if (!shouldUpdateFiles && detailsResp && wantsMediaProcessing) {
       // Last resort: try details response if server included transcode info there.
-      console.log('[link-details:save] fallback tracking attempt from details response', {
-        hasDetailsResp: !!detailsResp,
-      })
+      // console.log('[link-details:save] fallback tracking attempt from details response', {
+      //   hasDetailsResp: !!detailsResp,
+      // })
       startLinkTranscodeTracking({
         resp: detailsResp,
         wantsProxy: !!draftGenerateReviewProxy.value,

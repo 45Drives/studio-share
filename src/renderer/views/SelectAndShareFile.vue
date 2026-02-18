@@ -1704,7 +1704,7 @@ async function generateLink() {
             if ((up as any).relPath) body.watermarkFile = (up as any).relPath
         }
 
-        console.log('[magic-link] request body', JSON.stringify(body))
+        // console.log('[magic-link] request body', JSON.stringify(body))
         let data: any
         const watermarkFileCandidates = buildWatermarkFileCandidates()
         const tryRequest = async () => {
@@ -1725,12 +1725,12 @@ async function generateLink() {
                     if (action === 'overwrite') {
                         overwriteExisting.value = true
                         body.overwrite = true
-                        console.log('[magic-link] retry with overwrite', JSON.stringify(body))
+                        // console.log('[magic-link] retry with overwrite', JSON.stringify(body))
                         data = await tryRequest()
                     } else if (action === 'generate') {
                         body.keepExistingOutputs = true
                         body.overwrite = false
-                        console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
+                        // console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
                         data = await tryRequest()
                         pushNotification(
                             new Notification(
