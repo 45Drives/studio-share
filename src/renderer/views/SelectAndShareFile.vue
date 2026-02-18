@@ -127,31 +127,43 @@
                                                 placeholder="Optional title for the shared link" />
                                         </div>
                                     </template>
-
                                     <template #access>
-                                        <div class="flex flex-wrap items-center gap-3 min-w-0">
-                                            <label class="font-semibold sm:whitespace-nowrap" for="link-access-switch">
-                                                Network Access:
-                                            </label>
+                                        <div class="flex flex-col gap-1 min-w-0">
+                                            <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                                <span class="font-semibold sm:whitespace-nowrap">
+                                                    Network Access:
+                                                </span>
 
-                                            <Switch id="link-access-switch" v-model="usePublicBase" :class="[
-                                                usePublicBase ? 'bg-secondary' : 'bg-well',
-                                                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                            ]">
-                                                <span class="sr-only">Toggle link access</span>
-                                                <span aria-hidden="true" :class="[
-                                                    usePublicBase ? 'translate-x-5' : 'translate-x-0',
-                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                ]" />
-                                            </Switch>
+                                                <div class="flex flex-wrap gap-2 min-w-0" role="radiogroup"
+                                                    aria-label="Network Access">
+                                                    <!-- Local (false) -->
+                                                    <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer select-none transition
+                -well bg-default hover:bg-well/40">
+                                                        <input type="radio" name="link-access" :value="false"
+                                                            :checked="usePublicBase === false"
+                                                            @change="usePublicBase = false" class="h-4 w-4" />
+                                                        <span class="text-sm truncate">
+                                                            Share Locally (Over LAN)
+                                                        </span>
+                                                    </label>
 
-                                            <span class="text-sm select-none truncate min-w-0 flex-1">
-                                                {{ usePublicBase ? 'Share Externally (Over Internet)' : 'Share Locally (Over LAN)' }}
-                                            </span>
+                                                    <!-- External (true) -->
+                                                    <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer select-none transition
+                 border-well bg-default hover:bg-well/40">
+                                                        <input type="radio" name="link-access" :value="true"
+                                                            :checked="usePublicBase === true"
+                                                            @change="usePublicBase = true" class="h-4 w-4" />
+                                                        <span class="text-sm truncate">
+                                                            Share Externally (Over Internet)
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <p class="text-xs text-muted">
+                                                External sharing needs working port forwarding.
+                                            </p>
                                         </div>
-                                        <p class="text-xs text-muted mt-1">
-                                            External sharing needs working port forwarding.
-                                        </p>
                                     </template>
 
                                     <template #accessExtra>
