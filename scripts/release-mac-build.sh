@@ -89,6 +89,11 @@ rsync -a -e "${RSYNC_SSH[*]}" \
   "${ROOT_DIR}/${ENTITLEMENTS_FILE}" \
   "${SIGN_USER}@${SIGN_HOST}:${SIGN_INBOX}/${ENTITLEMENTS_FILE}"
 
+SIGN_GIT_PULL_CMD="${SIGN_GIT_PULL_CMD:-cd '${SIGN_INBOX}' && git pull --ff-only}"
+echo "Updating signing host repo..."
+SIGN_GIT_PULL_CMD_ESCAPED="$(printf '%q' "$SIGN_GIT_PULL_CMD")"
+"${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" "bash -lc $SIGN_GIT_PULL_CMD_ESCAPED"
+
 echo "Trigger signing/notarization on Intel..."
 "${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" \
   "bash -lc '\"${SIGN_INBOX}/scripts/sign-mac-on-intel.sh\" \"$BUNDLE_TAG\"'"

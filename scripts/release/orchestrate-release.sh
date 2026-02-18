@@ -11,10 +11,36 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# Preserve runtime env overrides so they win over values in ENV_FILE.
+RUNTIME_OVERRIDE_KEYS=(
+  RUN_LINUX_BUILD
+  RUN_MAC_BUILD
+  RUN_WINDOWS_BUILD
+  WIN_PHASE
+  RELEASE_VERSION
+  RELEASE_TAG
+  RELEASE_STAGING_DIR
+  RELEASE_BUILDS_DIR
+  GH_CREATE_DRAFT
+  GH_UPLOAD_RELEASE
+  GH_PUBLISH_RELEASE
+)
+declare -A RUNTIME_OVERRIDES=()
+for _k in "${RUNTIME_OVERRIDE_KEYS[@]}"; do
+  if [[ -n "${!_k+x}" ]]; then
+    RUNTIME_OVERRIDES["$_k"]="${!_k}"
+  fi
+done
+
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+for _k in "${!RUNTIME_OVERRIDES[@]}"; do
+  printf -v "$_k" '%s' "${RUNTIME_OVERRIDES[$_k]}"
+  export "$_k"
+done
 
 cd "$ROOT_DIR"
 
@@ -32,12 +58,7 @@ WIN_BUILD_DISABLE_SIGN="${WIN_BUILD_DISABLE_SIGN:-1}"
 WIN_BUILD_NO_SIGN_PREFIX="${WIN_BUILD_NO_SIGN_PREFIX:-set CSC_IDENTITY_AUTO_DISCOVERY=false&& set CSC_LINK=&& set CSC_KEY_PASSWORD=&& set WIN_CSC_LINK=&& set WIN_CSC_KEY_PASSWORD=&& set CSC_NAME=&& set WIN_CSC_NAME=&& }"
 WIN_BUILD_NO_SIGN_PREFIX_POSIX="${WIN_BUILD_NO_SIGN_PREFIX_POSIX:-CSC_IDENTITY_AUTO_DISCOVERY=false CSC_LINK= CSC_KEY_PASSWORD= WIN_CSC_LINK= WIN_CSC_KEY_PASSWORD= CSC_NAME= WIN_CSC_NAME= }"
 
-WIN_SIGN_HOST="${WIN_SIGN_HOST:-$WIN_BUILD_HOST}"
-WIN_SIGN_PORT="${WIN_SIGN_PORT:-$WIN_BUILD_PORT}"
-WIN_SIGN_USER="${WIN_SIGN_USER:-$WIN_BUILD_USER}"
-WIN_SIGN_PASSWORD="${WIN_SIGN_PASSWORD:-$WIN_BUILD_PASSWORD}"
-WIN_SIGN_REMOTE_DIR="${WIN_SIGN_REMOTE_DIR:-$WIN_BUILD_REMOTE_DIR}"
-WIN_SIGN_REMOTE_OS="${WIN_SIGN_REMOTE_OS:-windows}" # windows | posix
+WIN_SIGN_WIN_DIR="${WIN_SIGN_WIN_DIR:-}"
 
 truthy() {
   local v="${1:-}"
@@ -53,16 +74,25 @@ require_cmd() {
 }
 
 require_cmd ssh
+require_cmd scp
 require_cmd rsync
 require_cmd node
 require_cmd yarn
 
-VERSION="${RELEASE_VERSION:-$(node -p "require('./package.json').version")}"
-RELEASE_TAG="${RELEASE_TAG:-v${VERSION}}"
+PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+VERSION="$PACKAGE_VERSION"
+if [[ -n "${RELEASE_VERSION:-}" && "${RELEASE_VERSION}" != "$PACKAGE_VERSION" ]]; then
+  echo "RELEASE_VERSION (${RELEASE_VERSION}) does not match package.json (${PACKAGE_VERSION}); using package.json version." >&2
+fi
+RELEASE_TAG_RAW="${RELEASE_TAG:-v__VERSION__}"
+RELEASE_TAG="${RELEASE_TAG_RAW//__VERSION__/${VERSION}}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-STAGING_DIR="${RELEASE_STAGING_DIR:-${ROOT_DIR}/builds/release/${VERSION}}"
+STAGING_DIR_RAW="${RELEASE_STAGING_DIR:-${ROOT_DIR}/builds/release/__VERSION__}"
+STAGING_DIR="${STAGING_DIR_RAW//__VERSION__/${VERSION}}"
+RELEASE_BUILDS_DIR="${RELEASE_BUILDS_DIR:-${ROOT_DIR}/release-builds}"
 
 mkdir -p "$STAGING_DIR"/{linux,windows,mac}
+mkdir -p "$RELEASE_BUILDS_DIR"
 
 SSH_STRICT_OPTS=(
   -o StrictHostKeyChecking=no
@@ -73,7 +103,7 @@ SSH_STRICT_OPTS=(
 )
 
 needs_sshpass=0
-for p in "${WIN_BUILD_PASSWORD:-}" "${WIN_SIGN_PASSWORD:-}" "${MAC_ARM_PASSWORD:-}" "${MAC_SIGN_PASSWORD:-}"; do
+for p in "${WIN_BUILD_PASSWORD:-}" "${MAC_ARM_PASSWORD:-}" "${MAC_FETCH_PASSWORD:-}" "${MAC_SIGN_PASSWORD:-}"; do
   if [[ -n "${p:-}" ]]; then
     needs_sshpass=1
     break
@@ -129,62 +159,51 @@ rsync_from() {
   fi
 }
 
-replace_sign_tokens() {
-  local cmd="$1"
-  cmd="${cmd//__INPUT_POSIX__/${WIN_SIGN_INPUT_POSIX}}"
-  cmd="${cmd//__INPUT_WIN__/${WIN_SIGN_INPUT_WIN}}"
-  cmd="${cmd//__OUTPUT_POSIX__/${WIN_SIGN_OUTPUT_POSIX}}"
-  cmd="${cmd//__OUTPUT_WIN__/${WIN_SIGN_OUTPUT_WIN}}"
-  cmd="${cmd//__BASENAME__/${WIN_SIGN_BASENAME}}"
-  cmd="${cmd//__VERSION__/${VERSION}}"
-  printf '%s' "$cmd"
+scp_from_file() {
+  local host="$1" user="$2" pass="$3" port="$4" remote_file="$5" local_file="$6"
+  local remote_file_escaped="${remote_file// /\\ }"
+  local remote_spec="${host}:${remote_file_escaped}"
+  local user_ssh_opt="${user// /\\ }"
+  if [[ -n "$pass" ]]; then
+    sshpass -p "$pass" scp "${SSH_STRICT_OPTS[@]}" -o "User=${user_ssh_opt}" -P "$port" "$remote_spec" "$local_file"
+  else
+    scp "${SSH_STRICT_OPTS[@]}" -o "User=${user_ssh_opt}" -P "$port" "$remote_spec" "$local_file"
+  fi
 }
 
-fetch_signed_windows_exe() {
-  local signed_dir="$STAGING_DIR/windows/signed"
-  mkdir -p "$signed_dir"
-
-  # Avoid stale picks across runs/phases.
-  shopt -s nullglob
-  old_signed=("$signed_dir/"*.exe)
-  if [[ "${#old_signed[@]}" -gt 0 ]]; then
-    rm -f -- "${old_signed[@]}"
-  fi
-  shopt -u nullglob
-
-  local fetch_path="${WIN_SIGN_FETCH_PATH:-${WIN_SIGN_REMOTE_DIR%/}/}"
-
-  set +e
-  rsync_from "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$fetch_path" "$signed_dir/"
-  fetch_code=$?
-  set -e
-
-  if [[ "$fetch_code" -ne 0 ]]; then
-    echo "Failed to fetch signed Windows EXE from sign host." >&2
-    echo "Tried WIN_SIGN_FETCH_PATH='${fetch_path}'." >&2
-    return 1
-  fi
-
-  shopt -s nullglob
-  win_signed_exes=("$signed_dir/"*.exe)
-  shopt -u nullglob
-  if [[ "${#win_signed_exes[@]}" -eq 0 ]]; then
-    echo "No signed Windows EXE found in $signed_dir" >&2
-    return 1
-  fi
-
-  WIN_PRIMARY_EXE="$(ls -1t -- "${win_signed_exes[@]}" | head -n1)"
-  export WIN_PRIMARY_EXE
+copy_to_release_builds() {
+  local file
+  for file in "$@"; do
+    [[ -f "$file" ]] || continue
+    cp -f "$file" "$RELEASE_BUILDS_DIR/"
+  done
 }
 
 echo "Release version: $VERSION"
 echo "Release tag: $RELEASE_TAG"
 echo "Staging dir: $STAGING_DIR"
+echo "Release builds dir: $RELEASE_BUILDS_DIR"
 
 if truthy "${RUN_LINUX_BUILD:-1}"; then
   echo "== Linux build =="
+  LINUX_GIT_PULL_CMD="${LINUX_GIT_PULL_CMD:-git pull --ff-only}"
+  bash -lc "$LINUX_GIT_PULL_CMD"
   LINUX_BUILD_CMD="${LINUX_BUILD_CMD:-yarn build:linux}"
   bash -lc "$LINUX_BUILD_CMD"
+
+  LINUX_CLEAN_OUTPUTS="${LINUX_CLEAN_OUTPUTS:-1}"
+  if truthy "$LINUX_CLEAN_OUTPUTS"; then
+    shopt -s nullglob
+    stale_staging_linux=("$STAGING_DIR/linux/"*.deb "$STAGING_DIR/linux/"*.rpm "$STAGING_DIR/linux/latest-linux.yml)
+    if [[ "${#stale_staging_linux[@]}" -gt 0 ]]; then
+      rm -f -- "${stale_staging_linux[@]}"
+    fi
+    stale_release_linux=("$RELEASE_BUILDS_DIR/"*-linux-*.deb "$RELEASE_BUILDS_DIR/"*-linux-*.rpm "$RELEASE_BUILDS_DIR/latest-linux.yml)
+    if [[ "${#stale_release_linux[@]}" -gt 0 ]]; then
+      rm -f -- "${stale_release_linux[@]}"
+    fi
+    shopt -u nullglob
+  fi
 
   shopt -s nullglob
   linux_artifacts=(dist/*-linux-*.deb dist/*-linux-*.rpm dist/latest-linux.yml)
@@ -193,10 +212,14 @@ if truthy "${RUN_LINUX_BUILD:-1}"; then
     exit 1
   fi
   cp -f "${linux_artifacts[@]}" "$STAGING_DIR/linux/"
+  copy_to_release_builds "${linux_artifacts[@]}"
   shopt -u nullglob
 fi
 
-if truthy "${RUN_WINDOWS_BUILD:-1}"; then
+run_windows_flow() {
+  if ! truthy "${RUN_WINDOWS_BUILD:-1}"; then
+    return
+  fi
   echo "== Windows build/sign =="
   WIN_PHASE="${WIN_PHASE:-stage}" # stage | finalize
   case "$WIN_PHASE" in
@@ -211,27 +234,30 @@ if truthy "${RUN_WINDOWS_BUILD:-1}"; then
       ;;
   esac
 
-  : "${WIN_SIGN_HOST:?WIN_SIGN_HOST is required when RUN_WINDOWS_BUILD=1}"
-  : "${WIN_SIGN_USER:?WIN_SIGN_USER is required when RUN_WINDOWS_BUILD=1}"
-  if [[ "$WIN_PHASE" != "finalize" ]]; then
-    : "${WIN_BUILD_HOST:?WIN_BUILD_HOST is required when WIN_PHASE is '$WIN_PHASE'}"
-    : "${WIN_BUILD_USER:?WIN_BUILD_USER is required when WIN_PHASE is '$WIN_PHASE'}"
-  fi
+  : "${WIN_BUILD_HOST:?WIN_BUILD_HOST is required when RUN_WINDOWS_BUILD=1}"
+  : "${WIN_BUILD_USER:?WIN_BUILD_USER is required when RUN_WINDOWS_BUILD=1}"
+  : "${WIN_SIGN_WIN_DIR:?WIN_SIGN_WIN_DIR is required when RUN_WINDOWS_BUILD=1}"
 
-  if [[ "$WIN_PHASE" == "stage" ]] && (truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}"); then
-    echo "WIN_PHASE=stage cannot run with GH upload/publish enabled." >&2
-    echo "Disable GH_UPLOAD_RELEASE/GH_PUBLISH_RELEASE or run WIN_PHASE=finalize." >&2
-    exit 1
-  fi
+  # GitHub release automation temporarily disabled.
+  # if [[ "$WIN_PHASE" == "stage" ]] && (truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}"); then
+  #   echo "WIN_PHASE=stage cannot run with GH upload/publish enabled." >&2
+  #   echo "Disable GH_UPLOAD_RELEASE/GH_PUBLISH_RELEASE or run WIN_PHASE=finalize." >&2
+  #   exit 1
+  # fi
 
   WIN_BUILD_MODE="${WIN_BUILD_MODE:-git}" # git | rsync
   WIN_BUILD_GIT_PULL_CMD="${WIN_BUILD_GIT_PULL_CMD:-cd ${WIN_BUILD_REMOTE_DIR} && git pull --ff-only}"
   WIN_BUILD_CMD="${WIN_BUILD_CMD:-cd ${WIN_BUILD_REMOTE_DIR} && yarn install && yarn build:win}"
   WIN_BUILD_EXE_GLOB="${WIN_BUILD_EXE_GLOB:-${WIN_BUILD_REMOTE_DIR}/dist/*-win-*.exe}"
+  WIN_BUILD_DIST_DIR_WIN="${WIN_BUILD_DIST_DIR_WIN:-${WIN_BUILD_DIST_DIR:-${WIN_BUILD_REMOTE_DIR}\\dist}}"
+  WIN_BUILD_DIST_DIR_WIN="${WIN_BUILD_DIST_DIR_WIN%\\}"
+  WIN_BUILD_DIST_DIR_WIN="${WIN_BUILD_DIST_DIR_WIN%/}"
 
   mkdir -p "$STAGING_DIR/windows/unsigned" "$STAGING_DIR/windows/signed"
 
   if [[ "$WIN_PHASE" != "finalize" ]]; then
+    ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_GIT_PULL_CMD"
+
     if [[ "$WIN_BUILD_MODE" == "rsync" ]]; then
       if [[ -n "${WIN_BUILD_PREPARE_CMD:-}" ]]; then
         ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_PREPARE_CMD"
@@ -240,8 +266,6 @@ if truthy "${RUN_WINDOWS_BUILD:-1}"; then
       RSYNC_DELETE=1
       rsync_to "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "${ROOT_DIR}/" "${WIN_BUILD_REMOTE_DIR}/"
       RSYNC_DELETE=0
-    else
-      ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_GIT_PULL_CMD"
     fi
 
     WIN_BUILD_CMD_EFFECTIVE="$WIN_BUILD_CMD"
@@ -255,85 +279,90 @@ if truthy "${RUN_WINDOWS_BUILD:-1}"; then
     fi
     ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_CMD_EFFECTIVE"
 
-    set +e
-    rsync_from "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_BUILD_DIST_DIR" "$STAGING_DIR/windows/unsigned/"
-    rsync_code=$?
-    set -e
-    if [[ "$rsync_code" -ne 0 ]]; then
-      echo "Failed to fetch unsigned Windows artifacts from WIN_BUILD_DIST_DIR=$WIN_BUILD_DIST_DIR" >&2
-      exit 1
-    fi
+    WIN_UNSIGNED_EXE_REMOTE_WIN="$(ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" \
+      "powershell -NoProfile -Command \"\$f = Get-ChildItem -LiteralPath '${WIN_BUILD_DIST_DIR_WIN}' -Filter *.exe -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not \$f) { Write-Error 'No unsigned Windows EXE found'; exit 44 }; Write-Output \$f.FullName\"")"
+    WIN_UNSIGNED_EXE_REMOTE_WIN="$(printf '%s' "$WIN_UNSIGNED_EXE_REMOTE_WIN" | tr -d '\r')"
+    WIN_SIGN_BASENAME="$(printf '%s' "$WIN_UNSIGNED_EXE_REMOTE_WIN" | sed -E 's#.*[\\/]##')"
 
-    shopt -s nullglob
-    win_unsigned_exes=("$STAGING_DIR/windows/unsigned/"*.exe)
-    shopt -u nullglob
-    if [[ "${#win_unsigned_exes[@]}" -eq 0 ]]; then
-      echo "No unsigned Windows EXE found in $STAGING_DIR/windows/unsigned" >&2
-      exit 1
-    fi
-    WIN_UNSIGNED_EXE="$(ls -1t -- "${win_unsigned_exes[@]}" | head -n1)"
-    WIN_SIGN_BASENAME="$(basename "$WIN_UNSIGNED_EXE")"
-
-    WIN_SIGN_INPUT_POSIX="${WIN_SIGN_REMOTE_DIR%/}/${WIN_SIGN_BASENAME}"
-    if [[ -n "${WIN_SIGN_WIN_DIR:-}" ]]; then
-      WIN_SIGN_INPUT_WIN="${WIN_SIGN_WIN_DIR%\\}\\${WIN_SIGN_BASENAME}"
-    else
-      WIN_SIGN_INPUT_WIN="$WIN_SIGN_INPUT_POSIX"
-    fi
-    WIN_SIGN_OUTPUT_POSIX="${WIN_SIGN_OUTPUT_POSIX:-$WIN_SIGN_INPUT_POSIX}"
-    WIN_SIGN_OUTPUT_WIN="${WIN_SIGN_OUTPUT_WIN:-$WIN_SIGN_INPUT_WIN}"
-
-    if [[ -n "${WIN_SIGN_MKDIR_CMD:-}" ]]; then
-      WIN_SIGN_MKDIR_CMD_EFFECTIVE="$WIN_SIGN_MKDIR_CMD"
-    elif [[ "${WIN_SIGN_REMOTE_OS:-windows}" == "windows" ]]; then
-      WIN_SIGN_MKDIR_CMD_EFFECTIVE="cmd.exe /c \"if not exist \\\"${WIN_SIGN_REMOTE_DIR}\\\" mkdir \\\"${WIN_SIGN_REMOTE_DIR}\\\"\""
-    else
-      WIN_SIGN_MKDIR_CMD_EFFECTIVE="mkdir -p '${WIN_SIGN_REMOTE_DIR}'"
-    fi
-    ssh_run "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_SIGN_MKDIR_CMD_EFFECTIVE"
-    RSYNC_EXCLUDES=""
-    RSYNC_DELETE=0
-    rsync_to "$WIN_SIGN_HOST" "$WIN_SIGN_USER" "${WIN_SIGN_PASSWORD:-}" "$WIN_SIGN_PORT" "$WIN_UNSIGNED_EXE" "${WIN_SIGN_REMOTE_DIR%/}/"
+    WIN_SIGN_INPUT_WIN="${WIN_SIGN_WIN_DIR%\\}\\${WIN_SIGN_BASENAME}"
+    ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" \
+      "powershell -NoProfile -Command \"\$dst='${WIN_SIGN_WIN_DIR}'; New-Item -ItemType Directory -Force -Path \$dst | Out-Null; Copy-Item -LiteralPath '${WIN_UNSIGNED_EXE_REMOTE_WIN}' -Destination (Join-Path \$dst '${WIN_SIGN_BASENAME}') -Force\""
   fi
 
   if [[ "$WIN_PHASE" == "stage" ]]; then
-    WIN_SIGN_CMD="${WIN_SIGN_CMD:-}"
-    echo "Windows stage complete. Unsigned EXE uploaded to sign host."
-    echo "Sign manually on the sign host, then rerun with WIN_PHASE=finalize."
-    echo "Expected input path:"
-    echo "  POSIX: ${WIN_SIGN_INPUT_POSIX}"
-    echo "  WIN:   ${WIN_SIGN_INPUT_WIN}"
-    if [[ -n "$WIN_SIGN_CMD" ]]; then
-      WIN_SIGN_CMD_RESOLVED="$(replace_sign_tokens "$WIN_SIGN_CMD")"
-      echo "Manual signing command template:"
-      echo "  $WIN_SIGN_CMD_RESOLVED"
-    fi
+    echo "Windows stage complete. Unsigned EXE copied to manual signing folder."
+    echo "Sign manually on the Windows build/sign host, then rerun with WIN_PHASE=finalize."
+    echo "Expected input path: ${WIN_SIGN_INPUT_WIN}"
+    echo "Resume command:"
+    echo "  WIN_PHASE=finalize bash scripts/release/orchestrate-release.sh '${ENV_FILE}'"
+    exit 0
   fi
 
   if [[ "$WIN_PHASE" != "stage" ]]; then
-    fetch_signed_windows_exe
+    SIGN_FETCH_INFO="$(ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" \
+      "powershell -NoProfile -Command \"\$sign='${WIN_SIGN_WIN_DIR}'; \$dist='${WIN_BUILD_DIST_DIR_WIN}'; \$f = Get-ChildItem -LiteralPath \$sign -Filter *.exe -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not \$f) { Write-Error 'No signed Windows EXE found'; exit 45 }; New-Item -ItemType Directory -Force -Path \$dist | Out-Null; \$safeExe = Join-Path \$dist '__orchestrator_signed.exe'; Copy-Item -LiteralPath \$f.FullName -Destination \$safeExe -Force; \$bmSrc = \"\$([string]\$f.FullName).blockmap\"; \$safeBm = \"\$safeExe.blockmap\"; if (Test-Path -LiteralPath \$bmSrc) { Copy-Item -LiteralPath \$bmSrc -Destination \$safeBm -Force; Write-Output \"BLOCKMAP=\$safeBm\" } else { Write-Output \"BLOCKMAP=\" }; Write-Output \"EXE=\$safeExe\"; Write-Output \"NAME=\$([string]\$f.Name)\"\"")"
+    SIGN_FETCH_INFO="$(printf '%s' "$SIGN_FETCH_INFO" | tr -d '\r')"
+    WIN_PRIMARY_EXE_REMOTE_WIN="$(printf '%s\n' "$SIGN_FETCH_INFO" | awk -F= '/^EXE=/{print $2}' | tail -n1)"
+    WIN_PRIMARY_BLOCKMAP_REMOTE_WIN="$(printf '%s\n' "$SIGN_FETCH_INFO" | awk -F= '/^BLOCKMAP=/{print $2}' | tail -n1)"
+    WIN_PRIMARY_EXE_NAME="$(printf '%s\n' "$SIGN_FETCH_INFO" | awk -F= '/^NAME=/{print $2}' | tail -n1)"
+    if [[ -z "$WIN_PRIMARY_EXE_REMOTE_WIN" ]]; then
+      echo "Unable to resolve signed Windows EXE path from remote host." >&2
+      exit 1
+    fi
+    if [[ -z "$WIN_PRIMARY_EXE_NAME" ]]; then
+      WIN_PRIMARY_EXE_NAME="$(printf '%s' "$WIN_PRIMARY_EXE_REMOTE_WIN" | sed -E 's#.*[\\/]##')"
+    fi
+    WIN_PRIMARY_EXE_REMOTE_POSIX="${WIN_PRIMARY_EXE_REMOTE_WIN//\\//}"
+    WIN_PRIMARY_EXE_LOCAL="$STAGING_DIR/windows/signed/${WIN_PRIMARY_EXE_NAME}"
+    scp_from_file "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_PRIMARY_EXE_REMOTE_POSIX" "$WIN_PRIMARY_EXE_LOCAL"
+    WIN_PRIMARY_EXE="$WIN_PRIMARY_EXE_LOCAL"
+
+    WIN_PRIMARY_BLOCKMAP=""
+    if [[ -n "$WIN_PRIMARY_BLOCKMAP_REMOTE_WIN" ]]; then
+      WIN_PRIMARY_BLOCKMAP_REMOTE_POSIX="${WIN_PRIMARY_BLOCKMAP_REMOTE_WIN//\\//}"
+      WIN_PRIMARY_BLOCKMAP="$STAGING_DIR/windows/signed/${WIN_PRIMARY_EXE_NAME}.blockmap"
+      scp_from_file "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_PRIMARY_BLOCKMAP_REMOTE_POSIX" "$WIN_PRIMARY_BLOCKMAP"
+    fi
+
     yarn release:gen-yml \
       --version "$VERSION" \
       --output "$STAGING_DIR/windows/latest.yml" \
       --file "$WIN_PRIMARY_EXE"
+    copy_to_release_builds "$WIN_PRIMARY_EXE" "$STAGING_DIR/windows/latest.yml"
+    if [[ -n "${WIN_PRIMARY_BLOCKMAP:-}" ]]; then
+      copy_to_release_builds "$WIN_PRIMARY_BLOCKMAP"
+    fi
   fi
-fi
+}
 
 if truthy "${RUN_MAC_BUILD:-1}"; then
   echo "== macOS build/sign/notarize =="
   : "${MAC_ARM_HOST:?MAC_ARM_HOST is required when RUN_MAC_BUILD=1}"
   : "${MAC_ARM_USER:?MAC_ARM_USER is required when RUN_MAC_BUILD=1}"
   : "${MAC_ARM_REPO_DIR:?MAC_ARM_REPO_DIR is required when RUN_MAC_BUILD=1}"
-  : "${MAC_SIGN_HOST:?MAC_SIGN_HOST is required when RUN_MAC_BUILD=1}"
-  : "${MAC_SIGN_USER:?MAC_SIGN_USER is required when RUN_MAC_BUILD=1}"
-  : "${MAC_SIGN_OUTPUT_DIR:?MAC_SIGN_OUTPUT_DIR is required when RUN_MAC_BUILD=1}"
 
   MAC_ARM_PORT="${MAC_ARM_PORT:-22}"
-  MAC_SIGN_PORT="${MAC_SIGN_PORT:-22}"
   MAC_BUILD_KIND="${MAC_BUILD_KIND:-universal}"
   BUNDLE_TAG="${MAC_BUNDLE_TAG:-mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}}"
   MAC_RELEASE_ENV_LOCAL="${MAC_RELEASE_ENV_LOCAL:-}"
   MAC_RELEASE_ENV_REMOTE="${MAC_RELEASE_ENV_REMOTE:-${MAC_ARM_REPO_DIR}/scripts/.env.release}"
+  MAC_ARM_GIT_PULL_CMD="${MAC_ARM_GIT_PULL_CMD:-cd '${MAC_ARM_REPO_DIR}' && git pull --ff-only}"
+  MAC_FETCH_HOST="${MAC_FETCH_HOST:-$MAC_ARM_HOST}"
+  MAC_FETCH_PORT="${MAC_FETCH_PORT:-$MAC_ARM_PORT}"
+  MAC_FETCH_USER="${MAC_FETCH_USER:-$MAC_ARM_USER}"
+  MAC_FETCH_PASSWORD="${MAC_FETCH_PASSWORD:-${MAC_ARM_PASSWORD:-}}"
+  MAC_FETCH_DIR="${MAC_FETCH_DIR:-}"
+  if [[ -z "$MAC_FETCH_DIR" ]]; then
+    if [[ -n "${MAC_ARM_OUTPUT_DIR:-}" ]]; then
+      MAC_FETCH_DIR="${MAC_ARM_OUTPUT_DIR%/}/${BUNDLE_TAG}/"
+    elif [[ -n "${MAC_SIGN_OUTPUT_DIR:-}" ]]; then
+      MAC_FETCH_DIR="${MAC_SIGN_OUTPUT_DIR%/}/${BUNDLE_TAG}/"
+    else
+      echo "Set MAC_FETCH_DIR (or MAC_ARM_OUTPUT_DIR / MAC_SIGN_OUTPUT_DIR) when RUN_MAC_BUILD=1." >&2
+      exit 1
+    fi
+  fi
+  MAC_FETCH_DIR="${MAC_FETCH_DIR//__BUNDLE_TAG__/${BUNDLE_TAG}}"
 
   if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
     RSYNC_EXCLUDES=""
@@ -341,17 +370,45 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
       "$MAC_RELEASE_ENV_LOCAL" "$MAC_RELEASE_ENV_REMOTE"
   fi
 
-  MAC_REMOTE_CMD="cd '${MAC_ARM_REPO_DIR}' && BUNDLE_TAG_OVERRIDE='${BUNDLE_TAG}'"
-  if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
-    MAC_REMOTE_CMD="${MAC_REMOTE_CMD} ENV_FILE='${MAC_RELEASE_ENV_REMOTE}'"
+  ssh_run "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" "$MAC_ARM_GIT_PULL_CMD"
+
+  MAC_REMOTE_CMD="${MAC_REMOTE_CMD:-}"
+  if [[ -z "$MAC_REMOTE_CMD" ]]; then
+    MAC_REMOTE_SCRIPT="${MAC_REMOTE_SCRIPT:-scripts/release-mac-build.sh}"
+    MAC_REMOTE_CMD="cd '${MAC_ARM_REPO_DIR}' && BUNDLE_TAG_OVERRIDE='${BUNDLE_TAG}'"
+    if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
+      MAC_REMOTE_CMD="${MAC_REMOTE_CMD} ENV_FILE='${MAC_RELEASE_ENV_REMOTE}'"
+    fi
+    MAC_REMOTE_CMD="${MAC_REMOTE_CMD} bash ${MAC_REMOTE_SCRIPT}"
+  else
+    MAC_REMOTE_CMD="${MAC_REMOTE_CMD//__BUNDLE_TAG__/${BUNDLE_TAG}}"
+    MAC_REMOTE_CMD="${MAC_REMOTE_CMD//__ENV_FILE__/${MAC_RELEASE_ENV_REMOTE}}"
   fi
-  MAC_REMOTE_CMD="${MAC_REMOTE_CMD} bash scripts/release-mac-build.sh"
 
   ssh_run "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" "$MAC_REMOTE_CMD"
 
   mkdir -p "$STAGING_DIR/mac"
-  rsync_from "$MAC_SIGN_HOST" "$MAC_SIGN_USER" "${MAC_SIGN_PASSWORD:-}" "$MAC_SIGN_PORT" \
-    "${MAC_SIGN_OUTPUT_DIR}/${BUNDLE_TAG}/" "$STAGING_DIR/mac/"
+  MAC_CLEAN_OUTPUTS="${MAC_CLEAN_OUTPUTS:-1}"
+  if truthy "$MAC_CLEAN_OUTPUTS"; then
+    shopt -s nullglob
+    stale_staging_mac=("$STAGING_DIR/mac/"*)
+    if [[ "${#stale_staging_mac[@]}" -gt 0 ]]; then
+      rm -f -- "${stale_staging_mac[@]}"
+    fi
+    stale_release_mac=(
+      "$RELEASE_BUILDS_DIR/"*-mac.zip
+      "$RELEASE_BUILDS_DIR/"*-mac.zip.blockmap
+      "$RELEASE_BUILDS_DIR/"*-mac.dmg
+      "$RELEASE_BUILDS_DIR/"*-mac.dmg.blockmap
+      "$RELEASE_BUILDS_DIR/latest-mac.yml"
+    )
+    if [[ "${#stale_release_mac[@]}" -gt 0 ]]; then
+      rm -f -- "${stale_release_mac[@]}"
+    fi
+    shopt -u nullglob
+  fi
+  rsync_from "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" \
+    "$MAC_FETCH_DIR" "$STAGING_DIR/mac/"
 
   shopt -s nullglob
   mac_zips=("$STAGING_DIR/mac/"*.zip)
@@ -378,34 +435,48 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
   fi
 
   yarn release:gen-yml "${gen_args[@]}"
-fi
-
-if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || truthy "${GH_CREATE_DRAFT:-0}"; then
-  require_cmd gh
-  GH_REPO="${GH_REPO:-45Drives/studio-share}"
-  GH_TITLE="${GH_TITLE:-$RELEASE_TAG}"
-  GH_NOTES="${GH_NOTES:-}"
-
-  if truthy "${GH_CREATE_DRAFT:-0}"; then
-    if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-      gh release create "$RELEASE_TAG" --repo "$GH_REPO" --title "$GH_TITLE" --notes "$GH_NOTES" --draft
-    fi
+  shopt -s nullglob
+  mac_blockmaps=("$STAGING_DIR/mac/"*.zip.blockmap "$STAGING_DIR/mac/"*.dmg.blockmap)
+  shopt -u nullglob
+  copy_to_release_builds "$MAC_PRIMARY_ZIP" "$STAGING_DIR/mac/latest-mac.yml"
+  if [[ -n "${MAC_PRIMARY_DMG:-}" ]]; then
+    copy_to_release_builds "$MAC_PRIMARY_DMG"
   fi
-
-  if truthy "${GH_UPLOAD_RELEASE:-0}"; then
-    mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 2 -type f \
-      \( -name '*.yml' -o -name '*.exe' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) | sort)
-    if [[ "${#assets[@]}" -eq 0 ]]; then
-      echo "No assets found to upload from $STAGING_DIR" >&2
-      exit 1
-    fi
-    gh release upload "$RELEASE_TAG" --repo "$GH_REPO" --clobber "${assets[@]}"
-  fi
-
-  if truthy "${GH_PUBLISH_RELEASE:-0}"; then
-    gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false
+  if [[ "${#mac_blockmaps[@]}" -gt 0 ]]; then
+    copy_to_release_builds "${mac_blockmaps[@]}"
   fi
 fi
+
+run_windows_flow
+
+# GitHub release automation temporarily disabled.
+# if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || truthy "${GH_CREATE_DRAFT:-0}"; then
+#   require_cmd gh
+#   GH_REPO="${GH_REPO:-45Drives/studio-share}"
+#   GH_TITLE="${GH_TITLE:-$RELEASE_TAG}"
+#   GH_NOTES="${GH_NOTES:-}"
+#
+#   if truthy "${GH_CREATE_DRAFT:-0}"; then
+#     if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+#       gh release create "$RELEASE_TAG" --repo "$GH_REPO" --title "$GH_TITLE" --notes "$GH_NOTES" --draft
+#     fi
+#   fi
+#
+#   if truthy "${GH_UPLOAD_RELEASE:-0}"; then
+#     mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 2 -type f \
+#       \( -name '*.yml' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) | sort)
+#     if [[ "${#assets[@]}" -eq 0 ]]; then
+#       echo "No assets found to upload from $STAGING_DIR" >&2
+#       exit 1
+#     fi
+#     gh release upload "$RELEASE_TAG" --repo "$GH_REPO" --clobber "${assets[@]}"
+#   fi
+#
+#   if truthy "${GH_PUBLISH_RELEASE:-0}"; then
+#     gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false
+#   fi
+# fi
 
 echo "Release orchestration complete."
 echo "Collected assets under: $STAGING_DIR"
+echo "Final release-builds assets under: $RELEASE_BUILDS_DIR"
