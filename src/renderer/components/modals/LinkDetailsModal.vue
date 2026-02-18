@@ -1388,7 +1388,8 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 function filterVersionIdsByJobKind(
   versionIds: number[],
   jobInfo: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }>,
-  kind: string
+  kind: string,
+  unknownPolicy: 'queued' | 'skipped' = 'queued'
 ) {
   const queued: number[] = []
   const active: number[] = []
@@ -1400,8 +1401,8 @@ function filterVersionIdsByJobKind(
     else if (rec?.queuedKinds?.includes(kind)) queued.push(vId)
     else if (rec?.skippedKinds?.includes(kind)) skipped.push(vId)
     else {
-      // Unknown: server didn't tell us. Treat as queued to preserve existing behavior.
-      queued.push(vId)
+      if (unknownPolicy === 'queued') queued.push(vId)
+      else skipped.push(vId)
     }
   }
 
@@ -1554,9 +1555,11 @@ function startLinkTranscodeTracking(opts: {
 
   if (versionIds.length) {
     const jobInfo = extractJobInfoByVersion(opts.resp)
+    const unknownPolicy =
+      opts.resp?.keepExistingOutputs || opts.resp?.allowExistingOutputs ? 'skipped' : 'queued'
 
     if (opts.wantsProxy) {
-      const proxySplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'proxy_mp4')
+      const proxySplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'proxy_mp4', unknownPolicy)
       const proxyCandidates = [...proxySplit.queued, ...proxySplit.active]
       const proxyActiveSplit = transfer.splitActiveTranscodeAssetVersions(proxyCandidates, 'proxy_mp4')
       const proxyToTrack = proxyActiveSplit.inactive
@@ -1631,7 +1634,7 @@ function startLinkTranscodeTracking(opts: {
     }
 
     if (opts.wantsHls) {
-      const hlsSplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'hls')
+      const hlsSplit = filterVersionIdsByJobKind(versionIds, jobInfo, 'hls', unknownPolicy)
       const hlsCandidates = [...hlsSplit.queued, ...hlsSplit.active]
       const hlsActiveSplit = transfer.splitActiveTranscodeAssetVersions(hlsCandidates, 'hls')
       const hlsToTrack = hlsActiveSplit.inactive

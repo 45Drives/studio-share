@@ -811,7 +811,8 @@ function extractJobInfoByVersion(
 function filterVersionIdsByJobKind(
     versionIds: number[],
     jobInfo: Record<number, { queuedKinds: string[]; activeKinds: string[]; skippedKinds: string[] }>,
-    kind: string
+    kind: string,
+    unknownPolicy: 'queued' | 'skipped' = 'queued'
 ) {
     const queued: number[] = []
     const active: number[] = []
@@ -823,8 +824,8 @@ function filterVersionIdsByJobKind(
         else if (rec?.queuedKinds?.includes(kind)) queued.push(vId)
         else if (rec?.skippedKinds?.includes(kind)) skipped.push(vId)
         else {
-            // Unknown: server didn't tell us. Treat as queued to preserve existing behavior.
-            queued.push(vId)
+            if (unknownPolicy === 'queued') queued.push(vId)
+            else skipped.push(vId)
         }
     }
 
@@ -1077,11 +1078,89 @@ function resolveWatermarkRelPath() {
     return `${rel ? rel + '/' : ''}flow45studio-watermarks/${name}`
 }
 
+function resolveWatermarkProjectRelPath() {
+    const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+    if (!name) return ''
+    return `flow45studio-watermarks/${name}`
+}
+
+function splitRelPath(relPath: string) {
+    const clean = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+    if (!clean) return { dir: '', name: '' }
+    const idx = clean.lastIndexOf('/')
+    if (idx < 0) return { dir: '', name: clean }
+    return {
+        dir: clean.slice(0, idx),
+        name: clean.slice(idx + 1),
+    }
+}
+
+async function serverFileExists(relPath: string) {
+    const { dir, name } = splitRelPath(relPath)
+    if (!name) return false
+    try {
+        const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dir)}`, { method: 'GET' })
+        const entries = Array.isArray(data?.entries) ? data.entries : []
+        return entries.some((e: any) => !e?.isDir && String(e?.name || '') === name)
+    } catch {
+        return false
+    }
+}
+
+async function resolveExistingServerWatermarkRelPath() {
+    const rooted = resolveWatermarkRelPath()
+    const projectRel = resolveWatermarkProjectRelPath()
+    const candidates = Array.from(new Set([rooted, projectRel].filter(Boolean)))
+    for (const relPath of candidates) {
+        if (await serverFileExists(relPath)) return relPath
+    }
+    return ''
+}
+
+function buildWatermarkFileCandidates() {
+    const rooted = resolveWatermarkRelPath()
+    const projectRel = resolveWatermarkProjectRelPath()
+    const baseName = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+    return Array.from(new Set([
+        rooted,
+        projectRel,
+        baseName ? `flow45studio-watermarks/${baseName}` : '',
+        baseName,
+    ].filter(Boolean)))
+}
+
+function parseApiErrorPayload(e: any) {
+    if (typeof e?.payload === 'object' && e.payload) return e.payload
+    if (typeof e?.response === 'object' && e.response) return e.response
+    if (typeof e?.data === 'object' && e.data) return e.data
+    if (typeof e?.message === 'string' && e.message.trim()) {
+        try {
+            return JSON.parse(e.message)
+        } catch {
+            return null
+        }
+    }
+    return null
+}
+
+function isWatermarkMissingError(e: any) {
+    const payload = parseApiErrorPayload(e)
+    const code = String(payload?.error || '')
+    if (/watermark.*not[_\s-]*found/i.test(code)) return true
+    const msg = String(e?.message || e?.error || '')
+    return /watermark.*not[_\s-]*found/i.test(msg)
+}
+
 async function uploadWatermarkToProject() {
     if (!watermarkFile.value) return { ok: false, error: 'no watermark file' }
     const host = ssh?.server
     const user = ssh?.username
     if (!host || !user) return { ok: false, error: 'missing ssh connection info' }
+
+    const existingRelPath = await resolveExistingServerWatermarkRelPath()
+    if (existingRelPath) {
+        return { ok: true, relPath: existingRelPath, reused: true }
+    }
 
     const destDir = resolveWatermarkUploadDir()
     const { done } = await window.electron.rsyncStart({
@@ -1095,7 +1174,7 @@ async function uploadWatermarkToProject() {
     })
     const res = await done
     if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
-    return { ok: true, relPath: resolveWatermarkRelPath() }
+    return { ok: true, relPath: resolveWatermarkRelPath(), reused: false }
 }
 
 // Map units → seconds
@@ -1615,11 +1694,15 @@ async function generateLink() {
 
         console.log('[magic-link] request body', JSON.stringify(body))
         let data: any
-        try {
-            data = await apiFetch('/api/magic-link', {
+        const watermarkFileCandidates = buildWatermarkFileCandidates()
+        const tryRequest = async () => {
+            return apiFetch('/api/magic-link', {
                 method: 'POST',
                 body: JSON.stringify(body),
             })
+        }
+        try {
+            data = await tryRequest()
         } catch (e: any) {
             if (e?.status === 409) {
                 let payload: any = null
@@ -1631,18 +1714,12 @@ async function generateLink() {
                         overwriteExisting.value = true
                         body.overwrite = true
                         console.log('[magic-link] retry with overwrite', JSON.stringify(body))
-                        data = await apiFetch('/api/magic-link', {
-                            method: 'POST',
-                            body: JSON.stringify(body),
-                        })
+                        data = await tryRequest()
                     } else if (action === 'generate') {
                         body.keepExistingOutputs = true
                         body.overwrite = false
                         console.log('[magic-link] retry keeping existing outputs', JSON.stringify(body))
-                        data = await apiFetch('/api/magic-link', {
-                            method: 'POST',
-                            body: JSON.stringify(body),
-                        })
+                        data = await tryRequest()
                         pushNotification(
                             new Notification(
                                 'Overwrite Canceled',
@@ -1658,6 +1735,12 @@ async function generateLink() {
                 } else {
                     throw e
                 }
+            } else if (body.watermark && isWatermarkMissingError(e)) {
+                const current = String(body.watermarkFile || '').trim()
+                const fallback = watermarkFileCandidates.find((c) => c && c !== current) || ''
+                if (!fallback) throw e
+                body.watermarkFile = fallback
+                data = await tryRequest()
             } else {
                 throw e
             }
@@ -1672,6 +1755,16 @@ async function generateLink() {
         const wantsHls = hasVideoSelected.value
         if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
+            const jobInfo = extractJobInfoByVersion(data)
+            const unknownPolicy = body.keepExistingOutputs ? 'skipped' : 'queued'
+            const hlsSplit = wantsHls
+                ? filterVersionIdsByJobKind(versionIds, jobInfo, 'hls', unknownPolicy)
+                : { queued: [] as number[], active: [] as number[], skipped: [] as number[] }
+            const proxySplit = transcodeProxy.value
+                ? filterVersionIdsByJobKind(versionIds, jobInfo, 'proxy_mp4', unknownPolicy)
+                : { queued: [] as number[], active: [] as number[], skipped: [] as number[] }
+            const hlsTrackSet = new Set<number>([...hlsSplit.queued, ...hlsSplit.active])
+            const proxyTrackSet = new Set<number>([...proxySplit.queued, ...proxySplit.active])
 
             if (versionIds.length) {
                 const groupId = `link:${data.viewUrl}`;
@@ -1691,6 +1784,9 @@ async function generateLink() {
                         );
                         if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) continue;
                         if (!versionIds.includes(assetVersionId)) continue;
+                        const shouldTrackHls = wantsHls && hlsTrackSet.has(assetVersionId)
+                        const shouldTrackProxy = transcodeProxy.value && proxyTrackSet.has(assetVersionId)
+                        if (!shouldTrackHls && !shouldTrackProxy) continue
 
                         started.add(assetVersionId);
                         const context = {
@@ -1708,7 +1804,7 @@ async function generateLink() {
                             ? `/api/token/${encodeURIComponent(token)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
                             : ''
 
-                        if (canUsePlayback) {
+                        if (shouldTrackHls && canUsePlayback) {
                             transfer.startPlaybackTranscodeTask({
                                 title: `Transcoding: ${getFileLabel(rec)}`,
                                 detail: 'Tracking HLS',
@@ -1724,7 +1820,7 @@ async function generateLink() {
                                     }
                                 }
                             })
-                        } else {
+                        } else if (shouldTrackHls) {
                             transfer.startAssetVersionTranscodeTask({
                                 apiFetch,
                                 assetVersionIds: [assetVersionId],
@@ -1736,7 +1832,7 @@ async function generateLink() {
                             });
                         }
 
-                        if (transcodeProxy.value) {
+                        if (shouldTrackProxy) {
                             if (canUsePlayback) {
                                 transfer.startPlaybackTranscodeTask({
                                     title: `Transcoding: ${getFileLabel(rec)}`,
@@ -1773,12 +1869,16 @@ async function generateLink() {
 
                 // Fallback: if version IDs exist but no per-file task could be started,
                 // create an aggregate tracker so the Transfers panel still reflects server work.
-                if (!started.size) {
+                if (!started.size && (hlsTrackSet.size || proxyTrackSet.size)) {
+                    const trackableVersionIds = Array.from(new Set([
+                        ...hlsTrackSet,
+                        ...proxyTrackSet,
+                    ]))
                     transfer.startAssetVersionTranscodeTask({
                         apiFetch,
-                        assetVersionIds: versionIds,
+                        assetVersionIds: trackableVersionIds,
                         title: "Generating transcodes",
-                        detail: `Tracking ${versionIds.length} version(s)`,
+                        detail: `Tracking ${trackableVersionIds.length} version(s)`,
                         intervalMs: 1500,
                         jobKind: 'any',
                         context: {
@@ -1795,7 +1895,7 @@ async function generateLink() {
                 // fallback (only if server didn't return transcodes for some reason)
                 const fileIds = extractDbFileIdsFromMagicLinkResponse(data);
 
-                if (fileIds.length && hasVideoSelected.value) {
+                if (fileIds.length && hasVideoSelected.value && !body.keepExistingOutputs) {
                     // NOTE: fileId polling can't separate proxy vs hls unless you also add jobKind support to summarize()
                     // If you want two rows even in fallback mode, you need the deterministic taskId approach or extend startTranscodeTask similarly.
                     transfer.startTranscodeTask({

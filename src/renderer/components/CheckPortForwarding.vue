@@ -187,7 +187,12 @@ async function runCheck() {
 
         lastResponse.value = json;
 
-        const enabled = json.forwardedToThisStudio === true && json.tokenMatched === true;
+        const enabled =
+            json.forwardedToThisStudio === true &&
+            // Backward/forward compatibility:
+            // - old checkers: no tokenMatched field
+            // - new checkers: explicit boolean
+            json.tokenMatched !== false;
 
         if (enabled) {
             status.value = "enabled";

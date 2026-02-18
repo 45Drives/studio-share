@@ -1,10 +1,10 @@
 <template>
-	<div>
+	<div class="h-full min-h-0 flex flex-col">
 		<div class="rounded-t-lg bg-secondary text-default p-2 text-center font-semibold">
 			{{ headingTitle }}
 		</div>
 
-		<div class="p-2 bg-well rounded-md min-w-0">
+		<div class="p-2 bg-well rounded-md min-w-0 flex-1 min-h-0 flex flex-col">
 			<div class="flex flex-wrap gap-2 mb-3">
 				<input v-model="q" type="search" placeholder="Search title / dir / file..."
 					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-64" />
@@ -42,7 +42,7 @@
 			</tr>
 
 			<!-- table -->
-			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges]"
+			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges] flex-1 min-h-0"
 				:class="{ '': !isMac }">
 				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
 					<colgroup>
@@ -58,14 +58,30 @@
 					</colgroup>
 					<thead>
 						<tr class="bg-default text-default border-b border-default">
-							<th class="text-left p-2 font-semibold border border-default">Title</th>
-							<th class="text-left p-2 font-semibold border border-default">Type</th>
-							<th class="text-left p-2 font-semibold border border-default">Link</th>
-							<th class="text-left p-2 font-semibold border border-default">Expires</th>
-							<th class="text-left p-2 font-semibold border border-default">Status</th>
-							<th class="text-left p-2 font-semibold border border-default">Access</th>
-							<th class="text-left p-2 font-semibold border border-default">Password</th>
-							<th class="text-left p-2 font-semibold border border-default">Created</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('title')">Title {{ sortIndicator('title') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('type')">Type {{ sortIndicator('type') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('url')">Link {{ sortIndicator('url') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('expires')">Expires {{ sortIndicator('expires') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('status')">Status {{ sortIndicator('status') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('access')">Access {{ sortIndicator('access') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('password')">Password {{ sortIndicator('password') }}</button>
+							</th>
+							<th class="text-left p-2 font-semibold border border-default">
+								<button class="hover:underline" @click="setSort('created')">Created {{ sortIndicator('created') }}</button>
+							</th>
 							<th class="text-left p-2 font-semibold border border-default">Actions</th>
 						</tr>
 					</thead>
@@ -94,7 +110,7 @@
 							</td>
 						</tr>
 
-						<tr v-else v-for="it in filteredRows" :key="it.id"
+						<tr v-else v-for="it in pagedRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
 							<!-- Title -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
@@ -230,8 +246,25 @@
 								</div>
 							</td>
 						</tr>
+						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
+							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
+						</tr>
 					</tbody>
 				</table>
+			</div>
+			<div class="mt-3 flex items-center justify-between gap-2 text-sm">
+				<div class="text-muted">
+					Showing {{ pageStart }}-{{ pageEnd }} of {{ filteredRows.length }}
+				</div>
+				<div class="flex items-center gap-2">
+					<button class="btn btn-secondary px-3 py-1" :disabled="currentPage <= 1" @click="prevPage">
+						Previous
+					</button>
+					<span>Page {{ currentPage }} / {{ totalPages }}</span>
+					<button class="btn btn-secondary px-3 py-1" :disabled="currentPage >= totalPages" @click="nextPage">
+						Next
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -247,6 +280,8 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
+type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'password' | 'created'
+type SortDir = 'asc' | 'desc'
 
 const os = ref<string>('')
 const isMac = computed(() => os.value === 'mac')
@@ -268,7 +303,7 @@ async function refresh() {
 			q: q.value.trim() || undefined,
 			type: typeFilter.value || undefined,
 			status: statusFilter.value || undefined,
-			limit: pageSize.value,
+			limit: fetchLimit.value,
 		})
 		rows.value = items
 	} catch (e: any) {
@@ -324,9 +359,19 @@ const rows = ref<LinkItem[]>([])
 const q = ref('')
 const typeFilter = ref<'' | LinkType>('')
 const statusFilter = ref<'' | Status>('active') // match “Currently Active Links” by default
-const pageSize = ref(200)
+const fetchLimit = ref(200)
+const pageSize = ref(10)
+const currentPage = ref(1)
+const sortKey = ref<SortKey>('expires')
+const sortDir = ref<SortDir>('desc')
 
-watch([q, typeFilter, statusFilter], refresh)
+watch([q, typeFilter, statusFilter], () => {
+	currentPage.value = 1
+	refresh()
+})
+watch([sortKey, sortDir], () => {
+	currentPage.value = 1
+})
 
 /* ------------------- mappers/helpers ------------------- */
 function fallbackTitle(it: LinkItem) {
@@ -543,7 +588,6 @@ function applyLinkPatch(p: Partial<LinkItem> & { id: LinkItem['id'] }) {
 
 /* ------------------- filters ------------------- */
 const filteredRows = computed(() => {
-	// table shows all rows matching filters; default status=active to match heading
 	return rows.value
 		.filter(r => (typeFilter.value ? r.type === typeFilter.value : true))
 		.filter(r => {
@@ -559,13 +603,113 @@ const filteredRows = computed(() => {
 				JSON.stringify(r.target?.files || [])
 			return hay.toLowerCase().includes(needle)
 		})
-		.sort((a, b) => {
-			// soonest expiring first (Never at end)
-			const ea = a.expiresAt ?? Number.POSITIVE_INFINITY
-			const eb = b.expiresAt ?? Number.POSITIVE_INFINITY
-			return ea - eb
-		})
 })
+
+const sortedRows = computed(() => {
+	const dir = sortDir.value === 'asc' ? 1 : -1
+	return filteredRows.value.slice().sort((a, b) => {
+		const cmp = compareByKey(a, b, sortKey.value)
+		return cmp * dir
+	})
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedRows.value.length / pageSize.value)))
+
+const pagedRows = computed(() => {
+	const start = (currentPage.value - 1) * pageSize.value
+	return sortedRows.value.slice(start, start + pageSize.value)
+})
+
+const pageStart = computed(() => {
+	if (!filteredRows.value.length) return 0
+	return (currentPage.value - 1) * pageSize.value + 1
+})
+
+const pageEnd = computed(() => {
+	if (!sortedRows.value.length) return 0
+	return Math.min(currentPage.value * pageSize.value, sortedRows.value.length)
+})
+
+watch(sortedRows, () => {
+	if (currentPage.value > totalPages.value) currentPage.value = totalPages.value
+})
+
+const emptyRowCount = computed(() => {
+	if (loading.value) return 0
+	const visibleDataRows = pagedRows.value.length
+	const emptyStateRow = filteredRows.value.length === 0 ? 1 : 0
+	return Math.max(0, pageSize.value - visibleDataRows - emptyStateRow)
+})
+
+function defaultSortDirForKey(key: SortKey): SortDir {
+	return key === 'expires' || key === 'created' ? 'desc' : 'asc'
+}
+
+function setSort(key: SortKey) {
+	if (sortKey.value === key) {
+		sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+		return
+	}
+	sortKey.value = key
+	sortDir.value = defaultSortDirForKey(key)
+}
+
+function sortIndicator(key: SortKey) {
+	if (sortKey.value !== key) return ''
+	return sortDir.value === 'asc' ? '▲' : '▼'
+}
+
+function compareText(a: string, b: string) {
+	return a.localeCompare(b, undefined, { sensitivity: 'base' })
+}
+
+function expirySortValue(it: LinkItem) {
+	const ms = Number(it.expiresAt)
+	if (!Number.isFinite(ms) || ms <= 0) return Number.POSITIVE_INFINITY // Never = longest
+	const remaining = ms - nowMs.value
+	if (remaining <= 0) return Number.NEGATIVE_INFINITY // Expired = shortest
+	return remaining
+}
+
+function compareByKey(a: LinkItem, b: LinkItem, key: SortKey) {
+	switch (key) {
+		case 'title':
+			return compareText(String(a.title || fallbackTitle(a) || ''), String(b.title || fallbackTitle(b) || ''))
+		case 'type':
+			return compareText(typeLabel(a.type), typeLabel(b.type))
+		case 'url':
+			return compareText(String((a as any).url || ''), String((b as any).url || ''))
+		case 'expires': {
+			const va = expirySortValue(a)
+			const vb = expirySortValue(b)
+			return va === vb ? 0 : (va < vb ? -1 : 1)
+		}
+		case 'status':
+			return compareText(statusOf(a), statusOf(b))
+		case 'access':
+			return compareText(accessLabel(a), accessLabel(b))
+		case 'password': {
+			const va = a.passwordRequired ? 1 : 0
+			const vb = b.passwordRequired ? 1 : 0
+			return va - vb
+		}
+		case 'created': {
+			const va = toDateUTC(a.createdAt)?.getTime() || 0
+			const vb = toDateUTC(b.createdAt)?.getTime() || 0
+			return va - vb
+		}
+		default:
+			return 0
+	}
+}
+
+function prevPage() {
+	if (currentPage.value > 1) currentPage.value -= 1
+}
+
+function nextPage() {
+	if (currentPage.value < totalPages.value) currentPage.value += 1
+}
 
 function ensureExpEntry(it: LinkItem) {
 	if (!expEditor.value[it.id]) {
