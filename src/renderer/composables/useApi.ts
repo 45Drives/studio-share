@@ -115,12 +115,30 @@ export function useApi() {
 
                 if (!res.ok) {
                     const detail = await res.text().catch(() => res.statusText)
+                    try {
+                        const parsed = detail ? JSON.parse(detail) : null
+                        if (parsed && typeof parsed === 'object' && 'security' in parsed) {
+                            window.appLog?.warn?.('api.security', {
+                                url,
+                                status: res.status,
+                                security: (parsed as any).security
+                            })
+                        }
+                    } catch { /* non-json */ }
                     const e = Object.assign(new Error(detail || `HTTP ${res.status}`), { status: res.status })
                     throw e
                 }
 
                 clearTimeout(timer)
-                return await parseAuto(res, parseMode)
+                const parsed = await parseAuto(res, parseMode)
+                if (parsed && typeof parsed === 'object' && 'security' in (parsed as any)) {
+                    window.appLog?.info?.('api.security', {
+                        url,
+                        status: res.status,
+                        security: (parsed as any).security
+                    })
+                }
+                return parsed
 
             } catch (err: any) {
                 clearTimeout(timer)
