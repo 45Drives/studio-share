@@ -195,11 +195,11 @@ if truthy "${RUN_LINUX_BUILD:-1}"; then
   LINUX_CLEAN_OUTPUTS="${LINUX_CLEAN_OUTPUTS:-1}"
   if truthy "$LINUX_CLEAN_OUTPUTS"; then
     shopt -s nullglob
-    stale_staging_linux=("$STAGING_DIR/linux/"*.deb "$STAGING_DIR/linux/"*.rpm "$STAGING_DIR/linux/latest-linux.yml)
+    stale_staging_linux=("$STAGING_DIR/linux/"*.deb "$STAGING_DIR/linux/"*.rpm)
     if [[ "${#stale_staging_linux[@]}" -gt 0 ]]; then
       rm -f -- "${stale_staging_linux[@]}"
     fi
-    stale_release_linux=("$RELEASE_BUILDS_DIR/"*-linux-*.deb "$RELEASE_BUILDS_DIR/"*-linux-*.rpm "$RELEASE_BUILDS_DIR/latest-linux.yml)
+    stale_release_linux=("$RELEASE_BUILDS_DIR/"*-linux-*.deb "$RELEASE_BUILDS_DIR/"*-linux-*.rpm)
     if [[ "${#stale_release_linux[@]}" -gt 0 ]]; then
       rm -f -- "${stale_release_linux[@]}"
     fi
@@ -207,7 +207,7 @@ if truthy "${RUN_LINUX_BUILD:-1}"; then
   fi
 
   shopt -s nullglob
-  linux_artifacts=(dist/*-linux-*.deb dist/*-linux-*.rpm dist/latest-linux.yml)
+  linux_artifacts=(dist/*-linux-*.deb dist/*-linux-*.rpm)
   if [[ "${#linux_artifacts[@]}" -eq 0 ]]; then
     echo "No Linux artifacts found in dist/" >&2
     exit 1
@@ -325,11 +325,12 @@ run_windows_flow() {
       scp_from_file "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_PRIMARY_BLOCKMAP_REMOTE_POSIX" "$WIN_PRIMARY_BLOCKMAP"
     fi
 
-    yarn release:gen-yml \
-      --version "$VERSION" \
-      --output "$STAGING_DIR/windows/latest.yml" \
-      --file "$WIN_PRIMARY_EXE"
-    copy_to_release_builds "$WIN_PRIMARY_EXE" "$STAGING_DIR/windows/latest.yml"
+    # latest.yml generation temporarily disabled.
+    # yarn release:gen-yml \
+    #   --version "$VERSION" \
+    #   --output "$STAGING_DIR/windows/latest.yml" \
+    #   --file "$WIN_PRIMARY_EXE"
+    copy_to_release_builds "$WIN_PRIMARY_EXE"
     if [[ -n "${WIN_PRIMARY_BLOCKMAP:-}" ]]; then
       copy_to_release_builds "$WIN_PRIMARY_BLOCKMAP"
     fi
@@ -343,8 +344,7 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
   : "${MAC_ARM_REPO_DIR:?MAC_ARM_REPO_DIR is required when RUN_MAC_BUILD=1}"
 
   MAC_ARM_PORT="${MAC_ARM_PORT:-22}"
-  MAC_BUILD_KIND="${MAC_BUILD_KIND:-universal}"
-  BUNDLE_TAG="${MAC_BUNDLE_TAG:-mac-${MAC_BUILD_KIND}-${VERSION}-${STAMP}}"
+  MAC_BUILD_KIND_REQUESTED="${MAC_BUILD_KIND:-universal}"
   MAC_RELEASE_ENV_LOCAL="${MAC_RELEASE_ENV_LOCAL:-}"
   MAC_RELEASE_ENV_REMOTE="${MAC_RELEASE_ENV_REMOTE:-${MAC_ARM_REPO_DIR}/scripts/.env.release}"
   MAC_ARM_GIT_PULL_CMD="${MAC_ARM_GIT_PULL_CMD:-cd '${MAC_ARM_REPO_DIR}' && git pull --ff-only}"
@@ -352,18 +352,28 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
   MAC_FETCH_PORT="${MAC_FETCH_PORT:-$MAC_ARM_PORT}"
   MAC_FETCH_USER="${MAC_FETCH_USER:-$MAC_ARM_USER}"
   MAC_FETCH_PASSWORD="${MAC_FETCH_PASSWORD:-${MAC_ARM_PASSWORD:-}}"
-  MAC_FETCH_DIR="${MAC_FETCH_DIR:-}"
-  if [[ -z "$MAC_FETCH_DIR" ]]; then
+  MAC_FETCH_DIR_TEMPLATE="${MAC_FETCH_DIR:-}"
+  MAC_REMOTE_CMD_TEMPLATE="${MAC_REMOTE_CMD:-}"
+
+  case "$MAC_BUILD_KIND_REQUESTED" in
+    both) MAC_BUILD_KINDS=(x64 arm64) ;;
+    arm64|x64|universal) MAC_BUILD_KINDS=("$MAC_BUILD_KIND_REQUESTED") ;;
+    *)
+      echo "MAC_BUILD_KIND must be one of: arm64, x64, universal, both (got '$MAC_BUILD_KIND_REQUESTED')" >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ -z "$MAC_FETCH_DIR_TEMPLATE" ]]; then
     if [[ -n "${MAC_ARM_OUTPUT_DIR:-}" ]]; then
-      MAC_FETCH_DIR="${MAC_ARM_OUTPUT_DIR%/}/${BUNDLE_TAG}/"
+      MAC_FETCH_DIR_TEMPLATE="${MAC_ARM_OUTPUT_DIR%/}/__BUNDLE_TAG__/"
     elif [[ -n "${MAC_SIGN_OUTPUT_DIR:-}" ]]; then
-      MAC_FETCH_DIR="${MAC_SIGN_OUTPUT_DIR%/}/${BUNDLE_TAG}/"
+      MAC_FETCH_DIR_TEMPLATE="${MAC_SIGN_OUTPUT_DIR%/}/__BUNDLE_TAG__/"
     else
       echo "Set MAC_FETCH_DIR (or MAC_ARM_OUTPUT_DIR / MAC_SIGN_OUTPUT_DIR) when RUN_MAC_BUILD=1." >&2
       exit 1
     fi
   fi
-  MAC_FETCH_DIR="${MAC_FETCH_DIR//__BUNDLE_TAG__/${BUNDLE_TAG}}"
 
   if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
     RSYNC_EXCLUDES=""
@@ -373,80 +383,86 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
 
   ssh_run "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" "$MAC_ARM_GIT_PULL_CMD"
 
-  MAC_REMOTE_CMD="${MAC_REMOTE_CMD:-}"
-  if [[ -z "$MAC_REMOTE_CMD" ]]; then
-    MAC_REMOTE_SCRIPT="${MAC_REMOTE_SCRIPT:-scripts/release-mac-build.sh}"
-    MAC_REMOTE_CMD="cd '${MAC_ARM_REPO_DIR}' && MAC_BUILD_KIND_OVERRIDE='${MAC_BUILD_KIND}' BUNDLE_TAG_OVERRIDE='${BUNDLE_TAG}'"
-    if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
-      MAC_REMOTE_CMD="${MAC_REMOTE_CMD} ENV_FILE='${MAC_RELEASE_ENV_REMOTE}'"
-    fi
-    MAC_REMOTE_CMD="${MAC_REMOTE_CMD} bash ${MAC_REMOTE_SCRIPT}"
-  else
-    MAC_REMOTE_CMD="${MAC_REMOTE_CMD//__BUNDLE_TAG__/${BUNDLE_TAG}}"
-    MAC_REMOTE_CMD="${MAC_REMOTE_CMD//__ENV_FILE__/${MAC_RELEASE_ENV_REMOTE}}"
-    MAC_REMOTE_CMD="MAC_BUILD_KIND_OVERRIDE='${MAC_BUILD_KIND}' ${MAC_REMOTE_CMD}"
-  fi
-
-  ssh_run "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" "$MAC_REMOTE_CMD"
-
   mkdir -p "$STAGING_DIR/mac"
   MAC_CLEAN_OUTPUTS="${MAC_CLEAN_OUTPUTS:-1}"
   if truthy "$MAC_CLEAN_OUTPUTS"; then
     shopt -s nullglob
     stale_staging_mac=("$STAGING_DIR/mac/"*)
     if [[ "${#stale_staging_mac[@]}" -gt 0 ]]; then
-      rm -f -- "${stale_staging_mac[@]}"
+      rm -rf -- "${stale_staging_mac[@]}"
     fi
     stale_release_mac=(
       "$RELEASE_BUILDS_DIR/"*-mac.zip
       "$RELEASE_BUILDS_DIR/"*-mac.zip.blockmap
       "$RELEASE_BUILDS_DIR/"*-mac.dmg
       "$RELEASE_BUILDS_DIR/"*-mac.dmg.blockmap
-      "$RELEASE_BUILDS_DIR/latest-mac.yml"
     )
     if [[ "${#stale_release_mac[@]}" -gt 0 ]]; then
       rm -f -- "${stale_release_mac[@]}"
     fi
     shopt -u nullglob
   fi
-  rsync_from "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" \
-    "$MAC_FETCH_DIR" "$STAGING_DIR/mac/"
 
-  shopt -s nullglob
-  mac_zips=("$STAGING_DIR/mac/"*.zip)
-  mac_dmgs=("$STAGING_DIR/mac/"*.dmg)
-  shopt -u nullglob
+  for MAC_KIND in "${MAC_BUILD_KINDS[@]}"; do
+    BUNDLE_TAG_RAW="${MAC_BUNDLE_TAG:-mac-__KIND__-__VERSION__-__STAMP__}"
+    BUNDLE_TAG="${BUNDLE_TAG_RAW//__KIND__/${MAC_KIND}}"
+    BUNDLE_TAG="${BUNDLE_TAG//__VERSION__/${VERSION}}"
+    BUNDLE_TAG="${BUNDLE_TAG//__STAMP__/${STAMP}}"
+    MAC_FETCH_DIR="${MAC_FETCH_DIR_TEMPLATE//__BUNDLE_TAG__/${BUNDLE_TAG}}"
 
-  if [[ "${#mac_zips[@]}" -eq 0 ]]; then
-    echo "No mac ZIP artifact found in $STAGING_DIR/mac" >&2
-    exit 1
-  fi
+    MAC_REMOTE_CMD_EFFECTIVE="$MAC_REMOTE_CMD_TEMPLATE"
+    if [[ -z "$MAC_REMOTE_CMD_EFFECTIVE" ]]; then
+      MAC_REMOTE_SCRIPT="${MAC_REMOTE_SCRIPT:-scripts/release-mac-build.sh}"
+      MAC_REMOTE_CMD_EFFECTIVE="cd '${MAC_ARM_REPO_DIR}' && MAC_BUILD_KIND_OVERRIDE='${MAC_KIND}' BUNDLE_TAG_OVERRIDE='${BUNDLE_TAG}'"
+      if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
+        MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE} ENV_FILE='${MAC_RELEASE_ENV_REMOTE}'"
+      fi
+      MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE} bash ${MAC_REMOTE_SCRIPT}"
+    else
+      MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE//__BUNDLE_TAG__/${BUNDLE_TAG}}"
+      MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE//__ENV_FILE__/${MAC_RELEASE_ENV_REMOTE}}"
+      MAC_REMOTE_CMD_EFFECTIVE="MAC_BUILD_KIND_OVERRIDE='${MAC_KIND}' ${MAC_REMOTE_CMD_EFFECTIVE}"
+    fi
 
-  MAC_PRIMARY_ZIP="$(ls -1t -- "${mac_zips[@]}" | head -n1)"
+    ssh_run "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" "$MAC_REMOTE_CMD_EFFECTIVE"
 
-  gen_args=(
-    --version "$VERSION"
-    --output "$STAGING_DIR/mac/latest-mac.yml"
-    --path "$(basename "$MAC_PRIMARY_ZIP")"
-    --file "$MAC_PRIMARY_ZIP"
-  )
+    MAC_KIND_DIR="$STAGING_DIR/mac/${MAC_KIND}"
+    mkdir -p "$MAC_KIND_DIR"
+    rsync_from "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" \
+      "$MAC_FETCH_DIR" "$MAC_KIND_DIR/"
 
-  if [[ "${#mac_dmgs[@]}" -gt 0 ]]; then
-    MAC_PRIMARY_DMG="$(ls -1t -- "${mac_dmgs[@]}" | head -n1)"
-    gen_args+=(--file "$MAC_PRIMARY_DMG")
-  fi
+    shopt -s nullglob
+    mac_kind_zips=("$MAC_KIND_DIR/"*.zip)
+    mac_kind_dmgs=("$MAC_KIND_DIR/"*.dmg)
+    mac_kind_blockmaps=("$MAC_KIND_DIR/"*.zip.blockmap "$MAC_KIND_DIR/"*.dmg.blockmap)
+    shopt -u nullglob
 
-  yarn release:gen-yml "${gen_args[@]}"
-  shopt -s nullglob
-  mac_blockmaps=("$STAGING_DIR/mac/"*.zip.blockmap "$STAGING_DIR/mac/"*.dmg.blockmap)
-  shopt -u nullglob
-  copy_to_release_builds "$MAC_PRIMARY_ZIP" "$STAGING_DIR/mac/latest-mac.yml"
-  if [[ -n "${MAC_PRIMARY_DMG:-}" ]]; then
-    copy_to_release_builds "$MAC_PRIMARY_DMG"
-  fi
-  if [[ "${#mac_blockmaps[@]}" -gt 0 ]]; then
-    copy_to_release_builds "${mac_blockmaps[@]}"
-  fi
+    if [[ "${#mac_kind_zips[@]}" -eq 0 ]]; then
+      echo "No mac ZIP artifact found in $MAC_KIND_DIR" >&2
+      exit 1
+    fi
+
+    for f in "${mac_kind_zips[@]}" "${mac_kind_dmgs[@]}" "${mac_kind_blockmaps[@]}"; do
+      [[ -f "$f" ]] || continue
+      f_dir="$(dirname "$f")"
+      f_base="$(basename "$f")"
+      if [[ "$f_base" == *"-mac."* ]]; then
+        f_new_base="${f_base/-mac./-mac-${MAC_KIND}.}"
+      else
+        f_new_base="$f_base"
+      fi
+      if [[ "$f_new_base" != "$f_base" ]]; then
+        mv -f -- "$f" "$f_dir/$f_new_base"
+      fi
+    done
+
+    shopt -s nullglob
+    mac_kind_outputs=("$MAC_KIND_DIR/"*.zip "$MAC_KIND_DIR/"*.dmg "$MAC_KIND_DIR/"*.zip.blockmap "$MAC_KIND_DIR/"*.dmg.blockmap)
+    shopt -u nullglob
+    if [[ "${#mac_kind_outputs[@]}" -gt 0 ]]; then
+      copy_to_release_builds "${mac_kind_outputs[@]}"
+    fi
+  done
 fi
 
 run_windows_flow
