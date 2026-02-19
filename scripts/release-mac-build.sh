@@ -71,8 +71,15 @@ if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
 elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
   CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:arm64
   APP_PATH="${ROOT_DIR}/dist/mac-arm64/${APP_PRODUCT_FILENAME}.app"
+elif [[ "${MAC_BUILD_KIND}" == "x64" ]]; then
+  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:x64
+  if [[ -d "${ROOT_DIR}/dist/mac/${APP_PRODUCT_FILENAME}.app" ]]; then
+    APP_PATH="${ROOT_DIR}/dist/mac/${APP_PRODUCT_FILENAME}.app"
+  else
+    APP_PATH="${ROOT_DIR}/dist/mac-x64/${APP_PRODUCT_FILENAME}.app"
+  fi
 else
-  echo "MAC_BUILD_KIND must be 'arm64' or 'universal'" >&2
+  echo "MAC_BUILD_KIND must be 'arm64', 'x64', or 'universal'" >&2
   exit 1
 fi
 
