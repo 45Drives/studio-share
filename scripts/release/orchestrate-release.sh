@@ -353,6 +353,9 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
   MAC_FETCH_USER="${MAC_FETCH_USER:-$MAC_ARM_USER}"
   MAC_FETCH_PASSWORD="${MAC_FETCH_PASSWORD:-${MAC_ARM_PASSWORD:-}}"
   MAC_FETCH_DIR_TEMPLATE="${MAC_FETCH_DIR:-}"
+  # MAC_FETCH_CLEANUP_OLD="${MAC_FETCH_CLEANUP_OLD:-1}"
+  # MAC_FETCH_KEEP_COUNT="${MAC_FETCH_KEEP_COUNT:-20}"
+  # MAC_FETCH_CLEANUP_GLOB="${MAC_FETCH_CLEANUP_GLOB:-mac-*}"
   MAC_REMOTE_CMD_TEMPLATE="${MAC_REMOTE_CMD:-}"
 
   case "$MAC_BUILD_KIND_REQUESTED" in
@@ -463,6 +466,15 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
       copy_to_release_builds "${mac_kind_outputs[@]}"
     fi
   done
+
+  # if truthy "$MAC_FETCH_CLEANUP_OLD" && [[ "$MAC_FETCH_DIR_TEMPLATE" == *"__BUNDLE_TAG__"* ]]; then
+  #   MAC_FETCH_BASE_DIR="${MAC_FETCH_DIR_TEMPLATE%%__BUNDLE_TAG__*}"
+  #   MAC_FETCH_BASE_DIR="${MAC_FETCH_BASE_DIR%/}"
+  #   if [[ -n "$MAC_FETCH_BASE_DIR" ]]; then
+  #     MAC_CLEANUP_CMD="cd '${MAC_FETCH_BASE_DIR}' && ls -1dt ${MAC_FETCH_CLEANUP_GLOB} 2>/dev/null | awk 'NR>${MAC_FETCH_KEEP_COUNT} {print}' | while IFS= read -r d; do rm -rf -- \"\$d\"; done"
+  #     ssh_run "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" "$MAC_CLEANUP_CMD"
+  #   fi
+  # fi
 fi
 
 run_windows_flow
