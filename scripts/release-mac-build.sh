@@ -137,4 +137,23 @@ echo "Trigger signing/notarization on Intel..."
 "${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" \
   "bash -lc '\"${SIGN_INBOX}/scripts/sign-mac-on-intel.sh\" \"$BUNDLE_TAG\"'"
 
-echo "Done. Artifacts are on Intel Mac under: ${SIGN_OUTPUT_DIR}/${BUNDLE_TAG}"
+INTEL_OUT_DIR="${SIGN_OUTPUT_DIR%/}/${BUNDLE_TAG}"
+SYNC_SIGNED_BACK_TO_ARM="${SYNC_SIGNED_BACK_TO_ARM:-1}"
+ARM_SIGNED_OUTPUT_DIR_TEMPLATE="${ARM_SIGNED_OUTPUT_DIR:-${ROOT_DIR}/Mac-signed/__BUNDLE_TAG__/}"
+ARM_SIGNED_OUTPUT_DIR_EFFECTIVE="${ARM_SIGNED_OUTPUT_DIR_TEMPLATE//__BUNDLE_TAG__/${BUNDLE_TAG}}"
+ARM_SIGNED_OUTPUT_DIR_EFFECTIVE="${ARM_SIGNED_OUTPUT_DIR_EFFECTIVE%/}"
+
+echo "Signed artifacts are on Intel Mac under: ${INTEL_OUT_DIR}"
+
+if truthy "$SYNC_SIGNED_BACK_TO_ARM"; then
+  mkdir -p "${ARM_SIGNED_OUTPUT_DIR_EFFECTIVE}"
+  echo "Syncing signed artifacts back to ARM host path: ${ARM_SIGNED_OUTPUT_DIR_EFFECTIVE}"
+  rsync -a --delete -e "${RSYNC_SSH[*]}" \
+    "${SIGN_USER}@${SIGN_HOST}:${INTEL_OUT_DIR}/" \
+    "${ARM_SIGNED_OUTPUT_DIR_EFFECTIVE}/"
+  echo "Synced signed artifacts to ARM host path: ${ARM_SIGNED_OUTPUT_DIR_EFFECTIVE}"
+else
+  echo "SYNC_SIGNED_BACK_TO_ARM=0; skipping Intel -> ARM artifact sync."
+fi
+
+echo "Done."

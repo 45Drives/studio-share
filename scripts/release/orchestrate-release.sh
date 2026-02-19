@@ -379,6 +379,12 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
     fi
   fi
 
+  if [[ "${#MAC_BUILD_KINDS[@]}" -gt 1 ]] && [[ "$MAC_FETCH_DIR_TEMPLATE" != *"__BUNDLE_TAG__"* ]]; then
+    echo "MAC_FETCH_DIR must include __BUNDLE_TAG__ when MAC_BUILD_KIND=both." >&2
+    echo "Current MAC_FETCH_DIR: ${MAC_FETCH_DIR_TEMPLATE}" >&2
+    exit 1
+  fi
+
   if [[ -n "$MAC_RELEASE_ENV_LOCAL" ]]; then
     RSYNC_EXCLUDES=""
     rsync_to "$MAC_ARM_HOST" "$MAC_ARM_USER" "${MAC_ARM_PASSWORD:-}" "$MAC_ARM_PORT" \
