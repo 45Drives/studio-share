@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-${ROOT_DIR}/scripts/.env.release}"
 
+truthy() {
+  local v="${1:-}"
+  [[ "$v" == "1" || "$v" == "true" || "$v" == "TRUE" || "$v" == "yes" || "$v" == "YES" ]]
+}
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing $ENV_FILE (copy from scripts/.env.release.example)" >&2
   exit 1
@@ -71,10 +76,17 @@ SSH_OPTS=(
   -o PreferredAuthentications=publickey
   -o PasswordAuthentication=no
   -o KbdInteractiveAuthentication=no
-  -o ControlMaster=auto
-  -o ControlPersist=5m
-  -o ControlPath="$HOME/.ssh/cm-%r@%h:%p"
 )
+
+# SSH multiplexing can fail with stale control sockets (e.g. "master hello exchange failed").
+# Keep it opt-in for reliability.
+if truthy "${SSH_USE_MUX:-0}"; then
+  SSH_OPTS+=(
+    -o ControlMaster=auto
+    -o ControlPersist=5m
+    -o ControlPath="$HOME/.ssh/cm-%r@%h:%p"
+  )
+fi
 
 SSH=(ssh "${SSH_OPTS[@]}")
 RSYNC_SSH=(ssh "${SSH_OPTS[@]}")
