@@ -25,7 +25,7 @@
   "mac": {
     "hardenedRuntime": true,
     "entitlements": "entitlements.mac.plist",
-    "entitlementsInherit": "entitlements.mac.plist",
+    "entitlementsInherit": "entitlements.mac.inherit.plist",
     "signIgnore": [
       ".*\\.(png|jpe?g|svg|gif|webp|ico|icns)$",
       ".*\\.(mp3|wav|aac|mp4|mov|webm|ogg)$",

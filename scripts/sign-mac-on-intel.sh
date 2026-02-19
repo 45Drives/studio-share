@@ -52,6 +52,12 @@ if [[ ! -f "$INHERIT_ENT" ]]; then
 <dict>
   <key>com.apple.security.inherit</key>
   <true/>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
 </dict>
 </plist>
 EOF
@@ -161,7 +167,13 @@ echo "Packaging ZIP (for auto-updates)..."
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ZIP_PATH"
 
 echo "Packaging DMG (for downloads)..."
-/usr/bin/hdiutil create -volname "$APP_PRODUCT_FILENAME" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_PATH"
+DMG_STAGE_DIR="${OUT_DIR}/.dmg-stage"
+/bin/rm -rf "$DMG_STAGE_DIR"
+/bin/mkdir -p "$DMG_STAGE_DIR"
+/usr/bin/rsync -a "$APP_BUNDLE" "$DMG_STAGE_DIR/"
+/bin/ln -sfn /Applications "$DMG_STAGE_DIR/Applications"
+/usr/bin/hdiutil create -volname "$APP_PRODUCT_FILENAME" -srcfolder "$DMG_STAGE_DIR" -ov -format UDZO "$DMG_PATH"
+/bin/rm -rf "$DMG_STAGE_DIR"
 
 echo "Notarizing ZIP..."
 /usr/bin/xcrun notarytool submit "$ZIP_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
@@ -176,5 +188,4 @@ echo "Artifacts complete:"
 /bin/ls -la "$OUT_DIR"
 echo "ZIP: $ZIP_PATH"
 echo "DMG: $DMG_PATH"
-
 
