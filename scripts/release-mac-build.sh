@@ -14,6 +14,12 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# Allow orchestrator/runtime override even when ENV_FILE defines MAC_BUILD_KIND.
+if [[ -n "${MAC_BUILD_KIND_OVERRIDE:-}" ]]; then
+  MAC_BUILD_KIND="$MAC_BUILD_KIND_OVERRIDE"
+  export MAC_BUILD_KIND
+fi
+
 cd "$ROOT_DIR"
 
 # Ensure node exists in non-interactive SSH shells (nvm/homebrew/common paths)
