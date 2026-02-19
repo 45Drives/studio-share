@@ -9,10 +9,24 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# Preserve direct runtime override (e.g. MAC_BUILD_KIND=x64 bash ...).
+MAC_BUILD_KIND_RUNTIME_SET=0
+MAC_BUILD_KIND_RUNTIME_VALUE=""
+if [[ -n "${MAC_BUILD_KIND+x}" ]]; then
+  MAC_BUILD_KIND_RUNTIME_SET=1
+  MAC_BUILD_KIND_RUNTIME_VALUE="${MAC_BUILD_KIND}"
+fi
+
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+# Apply runtime overrides after sourcing env file.
+if [[ "$MAC_BUILD_KIND_RUNTIME_SET" == "1" ]]; then
+  MAC_BUILD_KIND="$MAC_BUILD_KIND_RUNTIME_VALUE"
+  export MAC_BUILD_KIND
+fi
 
 # Allow orchestrator/runtime override even when ENV_FILE defines MAC_BUILD_KIND.
 if [[ -n "${MAC_BUILD_KIND_OVERRIDE:-}" ]]; then
