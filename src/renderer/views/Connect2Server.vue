@@ -508,6 +508,41 @@ function listenBootstrap(id: string) {
     return () => window.electron?.ipcRenderer.removeListener('bootstrap-progress', handler);
 }
 
+async function ensureLicenseActivated(apiBase: string) {
+    let statusResp: Response
+    try {
+        statusResp = await fetch(`${apiBase}/api/license/status`)
+    } catch {
+        // License endpoint unavailable (older broadcaster) -> continue.
+        return
+    }
+    if (!statusResp.ok) return
+
+    let statusBody: any = null
+    try { statusBody = await statusResp.json() } catch { return }
+    if (!statusBody?.enforcement || statusBody?.licensed) return
+
+    const key = window.prompt('Enter your 45Flow license key to activate this server:')
+    if (!key || !key.trim()) throw new Error('License activation canceled.')
+
+    const activateResp = await fetch(`${apiBase}/api/license/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ licenseKey: key.trim() }),
+    })
+
+    const activateText = await activateResp.text()
+    let activateBody: any = null
+    try { activateBody = activateText ? JSON.parse(activateText) : null } catch { /* keep raw text fallback */ }
+
+    if (!activateResp.ok || !activateBody?.ok) {
+        const msg = activateBody?.error || activateBody?.detail?.error || activateText || `HTTP ${activateResp.status}`
+        throw new Error(`License activation failed: ${msg}`)
+    }
+
+    pushNotification(new Notification('License Activated', 'This server is now licensed for perpetual use.', 'success', 6000))
+}
+
 async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
         pushNotification(new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000));
@@ -703,7 +738,9 @@ async function connectToServer() {
             unlistenProgress = null;
         }
 
-        // Healthy now — proceed to login
+        // Healthy now — activate license if required, then proceed to login
+        await ensureLicenseActivated(apiBase)
+
         const res = await fetch(`${apiBase}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
