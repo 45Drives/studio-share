@@ -19,13 +19,13 @@
                     </button>
                 </div>
 
-                <div v-if="canCheckUpdates" class="mb-2 text-center items-center">
+                <!-- <div v-if="canCheckUpdates" class="mb-2 text-center items-center">
                     <p class="text-xs text-default mb-1">Application</p>
                     <button class="btn btn-secondary wizard-btn w-full mb-1" :disabled="updateBusy"
                         @click="checkForUpdates">
                         {{ updateBusy ? 'Checking...' : 'Check for Updates' }}
                     </button>
-                </div>
+                </div> -->
 
                 <!-- Themes -->
                 <!-- <div class="mb-2 text-center items-center">
