@@ -414,14 +414,14 @@ function resolveWatermarkStorageRoot() {
 function resolveWatermarkUploadDir() {
 	const { abs } = resolveWatermarkStorageRoot()
 	const cleanRoot = abs === '/' ? '' : abs
-	return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+	return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
 }
 
 function resolveWatermarkRelPath() {
 	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
 	if (!name) return ''
 	const { rel } = resolveWatermarkStorageRoot()
-	return `${rel ? rel + '/' : ''}flow45studio-watermarks/${name}`
+	return `${rel ? rel + '/' : ''}45flow-watermarks/${name}`
 }
 
 function resolveWatermarkProjectRoot() {
@@ -467,6 +467,16 @@ async function serverFileExists(relPath: string) {
 		const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dir)}`, { method: 'GET' })
 		const entries = Array.isArray(data?.entries) ? data.entries : []
 		return entries.some((e: any) => !e?.isDir && String(e?.name || '') === name)
+	} catch {
+		return false
+	}
+}
+
+async function ensureServerDirExists(dir: string) {
+	const clean = String(dir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+	try {
+		await apiFetch(`/api/files?dir=${encodeURIComponent(clean || '.')}&dirsOnly=1&ensure=1`, { method: 'GET' })
+		return true
 	} catch {
 		return false
 	}
@@ -950,6 +960,19 @@ async function startUploads() {
 		watermarkRelPathForIngest = await resolveExistingServerWatermarkRelPath()
 		if (!watermarkRelPathForIngest) {
 			const watermarkDestDir = resolveWatermarkUploadDir()
+			const ensured = await ensureServerDirExists(watermarkDestDir)
+			if (!ensured) {
+				pushNotification(
+					new Notification(
+						'Watermark Upload Failed',
+						'Unable to prepare the remote watermark directory.',
+						'error',
+						8000
+					)
+				)
+				isUploading.value = false
+				return
+			}
 			const { done } = await window.electron.rsyncStart(
 				{
 					host: ssh?.server,

@@ -1080,20 +1080,20 @@ function resolveWatermarkStorageRoot() {
 function resolveWatermarkUploadDir() {
     const { abs } = resolveWatermarkStorageRoot()
     const cleanRoot = abs === '/' ? '' : abs
-    return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+    return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
 }
 
 function resolveWatermarkRelPath() {
     const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
     if (!name) return ''
     const { rel } = resolveWatermarkStorageRoot()
-    return `${rel ? rel + '/' : ''}flow45studio-watermarks/${name}`
+    return `${rel ? rel + '/' : ''}45flow-watermarks/${name}`
 }
 
 function resolveWatermarkProjectRelPath() {
     const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
     if (!name) return ''
-    return `flow45studio-watermarks/${name}`
+    return `45flow-watermarks/${name}`
 }
 
 function splitRelPath(relPath: string) {
@@ -1119,6 +1119,16 @@ async function serverFileExists(relPath: string) {
     }
 }
 
+async function ensureServerDirExists(dir: string) {
+    const clean = String(dir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+    try {
+        await apiFetch(`/api/files?dir=${encodeURIComponent(clean || '.')}&dirsOnly=1&ensure=1`, { method: 'GET' })
+        return true
+    } catch {
+        return false
+    }
+}
+
 async function resolveExistingServerWatermarkRelPath() {
     const rooted = resolveWatermarkRelPath()
     const projectRel = resolveWatermarkProjectRelPath()
@@ -1136,7 +1146,7 @@ function buildWatermarkFileCandidates() {
     return Array.from(new Set([
         rooted,
         projectRel,
-        baseName ? `flow45studio-watermarks/${baseName}` : '',
+        baseName ? `45flow-watermarks/${baseName}` : '',
         baseName,
     ].filter(Boolean)))
 }
@@ -1175,6 +1185,8 @@ async function uploadWatermarkToProject() {
     }
 
     const destDir = resolveWatermarkUploadDir()
+    const ensured = await ensureServerDirExists(destDir)
+    if (!ensured) return { ok: false, error: 'failed to prepare remote watermark directory' }
     const { done } = await window.electron.rsyncStart({
         host,
         user,

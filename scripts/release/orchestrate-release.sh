@@ -90,7 +90,7 @@ RELEASE_TAG="${RELEASE_TAG_RAW//__VERSION__/${VERSION}}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 STAGING_DIR_RAW="${RELEASE_STAGING_DIR:-${ROOT_DIR}/builds/release/__VERSION__}"
 STAGING_DIR="${STAGING_DIR_RAW//__VERSION__/${VERSION}}"
-RELEASE_BUILDS_DIR="${RELEASE_BUILDS_DIR:-${ROOT_DIR}/release-builds}"
+RELEASE_BUILDS_DIR="${RELEASE_BUILDS_DIR:-${ROOT_DIR}/builds/release}"
 
 mkdir -p "$STAGING_DIR"/{linux,windows,mac}
 mkdir -p "$RELEASE_BUILDS_DIR"
@@ -522,4 +522,4 @@ run_windows_flow
 
 echo "Release orchestration complete."
 echo "Collected assets under: $STAGING_DIR"
-echo "Final release-builds assets under: $RELEASE_BUILDS_DIR"
+echo "Final builds/release assets under: $RELEASE_BUILDS_DIR"

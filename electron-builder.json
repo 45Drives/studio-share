@@ -36,12 +36,12 @@
       ".*/Electron Framework\\.framework/Versions/A/Resources/.*$",
       ".*/assets/.*"
     ],
-    "icon": "icon.icns"
+    "icon": "assets/icons/mac/icon.icns"
   },
   "win": {
     "target": "nsis",
     "compression": "maximum",
-    "icon": "icon.ico",
+    "icon": "assets/icons/win/icon.ico",
     "signAndEditExecutable": true
   },
 
@@ -64,8 +64,6 @@
     "!src",
     "!build",
     "!builds",
-    "!release-builds",
-    "!release-builds/**",
     "!Mac-signed",
     "!Mac-signed/**",
     "!mac-signing-out",
