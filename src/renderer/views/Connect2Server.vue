@@ -148,7 +148,7 @@ import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
-useHeader('Welcome to Flow by 45Studio!');
+useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
