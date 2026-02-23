@@ -67,7 +67,7 @@
 											aria-label="Network Access">
 											<!-- Local (false) -->
 											<label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer select-none transition
-                -well bg-default hover:bg-well/40">
+                border border-default bg-default hover:bg-well/40">
 												<input type="radio" name="link-access" :value="false"
 													:checked="usePublicBase === false" @change="usePublicBase = false"
 													class="h-4 w-4" />
@@ -78,7 +78,7 @@
 
 											<!-- External (true) -->
 											<label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer select-none transition
-                 border-well bg-default hover:bg-well/40">
+                 border border-default bg-default hover:bg-well/40">
 												<input type="radio" name="link-access" :value="true"
 													:checked="usePublicBase === true" @change="usePublicBase = true"
 													class="h-4 w-4" />

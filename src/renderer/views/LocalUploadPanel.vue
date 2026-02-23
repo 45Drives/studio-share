@@ -1,15 +1,35 @@
 <template>
-	<div class="h-full flex items-start justify-center pt-6 overflow-y-auto">
-		<div class="grid grid-cols-1 gap-5 text-xl w-9/12 mx-auto">
-			<CardContainer class="local-upload-card bg-accent rounded-md shadow-xl h-[calc(100vh-11rem)] flex flex-col">
+	<div class="h-full overflow-y-auto pt-3 pb-4">
+		<div class="ss-page-frame grid grid-cols-1 gap-3 text-xl">
+			<CardContainer class="local-upload-card ss-surface bg-accent rounded-md shadow-xl h-[calc(100vh-10rem)] flex flex-col">
 				<template #header>
-					<!-- Stepper -->
-					<div class="flex items-center gap-3 text-sm justify-center">
-						<div :class="stepClass(1)">1</div><span>Select local files</span>
-						<div class="h-px w-10 bg-slate-600 mx-2"></div>
-						<div :class="stepClass(2)">2</div><span>Choose destination</span>
-						<div class="h-px w-10 bg-slate-600 mx-2"></div>
-						<div :class="stepClass(3)">3</div><span>Upload</span>
+					<div class="wizard-head">
+						<h2 class="wizard-main-title">Local Upload Wizard</h2>
+						<ol class="wizard-stepper" aria-label="Upload steps">
+							<li class="wizard-step-item">
+								<div :class="stepClass(1)">1</div>
+								<div class="wizard-step-copy">
+									<span class="wizard-step-label">Select Local Files</span>
+									<span class="wizard-step-help">Choose files/folders from this workstation.</span>
+								</div>
+							</li>
+							<li class="wizard-step-divider" aria-hidden="true"></li>
+							<li class="wizard-step-item">
+								<div :class="stepClass(2)">2</div>
+								<div class="wizard-step-copy">
+									<span class="wizard-step-label">Choose Destination</span>
+									<span class="wizard-step-help">Pick the target folder on the server.</span>
+								</div>
+							</li>
+							<li class="wizard-step-divider" aria-hidden="true"></li>
+							<li class="wizard-step-item">
+								<div :class="stepClass(3)">3</div>
+								<div class="wizard-step-copy">
+									<span class="wizard-step-label">Upload</span>
+									<span class="wizard-step-help">Monitor transfer progress and completion.</span>
+								</div>
+							</li>
+						</ol>
 					</div>
 				</template>
 
@@ -20,11 +40,11 @@
 
 						<h2 class="wizard-heading">Pick local files</h2>
 
-						<div class="wizard-controls">
-							<div class="button-group-row">
-								<button class="btn btn-primary" @click="pickFiles">Choose Files</button>
-								<button class="btn btn-secondary" @click="pickFolder">Choose Folder</button>
-							</div>
+							<div class="wizard-controls">
+								<div class="button-group-row">
+									<button class="btn btn-primary" @click="pickFiles">Choose Files</button>
+									<button class="btn btn-secondary" @click="pickFolder">Choose Folder</button>
+								</div>
 
 							<span class="wizard-muted">
 								{{ selected.length ? `${selected.length} item(s) • ${formatSize(totalSelectedBytes)}` :	'No files selected' }}
@@ -168,10 +188,7 @@
 
 											<tr v-if="u.status === 'uploading'">
 												<td colspan="5" class="px-4 py-2 border border-default">
-													<progress class="w-full h-2 rounded-lg overflow-hidden bg-default
-														accent-[#584c91]
-														[&::-webkit-progress-value]:bg-[#584c91]
-														[&::-moz-progress-bar]:bg-[#584c91]" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
+													<progress class="wizard-progress" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
 													</progress>
 												</td>
 											</tr>
@@ -382,8 +399,12 @@ function goStep(s: 1 | 2 | 3) {
 }
 function stepClass(n: number) {
 	return [
-		'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
-		step.value >= n ? 'bg-[#584c91] text-white' : 'bg-slate-700 text-slate-300'
+		'wizard-step-dot',
+		step.value > n
+			? 'wizard-step-dot--done'
+			: step.value === n
+				? 'wizard-step-dot--active'
+				: 'wizard-step-dot--pending'
 	].join(' ')
 }
 
@@ -1175,6 +1196,84 @@ function goBack() {
 </script>
 
 <style lang="css" scoped>
+.wizard-head {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.wizard-main-title {
+	font-size: 1.18rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.wizard-stepper {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+	gap: 0.45rem;
+}
+
+.wizard-step-item {
+	display: flex;
+	align-items: center;
+	gap: 0.52rem;
+	min-width: 0;
+}
+
+.wizard-step-divider {
+	height: 1px;
+	width: 2rem;
+	background: color-mix(in srgb, var(--btn-primary-bg) 28%, #56566a);
+}
+
+.wizard-step-copy {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.wizard-step-label {
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.wizard-step-help {
+	font-size: 0.68rem;
+	opacity: 0.78;
+	line-height: 1.3;
+}
+
+.wizard-step-dot {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.7rem;
+	height: 1.7rem;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 36%, #616172);
+	font-size: 0.76rem;
+	font-weight: 800;
+	flex-shrink: 0;
+}
+
+.wizard-step-dot--pending {
+	color: #c8cad2;
+	background: color-mix(in srgb, #2c2f3a 86%, transparent);
+}
+
+.wizard-step-dot--active {
+	color: white;
+	background: var(--btn-primary-bg);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--btn-primary-bg) 34%, transparent);
+}
+
+.wizard-step-dot--done {
+	color: #0a2a1c;
+	background: #4ade80;
+}
+
 .wizard-stage {
 	@apply flex flex-col flex-1 min-h-0 overflow-hidden;
 }
@@ -1188,11 +1287,11 @@ function goBack() {
 }
 
 .wizard-heading {
-	@apply text-xl font-semibold mt-2 text-left;
+	@apply text-xl font-semibold mt-1 text-left;
 }
 
 .wizard-controls {
-	@apply flex flex-row items-center gap-5;
+	@apply flex flex-wrap items-center gap-3;
 }
 
 .wizard-muted {
@@ -1201,6 +1300,7 @@ function goBack() {
 
 .wizard-table-shell {
 	@apply border rounded overflow-auto flex-1 min-h-0;
+	border-color: color-mix(in srgb, var(--btn-primary-bg) 24%, #4f5160);
 }
 
 .wizard-table-shell--filled {
@@ -1264,6 +1364,42 @@ function goBack() {
 
 .wizard-td {
 	@apply px-4 py-2 border border-default;
+}
+
+.wizard-progress {
+	width: 100%;
+	height: 0.5rem;
+	border-radius: 0.5rem;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
+	accent-color: var(--btn-primary-bg);
+}
+
+.wizard-progress::-webkit-progress-bar {
+	background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
+}
+
+.wizard-progress::-webkit-progress-value {
+	background: var(--btn-primary-bg);
+}
+
+.wizard-progress::-moz-progress-bar {
+	background: var(--btn-primary-bg);
+}
+
+@media (max-width: 920px) {
+	.wizard-stepper {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.45rem;
+	}
+
+	.wizard-step-divider {
+		display: none;
+	}
+
+	.wizard-step-help {
+		display: none;
+	}
 }
 
 </style>

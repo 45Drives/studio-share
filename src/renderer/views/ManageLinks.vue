@@ -1,13 +1,22 @@
 <template>
 	<div class="h-full min-h-0 flex flex-col">
-		<div class="rounded-t-lg bg-secondary text-default p-2 text-center font-semibold">
-			{{ headingTitle }}
+		<div class="manage-header">
+			<div class="manage-heading">
+				<h3>{{ headingTitle }}</h3>
+				<p class="ss-subtle">Search links, adjust settings, and track status in real time.</p>
+			</div>
+			<div class="manage-metrics">
+				<span class="ss-chip ss-chip--neutral">Total {{ linkSummary.total }}</span>
+				<span class="ss-chip ss-chip--success">Active {{ linkSummary.active }}</span>
+				<span class="ss-chip ss-chip--warning">Expired {{ linkSummary.expired }}</span>
+				<span class="ss-chip ss-chip--muted">Disabled {{ linkSummary.disabled }}</span>
+			</div>
 		</div>
 
-		<div class="p-2 bg-well rounded-md min-w-0 flex-1 min-h-0 flex flex-col">
-			<div class="flex flex-wrap gap-2 mb-3">
-				<input v-model="q" type="search" placeholder="Search title / dir / file..."
-					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-64" />
+		<div class="manage-surface p-2 bg-well rounded-md min-w-0 flex-1 min-h-0 flex flex-col">
+			<div class="manage-toolbar">
+				<input v-model="q" type="search" placeholder="Search title, directory, file..."
+					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-72" />
 				<select v-model="typeFilter" class="px-3 py-2 border border-default rounded-lg bg-default">
 					<option value="">All types</option>
 					<option value="upload">Upload</option>
@@ -25,24 +34,11 @@
 				</button>
 			</div>
 
-			<!-- errors -->
 			<div v-if="error" class="p-3 rounded bg-red-900/30 text-default border border-red-800 mb-3">
 				{{ error }}
 			</div>
-			<tr v-if="loading">
-				<td colspan="9" class="px-2 py-6 text-center text-default border border-default align-middle">
-					<div class="flex items-center justify-center gap-2">
-						<span
-							class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
-						<span class="text-sm opacity-80">
-							Loading...
-						</span>
-					</div>
-				</td>
-			</tr>
 
-			<!-- table -->
-			<div class="overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges] flex-1 min-h-0"
+			<div class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges] flex-1 min-h-0"
 				:class="{ '': !isMac }">
 				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
 					<colgroup>
@@ -57,7 +53,7 @@
 						<col class="w-[12%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
-						<tr class="bg-default text-default border-b border-default">
+						<tr class="bg-default/95 text-default border-b border-default">
 							<th class="text-left p-2 font-semibold border border-default">
 								<button class="hover:underline" @click="setSort('title')">Title {{ sortIndicator('title') }}</button>
 							</th>
@@ -335,6 +331,26 @@ const headingTitle = computed(() => {
 	return `Currently ${label}`
 })
 
+const linkSummary = computed(() => {
+	let active = 0
+	let expired = 0
+	let disabled = 0
+
+	for (const it of rows.value) {
+		const status = statusOf(it)
+		if (status === 'active') active += 1
+		else if (status === 'expired') expired += 1
+		else disabled += 1
+	}
+
+	return {
+		total: rows.value.length,
+		active,
+		expired,
+		disabled,
+	}
+})
+
 onMounted(refresh);
 
 /* ----------- fetch/list endpoints ----------- */
@@ -390,7 +406,7 @@ function badgeClass(t: LinkType) {
 		? 'text-blue-500'
 		: t === 'download'
 			? 'text-emerald-500'
-			: 'text-purple-500'
+			: 'text-cyan-400'
 }
 
 function isDisabled(it: LinkItem) {
@@ -856,3 +872,62 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 }
 
 </script>
+
+<style scoped>
+.manage-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.7rem;
+	padding: 0.55rem 0.4rem 0.75rem;
+}
+
+.manage-heading h3 {
+	font-size: 1.06rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.manage-heading p {
+	margin-top: 0.14rem;
+	font-size: 0.8rem;
+}
+
+.manage-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.manage-surface {
+	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 28%, #50505e);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
+}
+
+.manage-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+	margin-bottom: 0.75rem;
+}
+
+.manage-table-wrap {
+	border-radius: 0.72rem;
+	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 22%, #4a4b57);
+	background: color-mix(in srgb, black 24%, transparent);
+}
+
+.manage-table-wrap thead tr {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	backdrop-filter: blur(6px);
+}
+
+@media (max-width: 980px) {
+	.manage-header {
+		padding-top: 0.25rem;
+	}
+}
+</style>

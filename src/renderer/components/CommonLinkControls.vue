@@ -59,13 +59,13 @@
 .clc {
     width: 100%;
     min-width: 0;
-    margin-top: 0.5rem;
+    margin-top: 0.6rem;
 }
 
 .clc__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
+    gap: 0.65rem;
     align-items: stretch;
     width: 100%;
     min-width: 0;
@@ -74,10 +74,13 @@
 .clc__lane {
     min-width: 0;
     height: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.6rem;
-    padding: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 25%, #585867);
+    border-radius: 0.8rem;
+    padding: 0.8rem;
     overflow: hidden;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--btn-primary-bg) 9%, transparent), transparent 58%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
 }
 
 .clc__sections {
@@ -89,7 +92,7 @@
 
 .clc__section {
     min-width: 0;
-    padding-top: 0.65rem;
+    padding-top: 0.55rem;
 }
 
 .clc__section:first-child {
@@ -97,8 +100,8 @@
 }
 
 .clc__section+.clc__section {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin-top: 0.65rem;
+    border-top: 1px solid color-mix(in srgb, var(--btn-primary-bg) 16%, #56566a);
+    margin-top: 0.6rem;
 }
 
 .clc__errors {
@@ -122,7 +125,7 @@
 }
 
 .clc__after {
-    margin-top: 0.75rem;
+    margin-top: 0.68rem;
     min-width: 0;
 }
 

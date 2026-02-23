@@ -27,18 +27,20 @@
                     </button>
                 </div> -->
 
-                <!-- Themes -->
-                <!-- <div class="mb-2 text-center items-center">
-                    <p class="text-xs text-default mb-1">Themes</p>
-                    <button class="btn theme-btn theme-btn-default w-full mb-1"
-                        @click="selectTheme('theme-default')">Default</button>
-                    <button class="btn theme-btn theme-btn-homelab w-full mb-1"
-                        @click="selectTheme('theme-homelab')">45Homelab</button>
-                    <button class="btn theme-btn theme-btn-professional w-full mb-1"
-                        @click="selectTheme('theme-professional')">45Pro</button>
-                    <button class="btn theme-btn theme-btn-studio w-full mb-1"
-                        @click="selectTheme('theme-studio')">45Studio</button>
-                </div> -->
+                <div class="mb-2 text-center items-center">
+                    <p class="text-xs text-default mb-1">Studio Palette</p>
+                    <div class="palette-grid">
+                        <button
+                            v-for="palette in studioPalettes"
+                            :key="palette.theme"
+                            class="btn theme-btn w-full"
+                            :class="[palette.className, currentTheme === palette.theme ? 'theme-btn-active' : '']"
+                            @click="selectTheme(palette.theme)"
+                        >
+                            {{ palette.label }}
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Dark mode -->
                 <div class="mb-2 items-center">
@@ -60,10 +62,10 @@
 
 <script setup lang="ts">
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, inject } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Bars3Icon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { toggleDarkMode, useDarkModeState, pushNotification, Notification } from '@45drives/houston-common-ui'
-import { useThemeFromAlias } from '../composables/useThemeFromAlias'
+import { useThemeFromAlias, type Theme } from '../composables/useThemeFromAlias'
 import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
 import { useResilientNav } from '../composables/useResilientNav'
 const { to } = useResilientNav()
@@ -72,7 +74,6 @@ interface GlobalMenuProps {
 }
 defineProps<GlobalMenuProps>()
 
-const router = useRouter()
 const route = useRoute()
 
 // --- Auth state (injected from AppShell) ---
@@ -125,7 +126,18 @@ const darkModeButtonClass = computed(() => (darkMode.value ? 'btn-sun' : 'btn-mo
 
 const { setTheme, currentTheme } = useThemeFromAlias()
 
-function selectTheme(theme: 'theme-default' | 'theme-homelab' | 'theme-professional' | 'theme-studio') {
+const studioPalettes: Array<{ label: string; theme: Theme; className: string }> = [
+    { label: 'Original Purple', theme: 'theme-studio-original-purple', className: 'theme-btn-studio-original-purple' },
+    { label: 'Purple + Orange', theme: 'theme-studio-grad-purple-orange', className: 'theme-btn-studio-grad-purple-orange' },
+    { label: 'Purple + Pink + Orange', theme: 'theme-studio-grad-purple-pink-orange', className: 'theme-btn-studio-grad-purple-pink-orange' },
+    { label: 'Pink + Orange', theme: 'theme-studio-grad-pink-orange', className: 'theme-btn-studio-grad-pink-orange' },
+    { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
+    { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
+    { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
+    { label: 'Carbon', theme: 'theme-studio-carbon', className: 'theme-btn-studio-carbon' },
+]
+
+function selectTheme(theme: Theme) {
     setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
 }
 
@@ -203,55 +215,95 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
 }
 
 
+.palette-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+}
 
-/* THEME BUTTONS: Theme Color Swatches */
-
-.theme-btn-default {
-    background-color: #D92B2F;
-    border: 1px solid #D92B2F;
+.theme-btn-studio-balanced {
+    background-color: #4E6B93;
+    border: 1px solid #4E6B93;
     color: white;
-    transition: all 0.2s ease-in-out;
 }
 
-.theme-btn-default:hover {
-    background-color: #b02428;
-    border-color: #b02428;
+.theme-btn-studio-balanced:hover {
+    background-color: #3F587A;
+    border-color: #3F587A;
 }
 
-.theme-btn-homelab {
-    background-color: #2563EB;
-    border: 1px solid #2563EB;
-    color: white;
-    transition: all 0.2s ease-in-out;
-}
-
-.theme-btn-homelab:hover {
-    background-color: #1E4FCB;
-    border-color: #1E4FCB;
-}
-
-.theme-btn-professional {
-    background-color: #65A443;
-    border: 1px solid #65A443;
-    color: white;
-    transition: all 0.2s ease-in-out;
-}
-
-.theme-btn-professional:hover {
-    background-color: #4F8F37;
-    border-color: #4F8F37;
-}
-
-.theme-btn-studio {
+.theme-btn-studio-original-purple {
     background-color: #6557A5;
     border: 1px solid #6557A5;
     color: white;
-    transition: all 0.2s ease-in-out;
 }
 
-.theme-btn-studio:hover {
+.theme-btn-studio-original-purple:hover {
     background-color: #504584;
     border-color: #504584;
+}
+
+.theme-btn-studio-grad-purple-orange {
+    background: linear-gradient(135deg, #6F58B8 0%, #C96E36 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-purple-orange:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-purple-pink-orange {
+    background: linear-gradient(135deg, #7A4FD8 0%, #D95AA5 52%, #E57A4A 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-purple-pink-orange:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-pink-orange {
+    background: linear-gradient(135deg, #D75A99 0%, #E88747 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-pink-orange:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-slate {
+    background-color: #5F6E82;
+    border: 1px solid #5F6E82;
+    color: white;
+}
+
+.theme-btn-studio-slate:hover {
+    background-color: #4E5D71;
+    border-color: #4E5D71;
+}
+
+.theme-btn-studio-ocean {
+    background-color: #3E6D84;
+    border: 1px solid #3E6D84;
+    color: white;
+}
+
+.theme-btn-studio-ocean:hover {
+    background-color: #31596D;
+    border-color: #31596D;
+}
+
+.theme-btn-studio-carbon {
+    background-color: #3F5368;
+    border: 1px solid #3F5368;
+    color: white;
+}
+
+.theme-btn-studio-carbon:hover {
+    background-color: #334354;
+    border-color: #334354;
 }
 
 .theme-btn {
@@ -259,12 +311,16 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
     font-weight: bold;
     padding: 0.3rem 0.5rem;
     border-radius: 0.25rem;
-    opacity: 0.8;
+    opacity: 0.88;
     transition: all 0.2s ease-in-out;
 }
 
 .theme-btn:hover {
     opacity: 1;
     transform: scale(1.02);
+}
+
+.theme-btn-active {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75);
 }
 </style>

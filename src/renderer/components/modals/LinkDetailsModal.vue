@@ -1130,7 +1130,7 @@ function openAccessModal() {
 
 function badgeClass(t?: LinkType) {
   if (!t) return ''
-  return t === 'upload' ? 'text-blue-500' : t === 'download' ? 'text-emerald-500' : 'text-purple-500'
+  return t === 'upload' ? 'text-blue-500' : t === 'download' ? 'text-emerald-500' : 'text-cyan-400'
 }
 function statusChipClass(s: Status) {
   return s === 'active' ? 'text-green-500' : s === 'expired' ? 'text-amber-500' : 'text-gray-500'

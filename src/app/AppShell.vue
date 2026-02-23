@@ -1,14 +1,17 @@
 <template>
   <div
-    class="w-screen h-screen overflow-hidden flex flex-col items-center justify-center text-default bg-default text-center">
-    <header v-if="!hideHeader" class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent">
+    class="w-screen h-screen overflow-hidden flex flex-col text-default bg-default">
+    <header
+      v-if="!hideHeader"
+      class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"
+    >
       <!-- Left (logo) -->
       <div class="justify-self-start">
-        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)"/>
+        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)" />
       </div>
 
       <!-- Center (title) -->
-      <div class="justify-self-center text-2xl font-semibold whitespace-nowrap">
+      <div class="justify-self-center text-center items-center text-2xl font-semibold whitespace-nowrap">
         {{ headerTitle || (route.meta.title as string) || '45Flow' }}
       </div>
 
@@ -19,7 +22,7 @@
     </header>
 
 
-    <main class="flex-1 min-h-0 w-full">
+    <main class="flex-1 min-h-0 w-full overflow-hidden">
       <router-view />
     </main>
     <GlobalModalConfirm />
