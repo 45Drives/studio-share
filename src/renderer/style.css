@@ -1,3 +1,8 @@
+@import '@fontsource/red-hat-text/400.css';
+@import '@fontsource/red-hat-text/500.css';
+@import '@fontsource/red-hat-text/600.css';
+@import '@fontsource/red-hat-text/700.css';
+
 /* =====================
    Design tokens
    ===================== */
@@ -7,12 +12,16 @@
   --btn-primary-border: #D92B2F;
   --btn-primary-hover-bg: #b02428;
   --btn-primary-hover-border: #b02428;
+  --btn-primary-fill: var(--btn-primary-bg);
+  --btn-primary-hover-fill: var(--btn-primary-hover-bg);
 
   /* Secondary (default theme) */
   --btn-secondary-bg: #a02226;
   --btn-secondary-border: #a02226;
   --btn-secondary-hover-bg: #821b1f;
   --btn-secondary-hover-border: #821b1f;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
 
   /* Other tokens */
   --checkbox-border: #737373;
@@ -35,6 +44,16 @@
   --btn-success-hover-bg: #16A34A;
   /* darker on hover */
   --btn-success-hover-border: #16A34A;
+
+  --ui-shadow: 0 12px 28px rgba(17, 33, 52, 0.14);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 65%, white);
+  --ui-panel-bg: color-mix(in srgb, #ffffff 94%, var(--btn-primary-bg) 6%);
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #c7cedb);
+  --ui-subtle-text: color-mix(in srgb, currentColor 72%, transparent);
+  --ui-app-bg:
+    radial-gradient(80rem 40rem at -10% -12%, color-mix(in srgb, var(--btn-primary-bg) 7%, transparent), transparent 56%),
+    radial-gradient(72rem 38rem at 112% -12%, color-mix(in srgb, var(--btn-secondary-bg) 6%, transparent), transparent 62%),
+    linear-gradient(180deg, #f3f5f8, #e8ebef 58%, #e3e8ee);
 }
 
 /* === Success button === */
@@ -103,6 +122,21 @@
 }
 
 .theme-studio {
+  --btn-primary-bg: #4E6B93;
+  --btn-primary-border: #4E6B93;
+  --btn-primary-hover-bg: #3F587A;
+  --btn-primary-hover-border: #3F587A;
+
+  --btn-secondary-bg: #3C5477;
+  --btn-secondary-border: #3C5477;
+  --btn-secondary-hover-bg: #2F445F;
+  --btn-secondary-hover-border: #2F445F;
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #4f596a);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 60%, white);
+}
+
+.theme-studio-original-purple {
   --btn-primary-bg: #6557A5;
   --btn-primary-border: #6557A5;
   --btn-primary-hover-bg: #504584;
@@ -112,35 +146,173 @@
   --btn-secondary-border: #584C91;
   --btn-secondary-hover-bg: #463C73;
   --btn-secondary-hover-border: #463C73;
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #636072);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 62%, white);
+  --ui-app-bg:
+    radial-gradient(80rem 40rem at -10% -12%, color-mix(in srgb, #7a67c8 12%, transparent), transparent 56%),
+    radial-gradient(72rem 38rem at 112% -12%, color-mix(in srgb, #5e4f9e 10%, transparent), transparent 62%),
+    linear-gradient(180deg, #f3f0fb, #e9e5f5 58%, #e3deef);
+}
+
+.theme-studio-grad-purple-orange {
+  --btn-primary-bg: #6F58B8;
+  --btn-primary-border: #6F58B8;
+  --btn-primary-hover-bg: #5A4798;
+  --btn-primary-hover-border: #5A4798;
+  --btn-primary-fill: linear-gradient(135deg, #7d64d0 0%, #6F58B8 45%, #c96e36 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #6e56bc 0%, #5A4798 45%, #a95a29 100%);
+
+  --btn-secondary-bg: #6D52B6;
+  --btn-secondary-border: #6D52B6;
+  --btn-secondary-hover-bg: #59429A;
+  --btn-secondary-hover-border: #59429A;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #d0b7a2);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(70rem 36rem at -6% -14%, color-mix(in srgb, #6F58B8 20%, transparent), transparent 54%),
+    radial-gradient(74rem 34rem at 106% -16%, color-mix(in srgb, #C96E36 18%, transparent), transparent 58%),
+    linear-gradient(135deg, #f4eeff 0%, #fbeee2 100%);
+}
+
+.theme-studio-grad-purple-pink-orange {
+  --btn-primary-bg: #7A4FD8;
+  --btn-primary-border: #7A4FD8;
+  --btn-primary-hover-bg: #653FC0;
+  --btn-primary-hover-border: #653FC0;
+  --btn-primary-fill: linear-gradient(135deg, #7A4FD8 0%, #d95aa5 52%, #E57A4A 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #653FC0 0%, #be4a90 52%, #C76539 100%);
+
+  --btn-secondary-bg: #8A50D4;
+  --btn-secondary-border: #8A50D4;
+  --btn-secondary-hover-bg: #713EC1;
+  --btn-secondary-hover-border: #713EC1;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #d9a8b8);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #7A4FD8 18%, transparent), transparent 54%),
+    radial-gradient(68rem 34rem at 108% -10%, color-mix(in srgb, #FF6FAF 14%, transparent), transparent 56%),
+    linear-gradient(140deg, #f5ecff 0%, #ffe7f1 52%, #ffe8d8 100%);
+}
+
+.theme-studio-grad-pink-orange {
+  --btn-primary-bg: #D75A99;
+  --btn-primary-border: #D75A99;
+  --btn-primary-hover-bg: #BD4A84;
+  --btn-primary-hover-border: #BD4A84;
+  --btn-primary-fill: linear-gradient(135deg, #D75A99 0%, #E88747 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #BD4A84 0%, #CA7338 100%);
+
+  --btn-secondary-bg: #B657BE;
+  --btn-secondary-border: #B657BE;
+  --btn-secondary-hover-bg: #9B45A2;
+  --btn-secondary-hover-border: #9B45A2;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #e1b29f);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(70rem 35rem at -8% -12%, color-mix(in srgb, #D75A99 16%, transparent), transparent 56%),
+    radial-gradient(70rem 35rem at 110% -10%, color-mix(in srgb, #E88747 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #fff0f8 0%, #ffe8df 100%);
+}
+
+.theme-studio-slate {
+  --btn-primary-bg: #5F6E82;
+  --btn-primary-border: #5F6E82;
+  --btn-primary-hover-bg: #4E5D71;
+  --btn-primary-hover-border: #4E5D71;
+
+  --btn-secondary-bg: #4A586A;
+  --btn-secondary-border: #4A586A;
+  --btn-secondary-hover-bg: #3D4958;
+  --btn-secondary-hover-border: #3D4958;
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #535c69);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+}
+
+.theme-studio-ocean {
+  --btn-primary-bg: #3E6D84;
+  --btn-primary-border: #3E6D84;
+  --btn-primary-hover-bg: #31596D;
+  --btn-primary-hover-border: #31596D;
+
+  --btn-secondary-bg: #31576A;
+  --btn-secondary-border: #31576A;
+  --btn-secondary-hover-bg: #274859;
+  --btn-secondary-hover-border: #274859;
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 32%, #455a66);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+}
+
+.theme-studio-carbon {
+  --btn-primary-bg: #3F5368;
+  --btn-primary-border: #3F5368;
+  --btn-primary-hover-bg: #334354;
+  --btn-primary-hover-border: #334354;
+
+  --btn-secondary-bg: #2F4252;
+  --btn-secondary-border: #2F4252;
+  --btn-secondary-hover-bg: #263543;
+  --btn-secondary-hover-border: #263543;
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 34%, #4f5862);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+}
+
+/* In gradient themes, keep utility/small actions solid; gradients remain for primary CTAs. */
+.theme-studio-grad-purple-orange,
+.theme-studio-grad-purple-pink-orange,
+.theme-studio-grad-pink-orange {
+  --btn-success-bg: #22C55E;
+  --btn-success-border: #22C55E;
+  --btn-success-hover-bg: #16A34A;
+  --btn-success-hover-border: #16A34A;
 }
 
 .dark {
   --outline-color: white;
   --row-hover-bg: rgba(255, 255, 255, 0.06);
+  --ui-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+  --ui-panel-bg: color-mix(in srgb, #0f1014 86%, transparent);
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 40%, #4f5565);
+  --ui-app-bg:
+    radial-gradient(90rem 46rem at -10% -12%, color-mix(in srgb, var(--btn-primary-bg) 12%, transparent), transparent 52%),
+    radial-gradient(80rem 42rem at 110% -12%, color-mix(in srgb, var(--btn-secondary-bg) 10%, transparent), transparent 58%),
+    linear-gradient(180deg, #121318, #0b0d11 58%, #0a0b0f);
 }
 
 /* =====================
    Buttons
    ===================== */
 .btn-primary {
-  background-color: var(--btn-primary-bg) !important;
+  background: var(--btn-primary-fill) !important;
   border-color: var(--btn-primary-border) !important;
   color: white !important;
 }
 
 .btn-primary:hover {
-  background-color: var(--btn-primary-hover-bg) !important;
+  background: var(--btn-primary-hover-fill) !important;
   border-color: var(--btn-primary-hover-border) !important;
 }
 
 .btn-secondary {
-  background-color: var(--btn-secondary-bg) !important;
+  background: var(--btn-secondary-fill) !important;
   border-color: var(--btn-secondary-border) !important;
   color: white !important;
 }
 
 .btn-secondary:hover {
-  background-color: var(--btn-secondary-hover-bg) !important;
+  background: var(--btn-secondary-hover-fill) !important;
   border-color: var(--btn-secondary-hover-border) !important;
 }
 
@@ -158,13 +330,13 @@
 
 /* Helpers */
 .bg-primary {
-  background-color: var(--btn-primary-bg) !important;
+  background: var(--btn-primary-fill) !important;
   border-color: var(--btn-primary-border) !important;
   color: white !important;
 }
 
 .bg-secondary {
-  background-color: var(--btn-secondary-bg) !important;
+  background: var(--btn-secondary-fill) !important;
   border-color: var(--btn-secondary-border) !important;
   color: white !important;
 }
@@ -259,6 +431,136 @@ tbody tr.row-selected>td {
   box-sizing: content-box;
 }
 
+/* =====================
+   Global polish
+   ===================== */
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: 'Red Hat Text', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  letter-spacing: 0.01em;
+  background: var(--ui-app-bg);
+}
+
+.btn {
+  transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.input-textlike,
+select,
+textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.input-textlike:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--ui-ring) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--btn-primary-bg) 28%, transparent);
+}
+
+.ss-page-frame {
+  width: min(1520px, 100%);
+  margin: 0 auto;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.ss-surface {
+  background: var(--ui-panel-bg);
+  border: 1px solid var(--ui-panel-border);
+  border-radius: 0.9rem;
+  box-shadow: var(--ui-shadow);
+}
+
+.ss-subtle {
+  color: var(--ui-subtle-text);
+}
+
+.ss-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.24rem 0.56rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.ss-chip--neutral {
+  color: #334155;
+  background: #e8edf3;
+  border-color: #cfd9e4;
+}
+
+.ss-chip--success {
+  color: #14653b;
+  background: #dcf8e8;
+  border-color: #9fdfbe;
+}
+
+.ss-chip--warning {
+  color: #8a4c04;
+  background: #fff2d9;
+  border-color: #f3d49d;
+}
+
+.ss-chip--muted {
+  color: #4b5563;
+  background: #eceff4;
+  border-color: #d6dde7;
+}
+
+.dark .ss-chip--neutral {
+  color: #d8e1ec;
+  background: color-mix(in srgb, #8aa0ba 16%, transparent);
+  border-color: color-mix(in srgb, #8aa0ba 40%, transparent);
+}
+
+.dark .ss-chip--success {
+  color: #9de5be;
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  border-color: color-mix(in srgb, #22c55e 44%, transparent);
+}
+
+.dark .ss-chip--warning {
+  color: #f4cf8b;
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  border-color: color-mix(in srgb, #f59e0b 42%, transparent);
+}
+
+.dark .ss-chip--muted {
+  color: #cfd6df;
+  background: color-mix(in srgb, #94a3b8 12%, transparent);
+  border-color: color-mix(in srgb, #94a3b8 34%, transparent);
+}
+
+.ss-app-header {
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  z-index: 30;
+  min-height: 4.25rem;
+  max-height: 4.25rem;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.45rem !important;
+}
+
 
 /* =====================
    Text color overrides that mirror button tokens
@@ -270,6 +572,13 @@ tbody tr.row-selected>td {
 .theme-homelab,
 .theme-professional,
 .theme-studio,
+.theme-studio-original-purple,
+.theme-studio-grad-purple-orange,
+.theme-studio-grad-purple-pink-orange,
+.theme-studio-grad-pink-orange,
+.theme-studio-slate,
+.theme-studio-ocean,
+.theme-studio-carbon,
 .dark {
   --text-primary: var(--btn-primary-bg);
   --text-primary-hover: var(--btn-primary-hover-bg);

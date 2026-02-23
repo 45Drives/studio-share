@@ -176,10 +176,10 @@ This avoids partial live releases and keeps one source of truth for uploaded ass
 
 ## Fast path: publish from prebuilt signed artifacts
 
-If all final signed artifacts are already in one folder (example `/release-builds`), use:
+If all final signed artifacts are already in one folder (example `/builds/release`), use:
 
 ```bash
-RELEASE_DIR=/release-builds \
+RELEASE_DIR=/builds/release \
 RELEASE_VERSION=1.0.1 \
 RELEASE_TAG=v1.0.1 \
 GH_REPO=45Drives/studio-share \
@@ -204,7 +204,7 @@ The script also supports selecting platforms:
 Example: test only Windows + Linux while macOS is still building:
 
 ```bash
-RELEASE_DIR=/release-builds \
+RELEASE_DIR=/builds/release \
 RELEASE_VERSION=1.0.1 \
 RELEASE_TAG=v1.0.1 \
 GH_REPO=45Drives/studio-share \
@@ -227,7 +227,7 @@ This does:
 Then publish when ready:
 
 ```bash
-RELEASE_DIR=/release-builds \
+RELEASE_DIR=/builds/release \
 RELEASE_VERSION=1.0.1 \
 RELEASE_TAG=v1.0.1 \
 GH_REPO=45Drives/studio-share \

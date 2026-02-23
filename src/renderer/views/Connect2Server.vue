@@ -1,137 +1,131 @@
 <template>
-    <form @submit.prevent="connectToServer" class="h-full flex items-start justify-center pt-16" :aria-busy="anyBusy">
-        <div class="grid grid-cols-2 gap-6 text-2xl w-9/12 mx-auto">
-            <div class="col-span-2 mx-auto text-3xl">
-                <span>Share files with your collaborators easily through secure links.<br /> Log into your server to
-                    begin.</span>
-                <br />
-                <br />
-                <span class="text-default italic text-base">
-                    <b>Note:</b> The servers in the dropdown will only populate if the <b
-                        class="text-primary">houston-broadcaster</b>
-                    service is enabled (It should be by default).<br /> If it is not, manual connection is required.
-                </span>
-            </div>
+    <form @submit.prevent="connectToServer" class="connect-page" :class="{ 'is-dark': darkMode }" :aria-busy="anyBusy">
+        <div class="connect-shell ss-page-frame">
+            <section class="connect-hero ss-surface">
+                <h1>Share files through secure review links</h1>
+                <p>Connect this client to your server, then create and manage links from the dashboard.</p>
+                <p class="connect-note">
+                    Servers appear automatically when <b class="text-primary">houston-broadcaster</b> is running. If not, use manual IP connection.
+                </p>
+            </section>
 
-            <CardContainer class="col-span-1 bg-accent border-default rounded-md text-bold shadow-xl">
-                <div class="flex flex-col text-left">
-                    <span>Select a server to connect to:</span>
-                    <select v-model="selectedServerIp" :disabled="anyBusy || manualIp !== ''"
-                        class="bg-default h-[3rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
-                        <option v-for="server in discoveryState.servers" :key="server.ip" :value="server.ip">
-                            {{ server.name }} ({{ server.ip }})
-                        </option>
-                    </select>
-                </div>
-                <span class="text-center items-center justify-self-center"> -- OR -- </span>
-                <div class="flex flex-col text-left">
-                    <span>Connect to server manually via IP Address:</span>
-                    <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
-                        class="text-default input-textlike border px-4 py-1 rounded text-xl w-full" />
-                </div>
-                <div class="mt-4 text-left">
-                    <span class="block text-sm mb-2">Ports (optional)</span>
+            <CardContainer class="connect-main-card rounded-md shadow-xl text-black" :style="{ background: connectMainCardBackground }">
+                <div class="connect-main-grid">
+                    <section class="connect-panel">
+                        <div class="connect-section-title">Server Selection</div>
 
-                    <div class="grid grid-cols-3 gap-4 text-sm">
-                        <!-- SSH -->
-                        <label class="flex flex-col">
-                            <span class="mb-1 opacity-80">SSH</span>
-                            <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
-                                placeholder="22" />
-                        </label>
-
-                        <!-- Broadcaster / API -->
-                        <label class="flex flex-col">
-                            <span class="mb-1 opacity-80">
-                                API <span class="text-xs">(houston-broadcaster)</span>
-                            </span>
-                            <input v-model.number="broadcasterPort" type="number" min="1" max="65535"
-                                :disabled="anyBusy"
-                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
-                                placeholder="9095" />
-                        </label>
-
-                        <!-- HTTPS -->
-                        <label class="flex flex-col">
-                            <span class="mb-1 opacity-80">HTTPS</span>
-                            <input v-model.number="httpsPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                                class="text-default input-textlike border px-3 py-1 rounded text-base w-full"
-                                placeholder="443" />
-                        </label>
-                    </div>
-
-                    <p class="mt-1 text-xs opacity-75">
-                        Leave blank to use defaults: SSH 22, API 9095, HTTPS 443. Ports must be different for each
-                        service.
-                    </p>
-
-                    <p v-if="portError" class="mt-1 text-xs text-danger">
-                        {{ portError }}
-                    </p>
-                    <p v-else-if="portWarning" class="mt-1 text-xs text-warning">
-                        {{ portWarning }}
-                    </p>
-                </div>
-
-            </CardContainer>
-
-            <CardContainer class="col-span-1 bg-primary border-default rounded-md text-bold text-left shadow-xl">
-                <div class="flex flex-col text-bold">
-                    <span>Username:</span>
-                    <input v-model="username" type="text" placeholder="root" :disabled="anyBusy"
-                        class="text-default input-textlike px-4 py-1 rounded text-xl w-full border" />
-                    <span class="text-center items-center justify-self-center"><br /></span>
-                    <span>Password:</span>
-                    <div class="w-full relative">
-                        <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
-                            :disabled="anyBusy"
-                            class="text-default input-textlike px-4 py-1 rounded text-xl w-full border"
-                            placeholder="••••••••" />
-                        <button type="button" @click="togglePassword" :disabled="anyBusy"
-                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                            <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                            <EyeSlashIcon v-else class="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            </CardContainer>
-
-            <div class="col-span-2 grid grid-cols-2 gap-4">
-                <div class="flex flex-row justify-between w-full items-center text-center gap-2 col-span-2">
-                    <span class="text-danger text-base semibold text-left">
-                        <b>ALSO:</b> To allow sharing links outside your network, <b>HTTPS port
-                            (443 by default, unless you change it above) <u>must</u> </b> be open or forwarded from your router.
-                    </span>
-                    <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
-                        class="btn btn-secondary w-fit text-base justify-end">
-                        Click here to find out how.
-                    </button>
-                </div>
-                <div class="flex flex-row justify-center col-span-2">
-                    <div class="flex flex-col">
-                        <button type="submit"
-                            class="btn btn-success w-80 h-12 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                            :disabled="anyBusy">
-                            <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                                    opacity=".25" />
-                                <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                            </svg>
-                            <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
-                        </button>
-                        <div v-if="statusLine"
-                            class="mt-1 text-sm opacity-80 flex items-center gap-2 col-span-2 justify-center text-center">
-                            <svg v-if="isBootstrapping" class="animate-spin h-4 w-4" viewBox="0 0 24 24"
-                                aria-hidden="true">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"
-                                    opacity=".25" />
-                                <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
-                            </svg>
-                            <span>{{ statusLine }}</span>
+                        <div class="flex flex-col text-left">
+                            <span class="connect-label">Select a server</span>
+                            <select v-model="selectedServerIp" :disabled="anyBusy || manualIp !== ''"
+                                class="bg-default h-[2.9rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
+                                <option v-for="server in discoveryState.servers" :key="server.ip" :value="server.ip">
+                                    {{ server.name }} ({{ server.ip }})
+                                </option>
+                            </select>
                         </div>
-                    </div>
 
+                        <div class="connect-or">OR</div>
+
+                        <div class="flex flex-col text-left">
+                            <span class="connect-label">Connect manually via IP</span>
+                            <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
+                                class="text-default input-textlike border px-4 py-2 rounded text-lg w-full" />
+                        </div>
+
+                        <div class="mt-1 text-left">
+                            <span class="block text-sm mb-2 font-semibold">Ports (optional)</span>
+
+                            <div class="connect-port-grid text-sm">
+                                <label class="flex flex-col">
+                                    <span class="mb-1 opacity-80">SSH</span>
+                                    <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
+                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        placeholder="22" />
+                                </label>
+
+                                <label class="flex flex-col">
+                                    <span class="mb-1 opacity-80">
+                                        API <span class="text-xs">(houston-broadcaster)</span>
+                                    </span>
+                                    <input v-model.number="broadcasterPort" type="number" min="1" max="65535"
+                                        :disabled="anyBusy"
+                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        placeholder="9095" />
+                                </label>
+
+                                <label class="flex flex-col">
+                                    <span class="mb-1 opacity-80">HTTPS</span>
+                                    <input v-model.number="httpsPort" type="number" min="1" max="65535" :disabled="anyBusy"
+                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        placeholder="443" />
+                                </label>
+                            </div>
+
+                            <p class="mt-2 text-xs opacity-75">
+                                Leave blank to use defaults: SSH 22, API 9095, HTTPS 443. Ports must be different.
+                            </p>
+
+                            <p v-if="portError" class="mt-1 text-xs text-danger">
+                                {{ portError }}
+                            </p>
+                            <p v-else-if="portWarning" class="mt-1 text-xs text-warning">
+                                {{ portWarning }}
+                            </p>
+                        </div>
+                    </section>
+
+                    <section class="connect-panel">
+                        <div class="connect-section-title">Authentication</div>
+                        <label class="flex flex-col">
+                            <span class="connect-label">Username</span>
+                            <input v-model="username" type="text" placeholder="root" :disabled="anyBusy"
+                                class="text-default input-textlike px-4 py-2 rounded text-lg w-full border" />
+                        </label>
+
+                        <label class="flex flex-col">
+                            <span class="connect-label">Password</span>
+                            <div class="w-full relative">
+                                <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
+                                    :disabled="anyBusy"
+                                    class="text-default input-textlike px-4 py-2 rounded text-lg w-full border"
+                                    placeholder="••••••••" />
+                                <button type="button" @click="togglePassword" :disabled="anyBusy"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
+                                    <EyeIcon v-if="!showPassword" class="w-5 h-5" />
+                                    <EyeSlashIcon v-else class="w-5 h-5" />
+                                </button>
+                            </div>
+                        </label>
+                    </section>
+                </div>
+            </CardContainer>
+
+            <section class="connect-warning ss-surface">
+                <p class="text-danger text-sm text-left">
+                    <b>External sharing requires port forwarding:</b> HTTPS port 443 (or your custom HTTPS port) must be open/forwarded on your router.
+                </p>
+                <button type="button" @click.prevent="togglePortFwdModal" :disabled="anyBusy"
+                    class="btn btn-secondary w-fit text-sm">
+                    How to set this up
+                </button>
+            </section>
+
+            <div class="connect-submit">
+                <button type="submit"
+                    class="btn btn-success connect-submit-btn flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    :disabled="anyBusy">
+                    <svg v-if="isBusy" class="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity=".25" />
+                        <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                    </svg>
+                    <span>{{ isBusy ? 'Connecting…' : 'Connect to Server' }}</span>
+                </button>
+                <div v-if="statusLine" class="mt-2 text-sm opacity-85 flex items-center gap-2 justify-center text-center">
+                    <svg v-if="isBootstrapping" class="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity=".25" />
+                        <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" fill="none" />
+                    </svg>
+                    <span>{{ statusLine }}</span>
                 </div>
             </div>
         </div>
@@ -145,10 +139,11 @@ import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
-import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
+import { pushNotification, Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
-useHeader('Welcome to Flow by 45Studio!');
+import { useThemeFromAlias } from '../composables/useThemeFromAlias'
+useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
 const discoveryState = inject<DiscoveryState>(discoveryStateInjectionKey)!;
@@ -157,6 +152,29 @@ const username = ref('');
 const password = ref('');
 const showPassword = ref(false);
 const togglePassword = () => { showPassword.value = !showPassword.value; };
+const darkMode = useDarkModeState()
+const { currentTheme } = useThemeFromAlias()
+const connectMainCardBackground = computed(() => {
+    switch (currentTheme.value) {
+        case 'theme-studio-original-purple':
+            return '#6557A5'
+        case 'theme-studio-grad-purple-orange':
+            return 'linear-gradient(135deg, #6F58B8 0%, #C96E36 100%)'
+        case 'theme-studio-grad-purple-pink-orange':
+            return 'linear-gradient(135deg, #7A4FD8 0%, #D95AA5 52%, #E57A4A 100%)'
+        case 'theme-studio-grad-pink-orange':
+            return 'linear-gradient(135deg, #D75A99 0%, #E88747 100%)'
+        case 'theme-studio-slate':
+            return '#5F6E82'
+        case 'theme-studio-ocean':
+            return '#3E6D84'
+        case 'theme-studio-carbon':
+            return '#3F5368'
+        case 'theme-studio':
+        default:
+            return '#4E6B93'
+    }
+})
 
 const selectedServerIp = ref<string>('')
 const providedCurrentServer = inject(currentServerInjectionKey)!;
@@ -806,3 +824,171 @@ onUnmounted(() => {
     unlistenProgress = null
 })
 </script>
+
+<style scoped>
+.connect-page {
+    height: 100%;
+    overflow-y: auto;
+    padding-top: 1.2rem;
+    padding-bottom: 1rem;
+}
+
+.connect-shell {
+    display: grid;
+    gap: 0.95rem;
+}
+
+.connect-hero {
+    padding: 1rem 1.1rem;
+}
+
+.connect-hero h1 {
+    font-size: 1.36rem;
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.connect-hero p {
+    margin-top: 0.35rem;
+    font-size: 0.95rem;
+    opacity: 0.9;
+}
+
+.connect-note {
+    margin-top: 0.65rem;
+    font-size: 0.8rem !important;
+    opacity: 0.82 !important;
+}
+
+.connect-main-card {
+    min-width: 0;
+    padding: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 42%, #7f86b6);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 12%, transparent);
+}
+
+.connect-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    gap: 0.65rem;
+}
+
+.connect-panel {
+    min-width: 0;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 22%, #8f98a5);
+    border-radius: 0.7rem;
+    background: color-mix(in srgb, #ffffff 66%, transparent);
+    backdrop-filter: blur(1.5px);
+}
+
+.connect-page.is-dark .connect-panel {
+    background: rgba(248, 238, 251, 0.82);
+    border-color: color-mix(in srgb, #ffffff 52%, #c389c7);
+}
+
+.connect-page.is-dark .connect-panel .connect-section-title,
+.connect-page.is-dark .connect-panel .connect-label,
+.connect-page.is-dark .connect-panel .connect-or,
+.connect-page.is-dark .connect-panel p,
+.connect-page.is-dark .connect-panel span {
+    color: #2f3340;
+    text-shadow: none;
+}
+
+.connect-page.is-dark .connect-panel .input-textlike,
+.connect-page.is-dark .connect-panel select {
+    background: rgba(255, 255, 255, 0.9) !important;
+    color: #1f2937 !important;
+    border-color: color-mix(in srgb, #ffffff 34%, #9da6b5) !important;
+}
+
+.connect-page.is-dark .connect-panel ::placeholder {
+    color: #5b6474;
+    opacity: 1;
+}
+
+.connect-page.is-dark .connect-panel .text-muted {
+    color: #5f6878 !important;
+}
+
+/* Component-scoped override: keep textlike inputs light in dark mode on this screen. */
+.connect-page.is-dark .input-textlike {
+    background: rgba(255, 255, 255, 0.92) !important;
+    color: #1f2937 !important;
+    border-color: color-mix(in srgb, #ffffff 34%, #9da6b5) !important;
+}
+
+.connect-page.is-dark .input-textlike::placeholder {
+    color: #5b6474 !important;
+    opacity: 1;
+}
+
+.connect-page.is-dark .input-textlike:disabled {
+    background: rgba(237, 240, 245, 0.92) !important;
+    color: #7a8596 !important;
+    border-color: color-mix(in srgb, #ffffff 24%, #a5afbd) !important;
+}
+
+.connect-section-title {
+    font-size: 0.93rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    font-weight: 700;
+}
+
+.connect-label {
+    margin-bottom: 0.26rem;
+    font-size: 0.86rem;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.connect-or {
+    text-align: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.connect-port-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.connect-warning {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    padding: 0.75rem 1rem;
+}
+
+.connect-submit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 0.2rem;
+}
+
+.connect-submit-btn {
+    width: min(26rem, 100%);
+    min-height: 3rem;
+}
+
+@media (max-width: 980px) {
+    .connect-main-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 720px) {
+    .connect-port-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+</style>

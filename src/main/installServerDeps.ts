@@ -150,15 +150,37 @@ if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" = "Enforcing" ]; t
     fi
   fi
 fi
+
+# 3) Keep nginx upstream in sync with BCAST_PORT when Houston vhost exists.
+# This prevents 443 -> stale upstream port drift (e.g., old 9095 while app runs on 9096).
+NGINX_CONF="/etc/nginx/conf.d/houston-broadcaster.conf"
+if [ -f "$NGINX_CONF" ]; then
+  run_root sed -E -i \
+    '/^[[:space:]]*upstream[[:space:]]+houston_broadcaster_upstream[[:space:]]*\\{/,/^[[:space:]]*\\}[[:space:]]*$/ s/(server[[:space:]]+127\\.0\\.0\\.1:)[0-9]+;/\\1'"$BCAST_PORT"';/' \
+    "$NGINX_CONF" || true
+
+  run_root chmod 0644 "$NGINX_CONF" || true
+  if command -v restorecon >/dev/null 2>&1; then
+    run_root restorecon "$NGINX_CONF" >/dev/null 2>&1 || true
+  fi
+
+  if command -v nginx >/dev/null 2>&1; then
+    if run_root nginx -t >/dev/null 2>&1; then
+      run_root systemctl reload nginx >/dev/null 2>&1 || run_root systemctl restart nginx >/dev/null 2>&1 || true
+    else
+      run_root nginx -t || true
+    fi
+  fi
+fi
 `.trim();
 
-                send("config", "Configuring broadcaster ports and firewall…");
+                send("config", "Configuring broadcaster ports, firewall, and nginx…");
                 const res = await ssh.execCommand(`bash -lc ${shQ(script)}`);
                 if ((res.code ?? 0) !== 0) {
                     throw new Error(
                         res.stderr ||
                         res.stdout ||
-                        "Failed to configure broadcaster ports / firewall"
+                        "Failed to configure broadcaster ports / firewall / nginx"
                     );
                 }
             }

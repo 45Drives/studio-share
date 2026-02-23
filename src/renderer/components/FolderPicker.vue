@@ -1,6 +1,6 @@
 <template>
-  <section class="flex flex-col gap-2 text-left text-base rounded-md">
-    <div class="flex flex-col gap-2 text-sm">
+  <section class="fp-shell flex flex-col gap-2 text-left text-base rounded-md">
+    <div class="fp-meta flex flex-col gap-2 text-sm">
       <label v-if="allowEntireTree" class="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" v-model="showEntireTree" @change="changeProject" />
         <span>Show entire directory tree from root</span>
@@ -26,8 +26,8 @@
       </div>
     </div>
 
-    <div class="border rounded overflow-auto bg-default" :class="containerHeights">
-      <div class="sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10">
+    <div class="fp-browser border rounded overflow-auto bg-default" :class="containerHeights">
+      <div class="fp-toolbar sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10">
         <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
           title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
@@ -62,7 +62,7 @@
       </div>
 
       <template v-if="browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
-        <div v-for="r in projectRoots" :key="r.mountpoint" class="grid items-center border-b border-default px-3 py-1 bg-default
+        <div v-for="r in projectRoots" :key="r.mountpoint" class="fp-root-row grid items-center border-b border-default px-3 py-1 bg-default
                  [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
           <div></div>
           <div class="truncate">
@@ -94,7 +94,7 @@
       </template>
 
       <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-600/80 flex items-center justify-center p-4">
-        <div class="bg-accent p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
+        <div class="fp-modal bg-accent p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
           <h3 class="text-lg font-semibold mb-4 text-default">Create New Folder</h3>
           <p class="text-sm mb-4 text-muted">
             Current Path: <code>{{ newFolderBasePath }}</code>
@@ -474,3 +474,46 @@ function changeProject() {
 
 const containerHeights = computed(() => props.heightClass || 'max-h-[28rem] min-h-[18rem]')
 </script>
+
+<style scoped>
+.fp-shell {
+    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 20%, #4d4d5e);
+    border-radius: 0.78rem;
+    padding: 0.55rem;
+    background: color-mix(in srgb, black 16%, transparent);
+}
+
+.fp-meta {
+    padding-inline: 0.2rem;
+}
+
+.fp-browser {
+    border-color: color-mix(in srgb, var(--btn-primary-bg) 24%, #4d4e5e);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
+}
+
+.fp-toolbar {
+    backdrop-filter: blur(7px);
+    background: color-mix(in srgb, black 24%, transparent);
+}
+
+.fp-root-row:hover {
+    background: color-mix(in srgb, var(--btn-primary-bg) 12%, transparent);
+}
+
+.fp-modal {
+    border-color: color-mix(in srgb, var(--btn-primary-bg) 34%, #535468);
+}
+
+@media (max-width: 980px) {
+    .fp-root-row {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        gap: 0.55rem;
+    }
+
+    .fp-root-row > :nth-child(3),
+    .fp-root-row > :nth-child(4) {
+        display: none;
+    }
+}
+</style>

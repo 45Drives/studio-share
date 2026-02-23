@@ -52,7 +52,7 @@ truthy() {
 require_cmd node
 require_cmd yarn
 
-RELEASE_DIR="${RELEASE_DIR:-${ROOT_DIR}/release-builds}"
+RELEASE_DIR="${RELEASE_DIR:-${ROOT_DIR}/builds/release}"
 VERSION="${RELEASE_VERSION:-$(node -p "require('./package.json').version")}"
 RELEASE_TAG="${RELEASE_TAG:-v${VERSION}}"
 GH_REPO="${GH_REPO:-45Drives/studio-share}"

@@ -1013,14 +1013,24 @@ function resolveWatermarkStorageRootForEdit() {
 function resolveWatermarkUploadDirForEdit() {
   const { abs } = resolveWatermarkStorageRootForEdit()
   const cleanRoot = abs === '/' ? '' : abs
-  return `${cleanRoot || ''}/flow45studio-watermarks` || '/flow45studio-watermarks'
+  return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
 }
 
 function resolveWatermarkRelPathForEdit(name: string) {
   const cleanName = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
   if (!cleanName) return ''
   const { rel } = resolveWatermarkStorageRootForEdit()
-  return `${rel ? rel + '/' : ''}flow45studio-watermarks/${cleanName}`
+  return `${rel ? rel + '/' : ''}45flow-watermarks/${cleanName}`
+}
+
+async function ensureServerDirExistsForEdit(dir: string) {
+  const clean = String(dir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  try {
+    await props.apiFetch(`/api/files?dir=${encodeURIComponent(clean || '.')}&dirsOnly=1&ensure=1`, { method: 'GET' })
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function uploadDraftLocalWatermark() {
@@ -1031,6 +1041,8 @@ async function uploadDraftLocalWatermark() {
   if (!host || !user) return { ok: false, error: 'missing ssh connection info' as string }
 
   const destDir = resolveWatermarkUploadDirForEdit()
+  const ensured = await ensureServerDirExistsForEdit(destDir)
+  if (!ensured) return { ok: false, error: 'failed to prepare remote watermark directory' as string }
   const { done } = await window.electron.rsyncStart({
     host,
     user,
@@ -1118,7 +1130,7 @@ function openAccessModal() {
 
 function badgeClass(t?: LinkType) {
   if (!t) return ''
-  return t === 'upload' ? 'text-blue-500' : t === 'download' ? 'text-emerald-500' : 'text-purple-500'
+  return t === 'upload' ? 'text-blue-500' : t === 'download' ? 'text-emerald-500' : 'text-cyan-400'
 }
 function statusChipClass(s: Status) {
   return s === 'active' ? 'text-green-500' : s === 'expired' ? 'text-amber-500' : 'text-gray-500'

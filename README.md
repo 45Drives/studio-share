@@ -1,6 +1,6 @@
-# Flow by 45Studio
+# 45Flow
 
-Flow by 45Studio is a secure file collaboration and transfer system designed for media-heavy workflows. It combines a desktop client with a Linux-based server service to enable:
+45Flow is a secure file collaboration and transfer system designed for media-heavy workflows. It combines a desktop client with a Linux-based server service to enable:
 
 - Secure file sharing over the internet
 - Controlled upload portals for collaborators
@@ -16,7 +16,7 @@ It is optimized for Linux servers, especially those using ZFS storage.
 
 Flow consists of two primary components.
 
-## Desktop Client (Flow by 45Studio)
+## Desktop Client (45Flow)
 
 Supported platforms:
 
@@ -470,4 +470,4 @@ Client:
 
 ---
 
-Flow by 45Studio provides a secure and controlled way to collaborate on media projects while maintaining clear permission boundaries and centralized management.
+45Flow provides a secure and controlled way to collaborate on media projects while maintaining clear permission boundaries and centralized management.

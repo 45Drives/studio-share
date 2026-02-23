@@ -2184,8 +2184,8 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
         add(normalizedRaw)
         if (baseName) add(baseName)
-        if (baseName) add(`flow45studio-watermarks/${baseName}`)
-        if (destRootSeg && baseName) add(`${destRootSeg}/flow45studio-watermarks/${baseName}`)
+        if (baseName) add(`45flow-watermarks/${baseName}`)
+        if (destRootSeg && baseName) add(`${destRootSeg}/45flow-watermarks/${baseName}`)
         if (destRootSeg && normalizedRaw && !normalizedRaw.startsWith(destRootSeg + '/')) {
           add(`${destRootSeg}/${normalizedRaw}`)
         }
