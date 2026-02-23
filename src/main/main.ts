@@ -383,7 +383,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getAgentSocket, getKeyDir, ensureKeyPair, regeneratePemKeyPair } from './crossPlatformSsh';
 import { connectWithKey, connectWithPassword, setupSshKey } from './setupSsh'; 
 import { server, unwrap } from '@45drives/houston-common-lib';
-import { installServerDepsRemotely } from './installServerDeps';
+import { installServerDepsRemotely, configureCaddyReverseProxyRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { getPin, rememberPin } from './certPins'
 import { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -1386,6 +1386,27 @@ function createWindow() {
       jl('error', 'ipc.run-remote-bootstrap.error', { host, id, error: err?.message || String(err) });
 
       return { success: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle('run-remote-caddy-setup', async (_event, { host, username, sshPort, domain, email, bcastPort }) => {
+    const port = sshPort ?? 22;
+    jl('info', 'ipc.run-remote-caddy-setup.start', { host, username, port, domain, bcastPort });
+    try {
+      const res = await configureCaddyReverseProxyRemotely({
+        host,
+        username,
+        sshPort: port,
+        domain,
+        email,
+        bcastPort,
+      });
+      jl('info', 'ipc.run-remote-caddy-setup.done', { host, domain, success: !!res?.success });
+      return res;
+    } catch (err: any) {
+      const error = err?.message || String(err);
+      jl('error', 'ipc.run-remote-caddy-setup.error', { host, domain, error });
+      return { success: false, error };
     }
   });
 

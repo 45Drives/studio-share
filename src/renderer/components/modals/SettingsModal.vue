@@ -146,11 +146,11 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono break-all">
                                     <div>
                                         <div class="opacity-70 mb-1">Before</div>
-                                        https:///&lt;ip&gt;/s/&lt;token&gt;
+                                        https://&lt;ip&gt;/v/&lt;token&gt;
                                     </div>
                                     <div>
                                         <div class="opacity-70 mb-1">After</div>
-                                        https://&lt;custom-domain&gt;/s/&lt;token&gt;
+                                        https://&lt;custom-domain&gt;/v/&lt;token&gt;
                                     </div>
                                 </div>
 
@@ -159,6 +159,60 @@
                                     <span class="font-mono">"https://custom-domain"</span>
                                     and keep port 443 (or your forwarded port).
                                 </div>
+                            </div>
+
+                            <div class="border-t border-default pt-4 mt-4 space-y-3">
+                                <div class="text-base font-semibold">Reverse Proxy Setup (Caddy)</div>
+                                <div class="text-xs opacity-75">
+                                    Configures a Caddy site on the server and saves this domain as your external base URL.
+                                </div>
+                                <div>
+                                    <label class="block text-sm opacity-80 mb-1">Public domain</label>
+                                    <input
+                                        v-model.trim="reverseProxyDomain"
+                                        type="text"
+                                        :disabled="busy || caddyBusy"
+                                        class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                        placeholder="flow.example.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm opacity-80 mb-1">ACME email (optional)</label>
+                                    <input
+                                        v-model.trim="reverseProxyEmail"
+                                        type="email"
+                                        :disabled="busy || caddyBusy"
+                                        class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                        placeholder="admin@example.com"
+                                    />
+                                </div>
+                                <div class="text-xs opacity-70">
+                                    Requires SSH key access to the server and either root or passwordless sudo.
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button
+                                        class="btn btn-primary"
+                                        type="button"
+                                        :disabled="busy || caddyBusy || !hasSshTarget"
+                                        @click="configureReverseProxy"
+                                    >
+                                        <span v-if="caddyBusy">Configuring…</span>
+                                        <span v-else>Configure Caddy</span>
+                                    </button>
+                                    <div v-if="!hasSshTarget" class="text-xs text-warning">
+                                        Connect to a server first.
+                                    </div>
+                                </div>
+                                <div v-if="caddyError" class="text-danger text-sm">{{ caddyError }}</div>
+                                <div v-if="caddyOk" class="text-success text-sm">{{ caddyOk }}</div>
+                            </div>
+
+                            <div class="border-t border-default pt-4 mt-4 space-y-2">
+                                <div class="text-base font-semibold">Authelia Bypass (Required)</div>
+                                <div class="text-xs opacity-75">
+                                    Keep these paths public. If Authelia protects them, collaborators cannot open shared links.
+                                </div>
+                                <pre class="text-xs font-mono whitespace-pre-wrap break-all p-2 rounded border border-default bg-well">{{ autheliaBypassPaths.join('\n') }}</pre>
                             </div>
 
                             <div class="border-t border-default pt-4 mt-4">
@@ -219,11 +273,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, inject, onMounted, ref, watch } from "vue";
 import { CardContainer } from "@45drives/houston-common-ui";
 import { Switch } from "@headlessui/vue";
 import { useApi } from "../../composables/useApi";
 import { pushNotification, Notification } from '@45drives/houston-common-ui';
+import { connectionMetaInjectionKey } from '../../keys/injection-keys';
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -241,11 +296,15 @@ const emit = defineEmits<{
 }>();
 
 const { apiFetch } = useApi();
+const connectionMeta = inject(connectionMetaInjectionKey, null);
 
 const busy = ref(false);
 const loadError = ref<string | null>(null);
 const saveError = ref<string | null>(null);
 const saveOk = ref(false);
+const caddyBusy = ref(false);
+const caddyError = ref<string | null>(null);
+const caddyOk = ref<string | null>(null);
 
 const defaultLinkAccess = ref<"external" | "internal">("internal");
 
@@ -268,6 +327,19 @@ const externalHttpsPort = ref<number>(443);
 const defaultRestrictAccess = ref(false);
 const defaultAllowComments = ref(true);
 const defaultUseProxyFiles = ref(false);
+const reverseProxyDomain = ref("");
+const reverseProxyEmail = ref("");
+const autheliaBypassPaths = ref<string[]>([
+    "/.well-known/studio-share",
+    "/v/*",
+    "/upload/*",
+    "/meta/*",
+    "/stream/*",
+    "/download/*",
+    "/api/token/*",
+    "/api/upload/*",
+    "/api/uploads/*",
+]);
 
 // Read-only server-reported effective base (when auto)
 const externalBaseEffective = ref<string | null>(null);
@@ -300,6 +372,17 @@ function normalizeUrlInput(raw: string, scheme: "http" | "https"): string | null
 
 function isValidPort(p: number): boolean {
     return Number.isFinite(p) && p >= 1 && p <= 65535;
+}
+
+function normalizeDomainInput(raw: string): string | null {
+    const s = (raw || "").trim();
+    if (!s) return null;
+    const noProto = s.replace(/^https?:\/\//i, "");
+    if (!noProto || /[\/?#@]/.test(noProto)) return null;
+    const host = noProto.replace(/\.$/, "").toLowerCase();
+    if (!/^[a-z0-9.-]+$/.test(host)) return null;
+    if (!host.includes(".")) return null;
+    return host;
 }
 
 function withPortIfNeeded(base: string | null, port: number): string | null {
@@ -400,6 +483,7 @@ async function reload() {
 
         // For UI editing, externalBase is the CUSTOM base (only meaningful when mode=custom)
         externalBase.value = data.externalBaseCustom ?? "";
+        reverseProxyDomain.value = (data.externalBaseCustom ?? "").replace(/^https?:\/\//i, "");
 
         defaultRestrictAccess.value =
             typeof data.defaultRestrictAccess === "boolean" ? data.defaultRestrictAccess : false;
@@ -481,4 +565,66 @@ watch(internalAuto, () => { saveOk.value = false; saveError.value = null; });
 onMounted(() => {
     reload();
 });
+
+const hasSshTarget = computed(() => {
+    const ssh = connectionMeta?.value?.ssh;
+    return !!(ssh?.server && ssh?.username);
+});
+
+const normalizedReverseProxyDomain = computed(() => normalizeDomainInput(reverseProxyDomain.value));
+
+async function configureReverseProxy() {
+    caddyError.value = null;
+    caddyOk.value = null;
+    if (!hasSshTarget.value) {
+        caddyError.value = "No SSH target found in current session. Reconnect to the server first.";
+        return;
+    }
+    const domain = normalizedReverseProxyDomain.value;
+    if (!domain) {
+        caddyError.value = "Enter a valid public domain (for example: flow.example.com).";
+        return;
+    }
+
+    caddyBusy.value = true;
+    try {
+        const ssh = connectionMeta!.value!.ssh!;
+        const bcastPort = Number(connectionMeta?.value?.port || 9095);
+        const res = await window.electron?.ipcRenderer.invoke("run-remote-caddy-setup", {
+            host: ssh.server,
+            username: ssh.username,
+            sshPort: ssh.port ?? 22,
+            domain,
+            email: (reverseProxyEmail.value || "").trim() || undefined,
+            bcastPort,
+        });
+
+        if (!res?.success) {
+            throw new Error(String(res?.error || "Remote reverse proxy setup failed"));
+        }
+
+        if (Array.isArray(res?.autheliaBypassPaths) && res.autheliaBypassPaths.length) {
+            autheliaBypassPaths.value = res.autheliaBypassPaths.map((x: any) => String(x));
+        }
+
+        externalAuto.value = false;
+        externalBase.value = `https://${domain}`;
+        externalHttpsPort.value = 443;
+        await save();
+
+        caddyOk.value = "Caddy configured and settings saved. Forward router TCP 443 to this server.";
+        pushNotification(
+            new Notification(
+                "Reverse Proxy Configured",
+                "Domain routing is configured. Ensure DNS points to this server and TCP 443 is forwarded.",
+                "success",
+                10000
+            )
+        );
+    } catch (e: any) {
+        caddyError.value = e?.message || "Failed to configure reverse proxy.";
+    } finally {
+        caddyBusy.value = false;
+    }
+}
 </script>

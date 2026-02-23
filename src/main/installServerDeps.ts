@@ -240,3 +240,139 @@ fi
         return { success: false, error: err?.message || String(err) };
     }
 }
+
+export async function configureCaddyReverseProxyRemotely(opts: {
+    host: string;
+    username: string;
+    sshPort?: number;
+    domain: string;
+    email?: string;
+    bcastPort?: number;
+}) {
+    const { host, username, sshPort, domain, email, bcastPort } = opts;
+    const port = sshPort ?? 22;
+    const upstreamPort = bcastPort ?? 9095;
+    const shQ = (s: string) => `'${String(s).replace(/'/g, `'\"'\"'`)}'`;
+
+    const keyDir = getKeyDir();
+    const priv = path.join(keyDir, "id_ed25519");
+    await ensureKeyPair(priv, `${priv}.pub`);
+
+    const agentSock = getAgentSocket();
+
+    async function connectWithAvailableKey() {
+        if (agentSock) {
+            return connectWithKey({ host, username, privateKey: priv, agent: agentSock, port });
+        }
+        return connectWithKey({ host, username, privateKey: priv, port });
+    }
+
+    let ssh: NodeSSH;
+    try {
+        ssh = await connectWithAvailableKey();
+    } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (/unsupported key format/i.test(msg)) {
+            await regeneratePemKeyPair(priv);
+            ssh = await connectWithAvailableKey();
+        } else {
+            return { success: false, error: msg };
+        }
+    }
+
+    const autheliaBypassPaths = [
+        "/.well-known/studio-share",
+        "/v/*",
+        "/upload/*",
+        "/meta/*",
+        "/stream/*",
+        "/download/*",
+        "/api/token/*",
+        "/api/upload/*",
+        "/api/uploads/*",
+    ];
+
+    try {
+        const script = `
+set -euo pipefail
+
+DOMAIN=${shQ(domain)}
+EMAIL=${shQ(email || "")}
+UPSTREAM_PORT=${shQ(String(upstreamPort))}
+
+run_root() {
+  if [ "$(id -u)" = "0" ]; then "$@"; return; fi
+  if sudo -n true >/dev/null 2>&1; then sudo "$@"; return; fi
+  echo "non-interactive sudo is required for Caddy setup. Run as root or configure passwordless sudo." >&2
+  exit 97
+}
+
+if ! command -v caddy >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    run_root apt-get update -y
+    run_root apt-get install -y caddy
+  elif command -v dnf >/dev/null 2>&1; then
+    run_root dnf -y install caddy || true
+  elif command -v yum >/dev/null 2>&1; then
+    run_root yum -y install caddy || true
+  fi
+fi
+
+if ! command -v caddy >/dev/null 2>&1; then
+  echo "Unable to install/find caddy. Install caddy manually, then retry." >&2
+  exit 3
+fi
+
+CADDYFILE="/etc/caddy/Caddyfile"
+run_root mkdir -p /etc/caddy
+
+GLOBAL_BLOCK=""
+if [ -n "$EMAIL" ]; then
+  GLOBAL_BLOCK="{\\n  email $EMAIL\\n}\\n\\n"
+fi
+
+CFG="\${GLOBAL_BLOCK}\${DOMAIN} {\\n  encode zstd gzip\\n  reverse_proxy 127.0.0.1:\${UPSTREAM_PORT}\\n}\\n"
+printf '%b' "$CFG" | run_root tee "$CADDYFILE" >/dev/null
+run_root chmod 0644 "$CADDYFILE"
+
+run_root systemctl daemon-reload || true
+run_root systemctl enable caddy >/dev/null 2>&1 || true
+
+if ! run_root caddy validate --config "$CADDYFILE" >/dev/null 2>&1; then
+  run_root caddy validate --config "$CADDYFILE"
+  exit 4
+fi
+
+run_root systemctl restart caddy
+
+if command -v firewall-cmd >/dev/null 2>&1; then
+  run_root firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
+  run_root firewall-cmd --reload >/dev/null 2>&1 || true
+elif command -v ufw >/dev/null 2>&1; then
+  run_root ufw allow 443/tcp >/dev/null 2>&1 || true
+fi
+`.trim();
+
+        const res = await ssh.execCommand(`bash -lc ${shQ(script)}`);
+        if ((res.code ?? 0) !== 0) {
+            return {
+                success: false,
+                error: res.stderr || res.stdout || "Failed to configure caddy reverse proxy",
+            };
+        }
+
+        return {
+            success: true,
+            domain,
+            externalBase: `https://${domain}`,
+            externalHttpsPort: 443,
+            autheliaBypassPaths,
+            notes: [
+                "Forward router port 443 to this server.",
+                "Authelia must bypass Studio share endpoints for collaborators.",
+            ],
+        };
+    } finally {
+        ssh.dispose();
+    }
+}
