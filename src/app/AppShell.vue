@@ -27,7 +27,7 @@
     </main>
     <GlobalModalConfirm />
     <NotificationView />
-    <!-- <UpdateBanner /> -->
+    <UpdateBanner />
     <TransferProgressDock v-if="!hideTransfers" />
   </div>
 </template>
@@ -44,7 +44,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
 import { registerIpcActionListener } from "../renderer/composables/registerIpcActionListener";
 import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
-// import UpdateBanner from '../renderer/components/UpdateBanner.vue'
+import UpdateBanner from '../renderer/components/UpdateBanner.vue'
 
 // provide shared refs
 const currentServer = ref<Server | null>(null)

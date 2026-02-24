@@ -180,6 +180,70 @@ copy_to_release_builds() {
   done
 }
 
+generate_update_metadata() {
+  local output
+
+  mkdir -p "$STAGING_DIR/windows" "$STAGING_DIR/mac" "$STAGING_DIR/linux"
+
+  mapfile -t win_exes < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*win*.exe" | sort)
+  if [[ "${#win_exes[@]}" -eq 0 ]]; then
+    mapfile -t win_exes < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*win*.exe" | sort)
+  fi
+  mapfile -t win_blockmaps < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*.exe.blockmap" | sort)
+  if [[ "${#win_exes[@]}" -gt 0 ]]; then
+    output="$STAGING_DIR/windows/latest.yml"
+    win_gen=(node "$ROOT_DIR/scripts/release/generate-update-yml.mjs" --version "$VERSION" --output "$output")
+    for f in "${win_exes[@]}" "${win_blockmaps[@]}"; do
+      win_gen+=(--file "$f")
+    done
+    "${win_gen[@]}"
+    copy_to_release_builds "$output"
+  fi
+
+  mapfile -t mac_zips < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*mac*.zip" | sort)
+  if [[ "${#mac_zips[@]}" -eq 0 ]]; then
+    mapfile -t mac_zips < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*mac*.zip" | sort)
+  fi
+  mapfile -t mac_dmgs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*mac*.dmg" | sort)
+  if [[ "${#mac_dmgs[@]}" -eq 0 ]]; then
+    mapfile -t mac_dmgs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*mac*.dmg" | sort)
+  fi
+  mapfile -t mac_blockmaps < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f \( -name "*.zip.blockmap" -o -name "*.dmg.blockmap" \) | sort)
+  if [[ "${#mac_zips[@]}" -gt 0 ]]; then
+    output="$STAGING_DIR/mac/latest-mac.yml"
+    mac_primary_zip="$(basename "${mac_zips[0]}")"
+    mac_gen=(
+      node "$ROOT_DIR/scripts/release/generate-update-yml.mjs"
+      --version "$VERSION"
+      --output "$output"
+      --path "$mac_primary_zip"
+    )
+    for f in "${mac_zips[@]}" "${mac_dmgs[@]}" "${mac_blockmaps[@]}"; do
+      mac_gen+=(--file "$f")
+    done
+    "${mac_gen[@]}"
+    copy_to_release_builds "$output"
+  fi
+
+  mapfile -t linux_debs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*linux*.deb" | sort)
+  if [[ "${#linux_debs[@]}" -eq 0 ]]; then
+    mapfile -t linux_debs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*linux*.deb" | sort)
+  fi
+  mapfile -t linux_rpms < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*linux*.rpm" | sort)
+  if [[ "${#linux_rpms[@]}" -eq 0 ]]; then
+    mapfile -t linux_rpms < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*linux*.rpm" | sort)
+  fi
+  if [[ "${#linux_debs[@]}" -gt 0 || "${#linux_rpms[@]}" -gt 0 ]]; then
+    output="$STAGING_DIR/linux/latest-linux.yml"
+    linux_gen=(node "$ROOT_DIR/scripts/release/generate-update-yml.mjs" --version "$VERSION" --output "$output")
+    for f in "${linux_debs[@]}" "${linux_rpms[@]}"; do
+      linux_gen+=(--file "$f")
+    done
+    "${linux_gen[@]}"
+    copy_to_release_builds "$output"
+  fi
+}
+
 echo "Release version: $VERSION"
 echo "Release tag: $RELEASE_TAG"
 echo "Staging dir: $STAGING_DIR"
@@ -239,12 +303,11 @@ run_windows_flow() {
   : "${WIN_BUILD_USER:?WIN_BUILD_USER is required when RUN_WINDOWS_BUILD=1}"
   : "${WIN_SIGN_WIN_DIR:?WIN_SIGN_WIN_DIR is required when RUN_WINDOWS_BUILD=1}"
 
-  # GitHub release automation temporarily disabled.
-  # if [[ "$WIN_PHASE" == "stage" ]] && (truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}"); then
-  #   echo "WIN_PHASE=stage cannot run with GH upload/publish enabled." >&2
-  #   echo "Disable GH_UPLOAD_RELEASE/GH_PUBLISH_RELEASE or run WIN_PHASE=finalize." >&2
-  #   exit 1
-  # fi
+  if [[ "$WIN_PHASE" == "stage" ]] && (truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}"); then
+    echo "WIN_PHASE=stage cannot run with GH upload/publish enabled." >&2
+    echo "Disable GH_UPLOAD_RELEASE/GH_PUBLISH_RELEASE or run WIN_PHASE=finalize." >&2
+    exit 1
+  fi
 
   WIN_BUILD_MODE="${WIN_BUILD_MODE:-git}" # git | rsync
   WIN_BUILD_GIT_PULL_CMD="${WIN_BUILD_GIT_PULL_CMD:-cd ${WIN_BUILD_REMOTE_DIR} && git pull --ff-only}"
@@ -325,15 +388,15 @@ run_windows_flow() {
       scp_from_file "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" "$WIN_PRIMARY_BLOCKMAP_REMOTE_POSIX" "$WIN_PRIMARY_BLOCKMAP"
     fi
 
-    # latest.yml generation temporarily disabled.
-    # yarn release:gen-yml \
-    #   --version "$VERSION" \
-    #   --output "$STAGING_DIR/windows/latest.yml" \
-    #   --file "$WIN_PRIMARY_EXE"
+    yarn release:gen-yml \
+      --version "$VERSION" \
+      --output "$STAGING_DIR/windows/latest.yml" \
+      --file "$WIN_PRIMARY_EXE"
     copy_to_release_builds "$WIN_PRIMARY_EXE"
     if [[ -n "${WIN_PRIMARY_BLOCKMAP:-}" ]]; then
       copy_to_release_builds "$WIN_PRIMARY_BLOCKMAP"
     fi
+    copy_to_release_builds "$STAGING_DIR/windows/latest.yml"
   fi
 }
 
@@ -492,33 +555,34 @@ fi
 
 run_windows_flow
 
-# GitHub release automation temporarily disabled.
-# if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || truthy "${GH_CREATE_DRAFT:-0}"; then
-#   require_cmd gh
-#   GH_REPO="${GH_REPO:-45Drives/studio-share}"
-#   GH_TITLE="${GH_TITLE:-$RELEASE_TAG}"
-#   GH_NOTES="${GH_NOTES:-}"
-#
-#   if truthy "${GH_CREATE_DRAFT:-0}"; then
-#     if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-#       gh release create "$RELEASE_TAG" --repo "$GH_REPO" --title "$GH_TITLE" --notes "$GH_NOTES" --draft
-#     fi
-#   fi
-#
-#   if truthy "${GH_UPLOAD_RELEASE:-0}"; then
-#     mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 2 -type f \
-#       \( -name '*.yml' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) | sort)
-#     if [[ "${#assets[@]}" -eq 0 ]]; then
-#       echo "No assets found to upload from $STAGING_DIR" >&2
-#       exit 1
-#     fi
-#     gh release upload "$RELEASE_TAG" --repo "$GH_REPO" --clobber "${assets[@]}"
-#   fi
-#
-#   if truthy "${GH_PUBLISH_RELEASE:-0}"; then
-#     gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false
-#   fi
-# fi
+generate_update_metadata
+
+if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || truthy "${GH_CREATE_DRAFT:-0}"; then
+  require_cmd gh
+  GH_REPO="${GH_REPO:-45Drives/studio-share}"
+  GH_TITLE="${GH_TITLE:-$RELEASE_TAG}"
+  GH_NOTES="${GH_NOTES:-}"
+
+  if truthy "${GH_CREATE_DRAFT:-0}"; then
+    if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+      gh release create "$RELEASE_TAG" --repo "$GH_REPO" --title "$GH_TITLE" --notes "$GH_NOTES" --draft
+    fi
+  fi
+
+  if truthy "${GH_UPLOAD_RELEASE:-0}"; then
+    mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 2 -type f \
+      \( -name '*.yml' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) | sort)
+    if [[ "${#assets[@]}" -eq 0 ]]; then
+      echo "No assets found to upload from $STAGING_DIR" >&2
+      exit 1
+    fi
+    gh release upload "$RELEASE_TAG" --repo "$GH_REPO" --clobber "${assets[@]}"
+  fi
+
+  if truthy "${GH_PUBLISH_RELEASE:-0}"; then
+    gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false
+  fi
+fi
 
 echo "Release orchestration complete."
 echo "Collected assets under: $STAGING_DIR"
