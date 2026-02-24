@@ -36,7 +36,7 @@ const themeToDivision: Record<Theme, Division> = {
   'theme-default': 'default'
 }
 
-const STORAGE_KEY = 'studio-share-theme-v1'
+const STORAGE_KEY = '45flow-theme-v1'
 
 function isTheme(value: string): value is Theme {
   return [

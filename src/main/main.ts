@@ -96,7 +96,7 @@ function initLogging(resolvedLogDir: string) {
     transports: [
       new DailyRotateFile({
         dirname: resolvedLogDir,
-        filename: '45studio-share-client-%DATE%.json',
+        filename: '45flow-logs-%DATE%.json',
         datePattern: 'YYYY-MM-DD',
         maxFiles: '14d',
         zippedArchive: true,
@@ -1143,7 +1143,7 @@ function parseLogLine(line: string, id: string) {
 function readClientLogs(limit = 600) {
   const logDir = checkLogDir(false);
   const files = fs.readdirSync(logDir)
-    .filter((name) => name.startsWith('45studio-share-client-') && name.endsWith('.json'))
+    .filter((name) => name.startsWith('45flow-logs-') && name.endsWith('.json'))
     .sort();
 
   if (!files.length) {

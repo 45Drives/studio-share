@@ -17,7 +17,7 @@
                         <div class="flex flex-col text-left">
                             <span class="connect-label">Select a server</span>
                             <select v-model="selectedServerIp" :disabled="anyBusy || manualIp !== ''"
-                                class="bg-default h-[2.9rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
+                                class="connect-control h-[2.9rem] text-default rounded-lg px-4 flex-1 border border-default w-full">
                                 <option v-for="server in discoveryState.servers" :key="server.ip" :value="server.ip">
                                     {{ server.name }} ({{ server.ip }})
                                 </option>
@@ -29,7 +29,7 @@
                         <div class="flex flex-col text-left">
                             <span class="connect-label">Connect manually via IP</span>
                             <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
-                                class="text-default input-textlike border px-4 py-2 rounded text-lg w-full" />
+                                class="connect-control text-default input-textlike border px-4 py-2 rounded text-lg w-full" />
                         </div>
 
                         <div class="mt-1 text-left">
@@ -39,7 +39,7 @@
                                 <label class="flex flex-col">
                                     <span class="mb-1 opacity-80">SSH</span>
                                     <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        class="connect-control text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
                                         placeholder="22" />
                                 </label>
 
@@ -49,14 +49,14 @@
                                     </span>
                                     <input v-model.number="broadcasterPort" type="number" min="1" max="65535"
                                         :disabled="anyBusy"
-                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        class="connect-control text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
                                         placeholder="9095" />
                                 </label>
 
                                 <label class="flex flex-col">
                                     <span class="mb-1 opacity-80">HTTPS</span>
                                     <input v-model.number="httpsPort" type="number" min="1" max="65535" :disabled="anyBusy"
-                                        class="text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
+                                        class="connect-control text-default input-textlike border px-3 py-1.5 rounded text-base w-full"
                                         placeholder="443" />
                                 </label>
                             </div>
@@ -79,7 +79,7 @@
                         <label class="flex flex-col">
                             <span class="connect-label">Username</span>
                             <input v-model="username" type="text" placeholder="root" :disabled="anyBusy"
-                                class="text-default input-textlike px-4 py-2 rounded text-lg w-full border" />
+                                class="connect-control text-default input-textlike px-4 py-2 rounded text-lg w-full border" />
                         </label>
 
                         <label class="flex flex-col">
@@ -87,7 +87,7 @@
                             <div class="w-full relative">
                                 <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
                                     :disabled="anyBusy"
-                                    class="text-default input-textlike px-4 py-2 rounded text-lg w-full border"
+                                    class="connect-control text-default input-textlike px-4 py-2 rounded text-lg w-full border"
                                     placeholder="••••••••" />
                                 <button type="button" @click="togglePassword" :disabled="anyBusy"
                                     class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
@@ -131,6 +131,20 @@
         </div>
     </form>
     <PortForwardingModal v-if="showPortFwdModal" @close="togglePortFwdModal" />
+    <div v-if="showLicenseModal" class="fixed inset-0 z-[1100] bg-black/40 grid place-items-center p-4" @click.self="cancelLicenseEntry">
+        <div class="w-full max-w-[560px] rounded-xl border border-default bg-default text-default shadow-2xl p-4">
+            <h3 class="text-lg font-bold mb-1">License Required</h3>
+            <p class="text-sm opacity-80 mb-3">Enter your 45Flow license key to activate this server.</p>
+            <input v-model="licenseInput"
+                class="w-full rounded-lg border border-default bg-default text-default px-3 py-2 text-sm input-textlike"
+                type="text" placeholder="STUDIO-XXXX-XXXX-XXXX-XXXX"
+                @keydown.enter.prevent="submitLicenseEntry" />
+            <div class="mt-3 flex justify-end gap-2">
+                <button type="button" class="btn btn-secondary" @click="cancelLicenseEntry">Cancel</button>
+                <button type="button" class="btn btn-primary" @click="submitLicenseEntry">Activate</button>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -516,6 +530,34 @@ function togglePortFwdModal() {
     showPortFwdModal.value = !showPortFwdModal.value;
 }
 
+const showLicenseModal = ref(false)
+const licenseInput = ref('')
+let licensePromptResolver: ((value: string | null) => void) | null = null
+
+function requestLicenseKey(): Promise<string | null> {
+    licenseInput.value = ''
+    showLicenseModal.value = true
+    return new Promise((resolve) => {
+        licensePromptResolver = resolve
+    })
+}
+
+function submitLicenseEntry() {
+    const value = String(licenseInput.value || '').trim()
+    if (!value) return
+    showLicenseModal.value = false
+    const resolve = licensePromptResolver
+    licensePromptResolver = null
+    resolve?.(value)
+}
+
+function cancelLicenseEntry() {
+    showLicenseModal.value = false
+    const resolve = licensePromptResolver
+    licensePromptResolver = null
+    resolve?.(null)
+}
+
 
 function listenBootstrap(id: string) {
     const handler = (_: any, msg: any) => {
@@ -540,7 +582,7 @@ async function ensureLicenseActivated(apiBase: string) {
     try { statusBody = await statusResp.json() } catch { return }
     if (!statusBody?.enforcement || statusBody?.licensed) return
 
-    const key = window.prompt('Enter your 45Flow license key to activate this server:')
+    const key = await requestLicenseKey()
     if (!key || !key.trim()) throw new Error('License activation canceled.')
 
     const activateResp = await fetch(`${apiBase}/api/license/activate`, {
@@ -822,11 +864,18 @@ async function connectToServer() {
 onUnmounted(() => {
     unlistenProgress?.()
     unlistenProgress = null
+    licensePromptResolver?.(null)
+    licensePromptResolver = null
 })
 </script>
 
 <style scoped>
 .connect-page {
+    --connect-control-bg: rgba(255, 255, 255, 0.68);
+    --connect-control-border: color-mix(in srgb, #ffffff 30%, #9da6b5);
+    --connect-control-disabled-bg: rgba(244, 246, 250, 0.58);
+    --connect-control-disabled-text: #768195;
+    --connect-control-placeholder: #8a93a3;
     height: 100%;
     overflow-y: auto;
     padding-top: 1.2rem;
@@ -878,13 +927,38 @@ onUnmounted(() => {
     padding: 0.6rem 0.75rem;
     border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 22%, #8f98a5);
     border-radius: 0.7rem;
-    background: color-mix(in srgb, #ffffff 66%, transparent);
+    background: color-mix(in srgb, #ffffff 50%, transparent);
     backdrop-filter: blur(1.5px);
 }
 
 .connect-page.is-dark .connect-panel {
-    background: rgba(248, 238, 251, 0.82);
-    border-color: color-mix(in srgb, #ffffff 52%, #c389c7);
+    background: rgba(248, 238, 251, 0.50);
+    border-color: color-mix(in srgb, #ffffff 22%, #c389c7);
+}
+
+.connect-page.is-dark {
+    --connect-control-bg: rgba(255, 255, 255, 0.75);
+    --connect-control-border: color-mix(in srgb, #ffffff 24%, #93a0b4);
+    --connect-control-disabled-bg: rgba(238, 242, 247, 0.42);
+    --connect-control-disabled-text: #7a8596;
+    --connect-control-placeholder: #737c8d;
+}
+
+.connect-page .connect-control {
+    background: var(--connect-control-bg) !important;
+    border-color: var(--connect-control-border) !important;
+    backdrop-filter: blur(1px);
+}
+
+.connect-page .connect-control::placeholder {
+    color: var(--connect-control-placeholder) !important;
+    opacity: 0.9;
+}
+
+.connect-page .connect-control:disabled {
+    background: var(--connect-control-disabled-bg) !important;
+    color: var(--connect-control-disabled-text) !important;
+    border-color: color-mix(in srgb, var(--connect-control-border) 78%, #a5afbd) !important;
 }
 
 .connect-page.is-dark .connect-panel .connect-section-title,
@@ -898,36 +972,16 @@ onUnmounted(() => {
 
 .connect-page.is-dark .connect-panel .input-textlike,
 .connect-page.is-dark .connect-panel select {
-    background: rgba(255, 255, 255, 0.9) !important;
     color: #1f2937 !important;
-    border-color: color-mix(in srgb, #ffffff 34%, #9da6b5) !important;
 }
 
 .connect-page.is-dark .connect-panel ::placeholder {
-    color: #5b6474;
+    color: var(--connect-control-placeholder);
     opacity: 1;
 }
 
 .connect-page.is-dark .connect-panel .text-muted {
     color: #5f6878 !important;
-}
-
-/* Component-scoped override: keep textlike inputs light in dark mode on this screen. */
-.connect-page.is-dark .input-textlike {
-    background: rgba(255, 255, 255, 0.92) !important;
-    color: #1f2937 !important;
-    border-color: color-mix(in srgb, #ffffff 34%, #9da6b5) !important;
-}
-
-.connect-page.is-dark .input-textlike::placeholder {
-    color: #5b6474 !important;
-    opacity: 1;
-}
-
-.connect-page.is-dark .input-textlike:disabled {
-    background: rgba(237, 240, 245, 0.92) !important;
-    color: #7a8596 !important;
-    border-color: color-mix(in srgb, #ffffff 24%, #a5afbd) !important;
 }
 
 .connect-section-title {
