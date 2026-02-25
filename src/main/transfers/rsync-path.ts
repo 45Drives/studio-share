@@ -7,6 +7,15 @@ import { jl, type RsyncStartOpts } from '../main';
 
 const pathExists = (p: string) => { try { fs.accessSync(p); return true; } catch { return false; } };
 
+function shellQuoteForRemoteSh(v: string): string {
+  return `'${String(v || '').replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function shouldEnsure45flowWatermarksDir(destDir: string): boolean {
+  const clean = String(destDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  return clean === '/45flow-watermarks' || clean.endsWith('/45flow-watermarks');
+}
+
 export function findRsyncPath(): { cmd: string; useWSL: boolean } {
   const macCandidates = [
     '/opt/homebrew/bin/rsync',
@@ -105,6 +114,11 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
     '--inplace',
     supportsP2 ? '--info=progress2' : '--progress',
   ];
+  const hasRsyncPathArg = Array.isArray(o.extraArgs) && o.extraArgs.some((a) => String(a || '').startsWith('--rsync-path='));
+  if (!hasRsyncPathArg && shouldEnsure45flowWatermarksDir(o.destDir)) {
+    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/45flow-watermarks';
+    baseArgs.push(`--rsync-path=mkdir -p ${shellQuoteForRemoteSh(destForMkdir)} && rsync`);
+  }
   if (o.bwlimitKb && o.bwlimitKb > 0) baseArgs.push(`--bwlimit=${o.bwlimitKb}`);
   if (o.extraArgs?.length) baseArgs.push(...o.extraArgs);
 

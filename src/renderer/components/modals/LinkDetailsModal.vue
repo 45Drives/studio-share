@@ -514,14 +514,21 @@
 
         <!-- Versions manager -->
         <section v-if="!editMode"class="w-full">
-          <div class="flex items-center justify-between mb-2">
-            <h4 class="font-semibold">Versions</h4>
-            <div class="flex items-center gap-2">
-              <label class="text-xs opacity-70 flex items-center gap-1">
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+            <div>
+              <h4 class="font-semibold">Versions</h4>
+              <div class="text-xs opacity-70">Restore or delete versions, and inspect related proxy/version artifacts.</div>
+            </div>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <label class="text-xs opacity-80 inline-flex items-center gap-1 px-2 py-1 rounded border border-default bg-default/20">
                 <input type="checkbox" v-model="restoreBackup" />
                 Backup on restore
               </label>
-              <select v-model="selectedVersionFileId" class="px-2 py-1 border border-default rounded bg-default text-default">
+              <label class="text-xs opacity-80 inline-flex items-center gap-1 px-2 py-1 rounded border border-default bg-default/20">
+                <input type="checkbox" v-model="showExtraFiles" />
+                Show extra files
+              </label>
+              <select v-model="selectedVersionFileId" class="px-2 py-1 border border-default rounded bg-default text-default min-w-[20rem]">
                 <option v-for="f in versionFileChoices" :key="f.id" :value="f.id">
                   {{ f.name }}
                 </option>
@@ -558,23 +565,110 @@
                   <tr v-else-if="versions.length === 0">
                     <td colspan="5" class="px-3 py-4 border border-default text-center">No versions found.</td>
                   </tr>
-                  <tr v-else v-for="v in versions" :key="v.asset_version_id" class="border-t border-default">
-                    <td class="px-3 py-2 border border-default">v{{ v.version_index }}</td>
-                    <td class="px-3 py-2 border border-default">{{ v.created_at ? new Date(v.created_at).toLocaleString() : '—' }}</td>
-                    <td class="px-3 py-2 border border-default">{{ snapshotName(v.snapshot_rel) }}</td>
-                    <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(v.snapshot_size_bytes) }}</td>
-                    <td class="px-3 py-2 border border-default text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <button class="btn btn-primary px-2 py-1 text-xs" @click="restoreVersion(v)">
-                          Restore
-                        </button>
-                        <button class="btn btn-danger px-2 py-1 text-xs" :disabled="versions.length <= 1"
-                          @click="deleteVersion(v)">
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <template v-else v-for="v in versions" :key="`v-${v.asset_version_id}`">
+                    <tr class="border-t border-default">
+                      <td class="px-3 py-2 border border-default">v{{ v.version_index }}</td>
+                      <td class="px-3 py-2 border border-default">{{ v.created_at ? new Date(v.created_at).toLocaleString() : '—' }}</td>
+                      <td class="px-3 py-2 border border-default">{{ snapshotName(v.snapshot_rel) }}</td>
+                      <td class="px-3 py-2 text-right border border-default">{{ fmtBytes(v.snapshot_size_bytes) }}</td>
+                      <td class="px-3 py-2 border border-default text-right">
+                        <div class="flex items-center justify-end gap-2">
+                          <button class="btn btn-primary px-2 py-1 text-xs" @click="restoreVersion(v)">
+                            Restore
+                          </button>
+                          <button class="btn btn-danger px-2 py-1 text-xs" :disabled="versions.length <= 1"
+                            @click="deleteVersion(v)">
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="showExtraFiles" class="border-t border-default bg-default/10">
+                      <td colspan="5" class="px-3 py-2 border border-default">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div class="text-xs font-semibold">Extra files for this version</div>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <button
+                              class="btn btn-secondary px-2 py-1 text-xs"
+                              @click="copyAllExtraPaths(v)"
+                              :disabled="!hasAnyExtraPath(v)"
+                            >
+                              Copy all paths
+                            </button>
+                            <button
+                              class="btn btn-secondary px-2 py-1 text-xs"
+                              @click="deleteVersionArtifacts(v, 'transcodes')"
+                              :disabled="isDeletingArtifacts(v, 'transcodes')"
+                            >
+                              {{ isDeletingArtifacts(v, 'transcodes') ? 'Deleting…' : 'Delete proxy/HLS' }}
+                            </button>
+                            <button
+                              class="btn btn-secondary px-2 py-1 text-xs"
+                              @click="deleteVersionArtifacts(v, 'snapshot')"
+                              :disabled="isDeletingArtifacts(v, 'snapshot')"
+                            >
+                              {{ isDeletingArtifacts(v, 'snapshot') ? 'Deleting…' : 'Delete snapshot' }}
+                            </button>
+                            <button
+                              class="btn btn-danger px-2 py-1 text-xs"
+                              @click="deleteVersionArtifacts(v, 'all')"
+                              :disabled="isDeletingArtifacts(v, 'all')"
+                            >
+                              {{ isDeletingArtifacts(v, 'all') ? 'Deleting…' : 'Delete all extra' }}
+                            </button>
+                          </div>
+                        </div>
+                        <div class="grid gap-1 text-xs font-mono break-all opacity-85">
+                          <div v-if="artifactLoading(v)" class="text-xs opacity-70">Loading artifact files…</div>
+                          <div v-else-if="artifactError(v)" class="text-xs text-red-500">{{ artifactError(v) }}</div>
+                          <template v-else-if="artifactFileNodes(v).length">
+                            <div class="text-xs font-semibold mb-1">Existing files</div>
+                            <div
+                              v-for="f in artifactFileNodes(v)"
+                              :key="`artifact-file-${v.asset_version_id}-${f.rel_path}`"
+                              class="grid grid-cols-[1fr_auto_auto] gap-2 items-start border-b border-default/40 py-1"
+                            >
+                              <div class="min-w-0">
+                                <div class="truncate" :style="{ paddingLeft: `${Math.min(f.depth, 8) * 12}px` }">
+                                  └─ {{ f.name }}
+                                </div>
+                                <div class="text-[11px] opacity-70 truncate">{{ f.dir || '.' }}</div>
+                              </div>
+                              <div class="opacity-80">{{ fmtBytes(f.size) }}</div>
+                              <button
+                                class="btn btn-secondary px-2 py-1 text-[11px]"
+                                @click="copyExtraPath('Artifact file', f.rel_path)"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <div class="text-xs opacity-70">No artifact files found on disk. Known folders:</div>
+                            <div
+                              v-for="folder in fallbackFolderRows(v)"
+                              :key="`artifact-folder-${v.asset_version_id}-${folder.rel_path}`"
+                              class="grid grid-cols-[11rem_1fr_auto] gap-2 items-start"
+                            >
+                              <span class="opacity-80">{{ folder.label }}</span>
+                              <span>{{ folder.rel_path || '—' }}</span>
+                              <button class="btn btn-secondary px-2 py-1 text-[11px]" :disabled="!folder.rel_path" @click="copyExtraPath(folder.label, folder.rel_path)">Copy</button>
+                            </div>
+                          </template>
+                          <div class="grid grid-cols-[11rem_1fr_auto] gap-2 items-start pt-1">
+                            <span class="opacity-80">Proxy files</span>
+                            <span>{{ proxyPatternRelPath(v) || '—' }}</span>
+                            <button class="btn btn-secondary px-2 py-1 text-[11px]" :disabled="!proxyPatternRelPath(v)" @click="copyExtraPath('Proxy files pattern', proxyPatternRelPath(v))">Copy</button>
+                          </div>
+                          <div class="grid grid-cols-[11rem_1fr_auto] gap-2 items-start">
+                            <span class="opacity-80">HLS folder</span>
+                            <span>{{ hlsFolderRelPath(v) || '—' }}</span>
+                            <button class="btn btn-secondary px-2 py-1 text-[11px]" :disabled="!hlsFolderRelPath(v)" @click="copyExtraPath('HLS folder', hlsFolderRelPath(v))">Copy</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -639,6 +733,8 @@ const versionsError = ref<string | null>(null)
 const versions = ref<any[]>([])
 const selectedVersionFileId = ref<number | null>(null)
 const restoreBackup = ref(true)
+const showExtraFiles = ref(false)
+const deletingArtifactKeys = ref<Set<string>>(new Set())
 const detailsToken = ref('')
 let suppressVersionWatch = false
 const proxyQualityChoices = ['720p', '1080p', 'original'] as const
@@ -1162,6 +1258,161 @@ function snapshotName(rel?: string | null) {
   if (!rel) return '—'
   const parts = String(rel).split('/')
   return parts[parts.length - 1] || rel
+}
+
+function normalizeRelPathForDisplay(v: any) {
+  const s = String(v || '').trim().replace(/\\/g, '/').replace(/^\/+/, '')
+  return s || ''
+}
+
+function snapshotRelPath(v: any) {
+  return normalizeRelPathForDisplay(v?.snapshot_rel)
+}
+
+function snapshotDirRelPath(v: any) {
+  const explicit = normalizeRelPathForDisplay(v?.snapshot_dir_rel)
+  if (explicit) return explicit
+  const rel = snapshotRelPath(v)
+  if (!rel) return ''
+  const idx = rel.lastIndexOf('/')
+  return idx >= 0 ? rel.slice(0, idx) : ''
+}
+
+function transcodeDirRelPath(v: any) {
+  const explicit = normalizeRelPathForDisplay(v?.transcode_dir_rel)
+  if (explicit) return explicit
+
+  const assetVersionId = Number(v?.asset_version_id)
+  if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) return ''
+
+  const fileId = selectedVersionFileId.value
+  const selectedFile = fileId ? versionFileById.value.get(fileId) : null
+  const fileRel = normalizeRelPathForDisplay(selectedFile?.relPath ?? selectedFile?.path ?? selectedFile?.p ?? '')
+  const idx = fileRel.lastIndexOf('/')
+  const sourceDir = idx >= 0 ? fileRel.slice(0, idx) : ''
+
+  return sourceDir
+    ? `${sourceDir}/.studio/transcodes/${assetVersionId}`
+    : `.studio/transcodes/${assetVersionId}`
+}
+
+function proxyPatternRelPath(v: any) {
+  const dir = transcodeDirRelPath(v)
+  return dir ? `${dir}/proxy_*.mp4` : ''
+}
+
+function hlsFolderRelPath(v: any) {
+  const dir = transcodeDirRelPath(v)
+  return dir ? `${dir}/hls` : ''
+}
+
+function extraPathRows(v: any) {
+  return [
+    { label: 'Snapshot file', value: snapshotRelPath(v) },
+    { label: 'Version folder', value: snapshotDirRelPath(v) },
+    { label: 'Proxy/HLS folder', value: transcodeDirRelPath(v) },
+    { label: 'HLS folder', value: hlsFolderRelPath(v) },
+    { label: 'Proxy files pattern', value: proxyPatternRelPath(v) },
+  ].filter((row) => String(row.value || '').trim())
+}
+
+function hasAnyExtraPath(v: any) {
+  return extraPathRows(v).length > 0
+}
+
+async function copyExtraPath(label: string, p: string) {
+  const value = String(p || '').trim()
+  if (!value) return
+  try {
+    await navigator.clipboard.writeText(value)
+    pushNotification(new Notification('Path Copied', `${label} copied.`, 'success', 2500))
+  } catch (e: any) {
+    const msg = e?.message || e?.error || String(e)
+    pushNotification(new Notification('Copy Failed', msg, 'error', 5000))
+  }
+}
+
+async function copyAllExtraPaths(v: any) {
+  const rows = extraPathRows(v)
+  if (!rows.length) return
+  const text = rows.map((row) => `${row.label}: ${row.value}`).join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    pushNotification(new Notification('Paths Copied', `Copied ${rows.length} path(s).`, 'success', 3000))
+  } catch (e: any) {
+    const msg = e?.message || e?.error || String(e)
+    pushNotification(new Notification('Copy Failed', msg, 'error', 5000))
+  }
+}
+
+type ArtifactDeleteTarget = 'snapshot' | 'transcodes' | 'all'
+
+function artifactDeleteKey(v: any, target: ArtifactDeleteTarget) {
+  return `${Number(v?.asset_version_id || 0)}:${target}`
+}
+
+function isDeletingArtifacts(v: any, target: ArtifactDeleteTarget) {
+  return deletingArtifactKeys.value.has(artifactDeleteKey(v, target))
+}
+
+function artifactDeleteTitle(target: ArtifactDeleteTarget) {
+  if (target === 'snapshot') return 'Delete Snapshot'
+  if (target === 'transcodes') return 'Delete Proxy/HLS'
+  return 'Delete All Extra Files'
+}
+
+function artifactDeletePrompt(v: any, target: ArtifactDeleteTarget) {
+  const ver = `v${v?.version_index ?? '?'}`
+  if (target === 'snapshot') {
+    return `Delete snapshot files for ${ver}?\n\nThis removes version snapshot files from disk and clears snapshot metadata for this version.`
+  }
+  if (target === 'transcodes') {
+    return `Delete proxy/HLS artifacts for ${ver}?\n\nThis removes generated proxy/HLS files and clears transcode job state for this version.`
+  }
+  return `Delete all extra files for ${ver}?\n\nThis removes both snapshot files and proxy/HLS artifacts for this version.`
+}
+
+async function deleteVersionArtifacts(v: any, target: ArtifactDeleteTarget) {
+  if (!selectedVersionFileId.value) return
+  if (!v?.asset_version_id) return
+  const ok = confirm(artifactDeletePrompt(v, target))
+  if (!ok) return
+
+  const key = artifactDeleteKey(v, target)
+  deletingArtifactKeys.value.add(key)
+
+  try {
+    const fileId = Number(selectedVersionFileId.value)
+    const assetVersionId = Number(v.asset_version_id)
+    const currentLinkId = Number(props.link?.id)
+    const resp = await props.apiFetch(`/api/files/${fileId}/versions/${assetVersionId}/artifacts/delete`, {
+      method: 'POST',
+      body: JSON.stringify({
+        target,
+        linkId: Number.isFinite(currentLinkId) && currentLinkId > 0 ? currentLinkId : undefined,
+      }),
+    })
+
+    await refreshVersions()
+    pushNotification(
+      new Notification(
+        artifactDeleteTitle(target),
+        `Removed ${Number(resp?.deleted_count || 0)} path(s).`,
+        'success',
+        5000
+      )
+    )
+  } catch (e: any) {
+    const code = String(e?.payload?.error || e?.response?.error || e?.error || '')
+    const links = Array.isArray(e?.payload?.links) ? e.payload.links : (Array.isArray(e?.response?.links) ? e.response.links : [])
+    const inUseMsg = code === 'artifacts_in_use_by_other_links'
+      ? `Cannot delete artifacts: this file is used by ${links.length} other active share link(s).`
+      : null
+    const msg = inUseMsg || e?.message || e?.error || String(e)
+    pushNotification(new Notification(`${artifactDeleteTitle(target)} Failed`, msg, 'error', 8000))
+  } finally {
+    deletingArtifactKeys.value.delete(key)
+  }
 }
 
 function toNumericFileId(v: any) {
@@ -1875,6 +2126,112 @@ function selectDefaultVersionFile() {
 
 // Add near your refs:
 const noVersionsByFileId = ref<Set<number>>(new Set());
+const artifactDataByVersionId = ref<Record<number, {
+  loading: boolean
+  loaded: boolean
+  error: string | null
+  files: Array<{ rel_path: string; size?: number | null; mtime_ms?: number | null; kind?: string }>
+  folders: Array<{ rel_path: string; label?: string; exists?: boolean }>
+}>>({})
+
+function resetArtifactData() {
+  artifactDataByVersionId.value = {}
+}
+
+function artifactState(v: any) {
+  const versionId = Number(v?.asset_version_id)
+  if (!Number.isFinite(versionId) || versionId <= 0) return null
+  if (!artifactDataByVersionId.value[versionId]) {
+    artifactDataByVersionId.value[versionId] = {
+      loading: false,
+      loaded: false,
+      error: null,
+      files: [],
+      folders: [],
+    }
+  }
+  return artifactDataByVersionId.value[versionId]
+}
+
+function artifactLoading(v: any) {
+  return !!artifactState(v)?.loading
+}
+
+function artifactError(v: any) {
+  return artifactState(v)?.error || ''
+}
+
+function artifactFileNodes(v: any) {
+  const rows = Array.isArray(artifactState(v)?.files) ? artifactState(v)!.files : []
+  return rows
+    .filter((f) => String(f?.kind || '').toLowerCase() !== 'hls')
+    .map((f) => {
+      const rel = normalizeRelPathForDisplay(f?.rel_path)
+      const parts = rel.split('/').filter(Boolean)
+      const name = parts[parts.length - 1] || rel || 'file'
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+      return {
+        rel_path: rel,
+        name,
+        dir,
+        depth: Math.max(0, parts.length - 1),
+        size: typeof f?.size === 'number' ? f.size : undefined,
+      }
+    })
+    .filter((f) => !!f.rel_path)
+    .sort((a, b) => a.rel_path.localeCompare(b.rel_path))
+}
+
+function fallbackFolderRows(v: any) {
+  const fromApi = Array.isArray(artifactState(v)?.folders)
+    ? artifactState(v)!.folders
+      .map((f) => ({
+        label: String(f?.label || 'Folder'),
+        rel_path: normalizeRelPathForDisplay(f?.rel_path),
+      }))
+      .filter((f) => !!f.rel_path)
+    : []
+  if (fromApi.length) return fromApi
+
+  return [
+    { label: 'Version folder', rel_path: snapshotDirRelPath(v) },
+    { label: 'Proxy/HLS folder', rel_path: transcodeDirRelPath(v) },
+    { label: 'HLS folder', rel_path: hlsFolderRelPath(v) },
+  ].filter((f) => !!f.rel_path)
+}
+
+async function loadArtifactsForVersion(v: any, opts?: { force?: boolean }) {
+  if (!selectedVersionFileId.value) return
+  const fileId = Number(selectedVersionFileId.value)
+  const versionId = Number(v?.asset_version_id)
+  if (!Number.isFinite(fileId) || fileId <= 0) return
+  if (!Number.isFinite(versionId) || versionId <= 0) return
+
+  const st = artifactState(v)
+  if (!st) return
+  if (st.loading) return
+  if (st.loaded && !opts?.force) return
+
+  st.loading = true
+  st.error = null
+  try {
+    const resp = await props.apiFetch(`/api/files/${fileId}/versions/${versionId}/artifacts`)
+    st.files = Array.isArray(resp?.files) ? resp.files : []
+    st.folders = Array.isArray(resp?.folders) ? resp.folders : []
+    st.loaded = true
+  } catch (e: any) {
+    st.error = e?.message || e?.error || String(e)
+  } finally {
+    st.loading = false
+  }
+}
+
+async function loadArtifactsForVisibleVersions(opts?: { force?: boolean }) {
+  if (!showExtraFiles.value) return
+  for (const v of versions.value) {
+    await loadArtifactsForVersion(v, opts)
+  }
+}
 
 // Change loadVersions signature:
 async function loadVersions(fileId: number, opts?: { force?: boolean }) {
@@ -1895,6 +2252,7 @@ async function loadVersions(fileId: number, opts?: { force?: boolean }) {
     const resp = await props.apiFetch(`/api/files/${fileId}/versions`);
     const list = Array.isArray(resp?.versions) ? resp.versions : [];
     versions.value = list;
+    resetArtifactData();
 
     if (list.length === 0) {
       // Sticky "none exist" so we don't keep re-fetching
@@ -1917,6 +2275,7 @@ async function loadVersions(fileId: number, opts?: { force?: boolean }) {
     }
   } finally {
     versionsLoading.value = false;
+    if (showExtraFiles.value) await loadArtifactsForVisibleVersions()
   }
 }
 
@@ -1930,6 +2289,15 @@ watch(
   () => props.link?.id,
   () => {
     noVersionsByFileId.value = new Set();
+    resetArtifactData();
+  }
+);
+
+watch(
+  () => [showExtraFiles.value, selectedVersionFileId.value, versions.value.length],
+  async ([show]) => {
+    if (!show) return
+    await loadArtifactsForVisibleVersions()
   }
 );
 
@@ -2295,9 +2663,13 @@ async function saveAll() {
     const passwordWillClear = nextAccessMode === 'open' && !wantsPassword && hadPassword
     const passwordChanged = passwordWillSet || passwordWillClear
 
-    const shouldUpdateDetails =
-      titleChanged || notesChanged || accessModeChanged || allowCommentsChanged || authModeChanged || passwordChanged || mediaSettingsDirty.value
+    const shouldUpdateDetailsCore =
+      titleChanged || notesChanged || accessModeChanged || allowCommentsChanged || authModeChanged || passwordChanged
     const shouldUpdateFiles = isDownloadish.value && filesDirty.value
+    const shouldPatchMediaSettings = mediaSettingsDirty.value
+    const deferMediaPatchUntilAfterFiles = shouldUpdateFiles && shouldPatchMediaSettings
+    const shouldUpdateDetails =
+      shouldUpdateDetailsCore || (shouldPatchMediaSettings && !deferMediaPatchUntilAfterFiles)
     const shouldUpdateUploadDest = props.link.type === 'upload' && uploadDirDirty.value
     const wantsMediaProcessing = !!draftGenerateReviewProxy.value || !!draftWatermarkEnabled.value
     const shouldTriggerMediaProcessing =
@@ -2380,7 +2752,7 @@ async function saveAll() {
       } else if (passwordWillClear) {
         body.password = ''
       }
-      if (mediaSettingsDirty.value) {
+      if (shouldPatchMediaSettings && !deferMediaPatchUntilAfterFiles) {
         body.generateReviewProxy = !!draftGenerateReviewProxy.value
         body.adaptiveHls = !!draftGenerateReviewProxy.value || !!draftWatermarkEnabled.value
         body.proxyQualities = draftGenerateReviewProxy.value ? nextProxyQualities : []
@@ -2466,6 +2838,40 @@ async function saveAll() {
       }
     }
 
+    // 2.5) Media settings patch AFTER files update when files changed.
+    // This avoids overwrite prompts being evaluated against stale (pre-edit) file sets.
+    let mediaResp: any | null = null
+    if (shouldPatchMediaSettings && deferMediaPatchUntilAfterFiles) {
+      const mediaBody: any = {
+        generateReviewProxy: !!draftGenerateReviewProxy.value,
+        adaptiveHls: !!draftGenerateReviewProxy.value || !!draftWatermarkEnabled.value,
+        proxyQualities: draftGenerateReviewProxy.value ? nextProxyQualities : [],
+        watermark: !!draftWatermarkEnabled.value,
+        watermarkFile: draftWatermarkEnabled.value ? draftWatermarkFile.value.trim() : null,
+        watermarkProxyQualities: draftWatermarkEnabled.value ? nextProxyQualities : [],
+      }
+
+      try {
+        mediaResp = await apiFetchWithOutputConflictRetry(`/api/links/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(mediaBody),
+        }, 'PATCH /api/links/:id (media)')
+        did.details = true
+      } catch (e: any) {
+        if (e?.conflictCanceled) return
+        const msg = apiErrMsg(e)
+        pushNotification(
+          new Notification(
+            'Failed to Save Media Settings',
+            msg,
+            /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error',
+            8000
+          )
+        )
+        return
+      }
+    }
+
     let trackingResp: any | null = null
     let trackingPaths: string[] = []
     let trackingWantsHls = false
@@ -2490,8 +2896,9 @@ async function saveAll() {
       //   pathsToTrack,
       //   nextProxyQualities,
       // })
-      if (pathsToTrack.length && detailsResp) {
-        trackingResp = detailsResp
+      const triggerResp = mediaResp || detailsResp
+      if (pathsToTrack.length && triggerResp) {
+        trackingResp = triggerResp
         trackingPaths = pathsToTrack
         trackingWantsHls = true
         trackingWantsProxy = !!draftGenerateReviewProxy.value

@@ -1371,20 +1371,28 @@ function goBack() {
 	height: 0.5rem;
 	border-radius: 0.5rem;
 	overflow: hidden;
-	background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
-	accent-color: var(--btn-primary-bg);
+	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #d7dce4);
+	accent-color: var(--btn-success-bg, #22c55e);
 }
 
 .wizard-progress::-webkit-progress-bar {
-	background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
+	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #d7dce4);
 }
 
 .wizard-progress::-webkit-progress-value {
-	background: var(--btn-primary-bg);
+	background: var(--btn-success-bg, #22c55e);
 }
 
 .wizard-progress::-moz-progress-bar {
-	background: var(--btn-primary-bg);
+	background: var(--btn-success-bg, #22c55e);
+}
+
+:global(.dark) .wizard-progress {
+	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #11151d);
+}
+
+:global(.dark) .wizard-progress::-webkit-progress-bar {
+	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #11151d);
 }
 
 @media (max-width: 920px) {

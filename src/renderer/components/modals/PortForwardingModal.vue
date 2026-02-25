@@ -14,11 +14,11 @@
             <div class="px-4 pt-4 pb-4 text-sm text-left space-y-6 overflow-y-auto max-h-[75vh]">
                 <section class="space-y-3">
                     <p>
-                        To let people <em>outside</em> your network open Studio Share links, you must forward the
-                        <b>Studio Share HTTPS port</b> on your router to your Studio box.
+                        To let people <em>outside</em> your network open 45Flow links, you must forward the
+                        <b>45Flow HTTPS port</b> on your router to your Studio box.
                     </p>
                     <p class="text-xs opacity-80">
-                        The default is <b>TCP 443</b>, but if you changed the HTTPS port in the Studio Share app, you
+                        The default is <b>TCP 443</b>, but if you changed the HTTPS port in the 45Flow app, you
                         must forward
                         <b>that</b> port instead.
                     </p>
@@ -92,11 +92,11 @@
                             <tbody class="[&>tr>td]:py-1 [&>tr>td]:pr-3">
                                 <tr>
                                     <td class="font-medium">Name / Service</td>
-                                    <td>Studio Share</td>
+                                    <td>45Flow</td>
                                 </tr>
                                 <tr>
                                     <td class="font-medium">External Port</td>
-                                    <td>Your Studio Share HTTPS port (default 443)</td>
+                                    <td>Your 45Flow HTTPS port (default 443)</td>
                                 </tr>
                                 <tr>
                                     <td class="font-medium">Internal Port</td>
@@ -125,7 +125,7 @@
                     <p class="text-xs opacity-80">
                         Most setups use the same external and internal port. Only use different values if you
                         intentionally run
-                        Studio Share on one port internally and map a different port externally.
+                        45Flow on one port internally and map a different port externally.
                     </p>
                 </section>
 
@@ -134,7 +134,7 @@
                     <p>Port forwarding tests can be misleading from inside the same network. For the best test:</p>
                     <ol class="list-decimal pl-5 space-y-1">
                         <li>On your phone, turn <b>Wi-Fi OFF</b> (use cellular data).</li>
-                        <li>Open your Studio Share link in the phone browser.</li>
+                        <li>Open your 45Flow link in the phone browser.</li>
                     </ol>
 
                     <p class="text-xs opacity-80">
@@ -189,7 +189,7 @@
                         <li>
                             <b>ISP blocks 443:</b> some ISPs block inbound 443 on residential plans. If so, pick another
                             port (example
-                            <code>8443</code>), set that same port as the HTTPS port in Studio Share, forward it on your
+                            <code>8443</code>), set that same port as the HTTPS port in 45Flow, forward it on your
                             router, and
                             expect links to include <code>:8443</code>.
                         </li>

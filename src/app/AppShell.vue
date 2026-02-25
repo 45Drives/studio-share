@@ -1,6 +1,6 @@
 <template>
   <div
-    class="w-screen h-screen overflow-hidden flex flex-col text-default bg-default">
+    class="w-screen h-screen overflow-hidden flex flex-col text-default bg-default app-bg-textured">
     <header
       v-if="!hideHeader"
       class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"

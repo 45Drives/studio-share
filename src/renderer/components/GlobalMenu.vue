@@ -6,7 +6,7 @@
 
         <teleport to="body">
             <div v-if="show"
-                class="fixed z-[1002] right-0 mt-2 w-60 bg-well shadow-lg rounded-lg border p-4 text-left text-default"
+                class="fixed z-[1002] right-0 mt-2 w-60 max-h-[80vh] overflow-y-auto bg-well shadow-lg rounded-lg border p-4 text-left text-default"
                 ref="menuRef" :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }">
                 <!-- Navigation -->
                 <div class="mb-2 text-center items-center">
@@ -27,20 +27,22 @@
                     </button>
                 </div> -->
 
-                <div class="mb-2 text-center items-center">
-                    <p class="text-xs text-default mb-1">Studio Palette</p>
-                    <div class="palette-grid">
-                        <button
-                            v-for="palette in studioPalettes"
-                            :key="palette.theme"
-                            class="btn theme-btn w-full"
-                            :class="[palette.className, currentTheme === palette.theme ? 'theme-btn-active' : '']"
-                            @click="selectTheme(palette.theme)"
-                        >
-                            {{ palette.label }}
-                        </button>
+                <details class="menu-disclosure mb-2" open>
+                    <summary class="menu-disclosure-summary">Studio Palette</summary>
+                    <div class="disclosure-content">
+                        <div class="palette-grid">
+                            <button
+                                v-for="palette in studioPalettes"
+                                :key="palette.theme"
+                                class="btn theme-btn w-full"
+                                :class="[palette.className, currentTheme === palette.theme ? 'theme-btn-active' : '']"
+                                @click="selectTheme(palette.theme)"
+                            >
+                                {{ palette.label }}
+                            </button>
+                        </div>
                     </div>
-                </div>
+                </details>
 
                 <!-- Dark mode -->
                 <div class="mb-2 items-center">
@@ -224,6 +226,26 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.35rem;
+}
+
+.menu-disclosure {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 0.5rem;
+    padding: 0.35rem;
+    background: rgba(15, 23, 42, 0.12);
+}
+
+.menu-disclosure-summary {
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    user-select: none;
+    color: currentColor;
+}
+
+.disclosure-content {
+    margin-top: 0.45rem;
 }
 
 .theme-btn-studio-balanced {

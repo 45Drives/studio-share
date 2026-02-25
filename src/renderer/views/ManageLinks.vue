@@ -38,9 +38,8 @@
 				{{ error }}
 			</div>
 
-			<div class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x [scrollbar-gutter:stable_both-edges] flex-1 min-h-0"
-				:class="{ '': !isMac }">
-				<table class="min-w-full text-sm border border-default border-collapse table-fixed">
+			<div class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x flex-1 min-h-0">
+				<table class="manage-table min-w-[1180px] text-sm border border-default border-collapse">
 					<colgroup>
 						<col class="w-[22%]" /> <!-- Title -->
 						<col class="w-[8%]" /> <!-- Type -->
@@ -50,7 +49,7 @@
 						<col class="w-[8%]" /> <!-- Access -->
 						<col class="w-[4%]" /> <!-- Password -->
 						<col class="w-[10%]" /> <!-- Created -->
-						<col class="w-[12%]" /> <!-- Actions -->
+						<col class="w-[14%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
 						<tr class="bg-default/95 text-default border-b border-default">
@@ -278,17 +277,6 @@ import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
 type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'password' | 'created'
 type SortDir = 'asc' | 'desc'
-
-const os = ref<string>('')
-const isMac = computed(() => os.value === 'mac')
-
-onMounted(async () => {
-	try {
-		os.value = await window.electron?.ipcRenderer.invoke('get-os');
-	} catch (err) {
-		console.error('Failed to get OS', err);
-	}
-})
 
 const { apiFetch } = useApi()
 async function refresh() {
@@ -916,6 +904,11 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 	border-radius: 0.72rem;
 	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 22%, #4a4b57);
 	background: color-mix(in srgb, black 24%, transparent);
+}
+
+.manage-table {
+	width: 100%;
+	min-width: 1180px;
 }
 
 .manage-table-wrap thead tr {

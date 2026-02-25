@@ -119,10 +119,10 @@ const badgeText = computed(() => {
 });
 
 const badgeTwClass = computed(() => {
-    if (status.value === "enabled") return "bg-green-500/15 border-green-500/30 text-green-100";
-    if (status.value === "disabled") return "bg-amber-500/15 border-amber-500/30 text-amber-100";
-    if (status.value === "error") return "bg-red-500/15 border-red-500/30 text-red-100";
-    return "bg-white/10 border-white/15 text-white/85";
+    if (status.value === "enabled") return "bg-green-500/15 border-green-500/30 text-green-800 dark:text-green-100";
+    if (status.value === "disabled") return "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-100";
+    if (status.value === "error") return "bg-red-500/15 border-red-500/30 text-red-800 dark:text-red-100";
+    return "bg-zinc-500/10 border-zinc-500/20 text-zinc-700 dark:bg-white/10 dark:border-white/15 dark:text-white/85";
 });
 
 function reset() {

@@ -50,6 +50,8 @@
   --ui-panel-bg: color-mix(in srgb, #ffffff 94%, var(--btn-primary-bg) 6%);
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #c7cedb);
   --ui-subtle-text: color-mix(in srgb, currentColor 72%, transparent);
+  --ui-app-texture-image: url('../../assets/textures/gplay.png');
+  --ui-app-texture-size: auto;
   --ui-app-bg:
     radial-gradient(80rem 40rem at -10% -12%, color-mix(in srgb, var(--btn-primary-bg) 7%, transparent), transparent 56%),
     radial-gradient(72rem 38rem at 112% -12%, color-mix(in srgb, var(--btn-secondary-bg) 6%, transparent), transparent 62%),
@@ -554,7 +556,29 @@ body,
 body {
   font-family: 'Red Hat Text', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
   letter-spacing: 0.01em;
-  background: var(--ui-app-bg);
+  background-image: var(--ui-app-texture-image), var(--ui-app-bg);
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-size: var(--ui-app-texture-size), auto, auto, auto;
+  background-position: top left, center, center, center;
+}
+
+.app-bg-textured {
+  position: relative;
+  isolation: isolate;
+  background: var(--ui-app-bg) !important;
+}
+
+.app-bg-textured::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--ui-app-texture-image);
+  background-repeat: repeat;
+  background-size: var(--ui-app-texture-size);
+  background-position: top left;
+  opacity: 0.45;
+  z-index: -1;
 }
 
 .btn {

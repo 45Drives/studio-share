@@ -105,6 +105,7 @@ const goToLinkUploadPanel = () => {
 <style scoped>
 .dashboard-shell {
 	--local-border: color-mix(in srgb, var(--btn-primary-bg) 28%, #545463);
+	background: color-mix(in srgb, var(--ui-panel-bg) 0%, transparent) !important;
 }
 
 .dashboard-top {
@@ -129,7 +130,7 @@ const goToLinkUploadPanel = () => {
 .dashboard-subtitle {
 	margin-top: 0.2rem;
 	font-size: 0.9rem;
-	opacity: 0.82;
+	opacity: 0.95;
 }
 
 .dashboard-utility {

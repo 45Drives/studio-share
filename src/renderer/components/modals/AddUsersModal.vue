@@ -20,7 +20,7 @@
               <div class="font-semibold text-sm">{{ linkMode ? 'Select existing users' : 'Existing users' }}</div>
               <input type="text" v-model.trim="userSearch"
                 class="input-textlike border rounded px-2 py-1 text-sm"
-                placeholder="Search by name/username/email" @input="debouncedFetchUsers()" />
+                placeholder="Search by name/username/email/company/tag" @input="debouncedFetchUsers()" />
             </div>
 
             <div class="max-h-[45vh] overflow-auto border rounded">
@@ -36,6 +36,11 @@
                       @{{ u.username }}
                       <span v-if="u.user_email">• {{ u.user_email }}</span>
                     </span>
+                    <span v-if="u.company || (u.tags && u.tags.length)" class="opacity-60 text-xs">
+                      <span v-if="u.company">{{ u.company }}</span>
+                      <span v-if="u.company && u.tags && u.tags.length">•</span>
+                      <span v-if="u.tags && u.tags.length">{{ u.tags.join(', ') }}</span>
+                    </span>
                   </div>
                 </label>
                 <div v-else class="flex items-center gap-2">
@@ -46,6 +51,11 @@
                     <span class="opacity-70">
                       @{{ u.username }}
                       <span v-if="u.user_email">• {{ u.user_email }}</span>
+                    </span>
+                    <span v-if="u.company || (u.tags && u.tags.length)" class="opacity-60 text-xs">
+                      <span v-if="u.company">{{ u.company }}</span>
+                      <span v-if="u.company && u.tags && u.tags.length">•</span>
+                      <span v-if="u.tags && u.tags.length">{{ u.tags.join(', ') }}</span>
                     </span>
                   </div>
                 </div>
@@ -156,14 +166,24 @@
                     </div>
                     <p v-if="passwordMismatch" id="password-mismatch-error" class="mt-1 text-xs text-red-500">Passwords do not match.</p>
                   </div>
-                     <div>
+                  <div>
                     <label class="text-xs opacity-80">Email (optional)</label>
                     <input type="email" v-model.trim="newUser.user_email" tabindex="5"
                       class="input-textlike border rounded px-3 py-2 w-full" placeholder="jane@example.com" />
                   </div>
                   <div>
+                    <label class="text-xs opacity-80">Company (optional)</label>
+                    <input type="text" v-model.trim="newUser.company" tabindex="6"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="Acme Corp" />
+                  </div>
+                  <div class="col-span-2">
+                    <label class="text-xs opacity-80">Tags (optional)</label>
+                    <input type="text" v-model.trim="newUserTagsInput" tabindex="7"
+                      class="input-textlike border rounded px-3 py-2 w-full" placeholder="finance, vip, internal" />
+                  </div>
+                  <div>
                     <label class="text-xs opacity-80">Default role (new links)</label>
-                    <select v-model="newUserDefaultRoleId" :disabled="rolesLoading || !roles.length" tabindex="7"
+                    <select v-model="newUserDefaultRoleId" :disabled="rolesLoading || !roles.length" tabindex="8"
                       class="input-textlike border rounded px-3 py-2 w-full">
                       <option :value="null">None</option>
                       <option v-if="rolesLoading" disabled value="">Loading roles…</option>
@@ -175,7 +195,7 @@
                   </div>
                   <div v-if="linkMode" class="col-span-2">
                     <label class="text-xs opacity-80">Role for this link</label>
-                    <select v-model.number="newUserRoleId" :disabled="rolesLoading || !roles.length" tabindex="6"
+                    <select v-model.number="newUserRoleId" :disabled="rolesLoading || !roles.length" tabindex="9"
                       class="input-textlike border rounded px-3 py-2 w-full">
                       <option v-if="rolesLoading" disabled value="">Loading roles…</option>
                       <option v-else-if="!roles.length" disabled value="">No roles</option>
@@ -191,7 +211,7 @@
                   <div class="flex items-center gap-2">
                     <input type="color" v-model="newUser.display_color" class="h-8 w-10 p-0 border rounded"
                       title="Pick a color" />
-                    <input type="text" v-model.trim="newUser.display_color" tabindex="8"
+                    <input type="text" v-model.trim="newUser.display_color" tabindex="10"
                       class="input-textlike border rounded px-3 py-2 w-full" placeholder="#aabbcc" />
                   </div>
                   <div class="text-xs opacity-70 mt-1">Used to tint this user’s comments.</div>
@@ -200,7 +220,7 @@
                 <div class="flex flex-row w-full justify-between mt-2">
 
                   <button class="btn btn-secondary" @click="resetNewUser()">Reset</button>
-                  <button class="btn btn-primary" @click="createUser()" tabindex="9" :disabled="!canSubmit">{{linkMode ? 'Create & Select User' : 'Create User'}}</button>
+                  <button class="btn btn-primary" @click="createUser()" tabindex="11" :disabled="!canSubmit">{{linkMode ? 'Create & Select User' : 'Create User'}}</button>
                 </div>
 
 
@@ -240,6 +260,16 @@
           <label class="text-xs opacity-80">Email</label>
           <input v-model.trim="editForm.user_email" type="email"
             class="input-textlike border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label class="text-xs opacity-80">Company</label>
+          <input v-model.trim="editForm.company" type="text"
+            class="input-textlike border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label class="text-xs opacity-80">Tags</label>
+          <input v-model.trim="editForm.tags_text" type="text"
+            class="input-textlike border rounded px-3 py-2 w-full" placeholder="finance, vip, internal" />
         </div>
         <div>
           <label class="text-xs opacity-80">Comment color</label>
@@ -323,7 +353,8 @@ const roleNameByKey = ref<Record<string, string>>({})
 const newUserRoleId = ref<number | null>(null)
 const newUserDefaultRoleId = ref<number | null>(null)
 
-const newUser = ref<ExistingUser>({ username: '', name: '', user_email: '', display_color: randomPastel() })
+const newUser = ref<ExistingUser>({ username: '', name: '', user_email: '', company: '', display_color: randomPastel(), tags: [] })
+const newUserTagsInput = ref('')
 const error = ref('')
 const tempPassword = ref('')
 const tempPasswordConfirm = ref('')
@@ -342,9 +373,11 @@ const pendingResetUserId = ref<number | string | null>(null)
 
 // Edit state
 const editing = ref<ExistingUser | null>(null)
-const editForm = ref<{ name: string; user_email: string; display_color: string; default_role_id: number | null }>({
+const editForm = ref<{ name: string; user_email: string; company: string; tags_text: string; display_color: string; default_role_id: number | null }>({
   name: '',
   user_email: '',
+  company: '',
+  tags_text: '',
   display_color: '#999999',
   default_role_id: null,
 })
@@ -368,9 +401,13 @@ const hasProfileEdits = computed(() => {
   if (!editing.value) return false
   const nameChanged = editForm.value.name.trim() !== (editing.value.name || '')
   const emailChanged = (editForm.value.user_email.trim() || null) !== (editing.value.user_email ?? null)
+  const companyChanged = (editForm.value.company.trim() || null) !== ((editing.value.company || '').trim() || null)
+  const currentTags = normalizeTagArray(editing.value.tags)
+  const nextTags = normalizeTagArray(editForm.value.tags_text)
+  const tagsChanged = !tagArraysEqual(currentTags, nextTags)
   const colorChanged = (normalizeHex(editForm.value.display_color) || null) !== (editing.value.display_color || null)
   const defaultRoleChanged = (editForm.value.default_role_id ?? null) !== (getDefaultRoleId(editing.value) ?? null)
-  return nameChanged || emailChanged || colorChanged || defaultRoleChanged
+  return nameChanged || emailChanged || companyChanged || tagsChanged || colorChanged || defaultRoleChanged
 })
 
 const defaultRoleId = computed(() => {
@@ -469,6 +506,33 @@ function userKey(u: ExistingUser) {
   return u.id != null ? String(u.id) : (u.username || '').toLowerCase()
 }
 
+function normalizeTagArray(input: unknown): string[] {
+  const raw = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? input.split(',')
+      : [];
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const tag = String(item ?? '').trim()
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+  }
+  return out
+}
+
+function tagArraysEqual(a: string[], b: string[]) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if ((a[i] || '').toLowerCase() !== (b[i] || '').toLowerCase()) return false
+  }
+  return true
+}
+
 async function fetchUsers() {
   try {
     const q = userSearch.value ? `?q=${encodeURIComponent(userSearch.value)}` : ''
@@ -489,6 +553,8 @@ async function fetchUsers() {
         out.default_role_name ?? out.defaultRoleName ?? out.default_role?.name
       if (rawDefaultRoleName != null) out.default_role_name = String(rawDefaultRoleName)
       if (!out.default_role && out.defaultRole) out.default_role = out.defaultRole
+      out.company = out.company == null ? '' : String(out.company)
+      out.tags = normalizeTagArray(out.tags ?? out.tags_json ?? out.tagsJson ?? out.user_tags)
       return out
     })
     // ensure selected keys still exist; keep them even if not in the current page
@@ -587,6 +653,8 @@ async function createUser() {
     username: newUser.value.username.trim(),
     name: (newUser.value.name || '').trim(),
     user_email: (newUser.value.user_email || '').trim() || undefined,
+    company: (newUser.value.company || '').trim() || undefined,
+    tags: normalizeTagArray(newUserTagsInput.value),
     display_color: normalizeHex(newUser.value.display_color) || randomPastel(),
   }
   if (newUserDefaultRoleId.value != null) {
@@ -627,6 +695,8 @@ async function createUser() {
       username: created.username || payload.username,
       name: created.name ?? payload.name,
       user_email: created.user_email ?? payload.user_email,
+      company: created.company ?? payload.company,
+      tags: normalizeTagArray(created.tags ?? payload.tags),
       display_color: created.display_color ?? payload.display_color,
     }
     if (payload.default_role_id != null) {
@@ -660,6 +730,8 @@ function startEdit(u: ExistingUser) {
   editForm.value = {
     name: u.name || '',
     user_email: u.user_email || '',
+    company: u.company || '',
+    tags_text: normalizeTagArray(u.tags).join(', '),
     display_color: normalizeHex(u.display_color) || '#999999',
     default_role_id: getDefaultRoleId(u),
   }
@@ -690,6 +762,17 @@ async function saveEdit() {
       const nextEmail = editForm.value.user_email.trim() || null
       if ((nextEmail || null) !== (editing.value.user_email ?? null)) {
         payload.user_email = nextEmail
+      }
+
+      const nextCompany = editForm.value.company.trim() || null
+      if ((nextCompany || null) !== ((editing.value.company || '').trim() || null)) {
+        payload.company = nextCompany
+      }
+
+      const nextTags = normalizeTagArray(editForm.value.tags_text)
+      const currentTags = normalizeTagArray(editing.value.tags)
+      if (!tagArraysEqual(nextTags, currentTags)) {
+        payload.tags = nextTags
       }
 
       const nextColor = normalizeHex(editForm.value.display_color) || null
@@ -780,7 +863,8 @@ function clearSelected() {
 }
 
 function resetNewUser() {
-  newUser.value = { username: '', name: '', user_email: '', display_color: randomPastel() }
+  newUser.value = { username: '', name: '', user_email: '', company: '', display_color: randomPastel(), tags: [] }
+  newUserTagsInput.value = ''
   tempPassword.value = ''
   tempPasswordConfirm.value = ''
   showTempPassword.value = false

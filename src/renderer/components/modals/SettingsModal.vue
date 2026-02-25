@@ -9,7 +9,7 @@
                 <CardContainer class="flex-1 min-h-0 overflow-y-auto w-full bg-accent rounded-md shadow-xl min-w-0">
                     <template #header>
                         <div class="flex items-center justify-between px-6 py-4 shrink-0">
-                            <div class="text-xl font-semibold text-default">Studio Share Settings</div>
+                            <div class="text-xl font-semibold text-default">45Flow Settings</div>
                             <button class="btn btn-secondary" type="button" @click="close" :disabled="busy">
                                 Close
                             </button>
@@ -181,6 +181,99 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="border-t border-default pt-4 mt-4">
+                                <div class="text-base font-semibold">Maintenance Cleanup</div>
+                                <div class="text-xs opacity-70 mt-1">
+                                    Scan for orphaned transcode folders and missing-file metadata, then optionally apply cleanup.
+                                </div>
+
+                                <div class="space-y-3 mt-3 text-sm">
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="cleanupDeleteOrphans" :disabled="busy || cleanupBusy" />
+                                        <span>Delete orphan transcode directories</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="cleanupPruneMissingFiles" :disabled="busy || cleanupBusy" />
+                                        <span>Prune DB rows for missing source files</span>
+                                    </label>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs opacity-80 mb-1">Orphan min age (hours)</label>
+                                            <input
+                                                v-model.number="cleanupOrphanMinAgeHours"
+                                                type="number"
+                                                min="0"
+                                                max="8760"
+                                                :disabled="busy || cleanupBusy"
+                                                class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs opacity-80 mb-1">Max missing file checks</label>
+                                            <input
+                                                v-model.number="cleanupMaxMissingFiles"
+                                                type="number"
+                                                min="1"
+                                                max="5000"
+                                                :disabled="busy || cleanupBusy"
+                                                class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button class="btn btn-secondary" type="button" @click="runCleanup(false)" :disabled="busy || cleanupBusy">
+                                            <span v-if="cleanupBusy && cleanupMode === 'scan'">Scanning…</span>
+                                            <span v-else>Run Scan</span>
+                                        </button>
+                                        <button class="btn btn-danger" type="button" @click="runCleanup(true)" :disabled="busy || cleanupBusy">
+                                            <span v-if="cleanupBusy && cleanupMode === 'apply'">Applying…</span>
+                                            <span v-else>Apply Cleanup</span>
+                                        </button>
+                                        <button class="btn btn-secondary" type="button" @click="exportCleanupReport" :disabled="!cleanupResult || cleanupBusy">
+                                            Export JSON
+                                        </button>
+                                    </div>
+
+                                    <div v-if="cleanupError" class="text-danger text-xs">
+                                        {{ cleanupError }}
+                                    </div>
+
+                                    <div v-if="cleanupResult" class="rounded border border-default bg-default/20 p-3 text-xs space-y-2">
+                                        <div class="font-semibold">
+                                            Last run: {{ cleanupResult.apply ? 'Applied changes' : 'Dry run' }}
+                                        </div>
+                                        <div v-if="cleanupLastRunAt" class="opacity-75">
+                                            Ran at: {{ cleanupLastRunAtLabel }}
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <div>Transcode fixes: <span class="font-semibold">{{ cleanupTranscodeFixes.length }}</span></div>
+                                            <div>Orphan dirs: <span class="font-semibold">{{ cleanupOrphanDirs.length }}</span></div>
+                                            <div>Missing files: <span class="font-semibold">{{ cleanupMissingFiles.length }}</span></div>
+                                        </div>
+
+                                        <div v-if="cleanupOrphanDirs.length">
+                                            <div class="font-semibold mb-1">Sample orphan dirs</div>
+                                            <ul class="space-y-1">
+                                                <li v-for="(d, i) in cleanupOrphanDirs.slice(0, 5)" :key="`orphan-${i}`" class="font-mono break-all">
+                                                    {{ d.dir || d.path || d }}
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        <div v-if="cleanupMissingFiles.length">
+                                            <div class="font-semibold mb-1">Sample missing files</div>
+                                            <ul class="space-y-1">
+                                                <li v-for="(m, i) in cleanupMissingFiles.slice(0, 5)" :key="`missing-${i}`" class="font-mono break-all">
+                                                    {{ m.abs || [m.rel_dir, m.filename].filter(Boolean).join('/') || m }}
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                     </div>
@@ -268,6 +361,29 @@ const externalHttpsPort = ref<number>(443);
 const defaultRestrictAccess = ref(false);
 const defaultAllowComments = ref(true);
 const defaultUseProxyFiles = ref(false);
+
+const cleanupBusy = ref(false);
+const cleanupMode = ref<"scan" | "apply" | null>(null);
+const cleanupError = ref<string | null>(null);
+const cleanupResult = ref<any | null>(null);
+const cleanupLastRunAt = ref<number | null>(null);
+const cleanupDeleteOrphans = ref(true);
+const cleanupPruneMissingFiles = ref(false);
+const cleanupMaxMissingFiles = ref(200);
+const cleanupOrphanMinAgeHours = ref(24);
+
+const cleanupTranscodeFixes = computed(() =>
+    Array.isArray(cleanupResult.value?.transcodeFixes) ? cleanupResult.value.transcodeFixes : []
+);
+const cleanupOrphanDirs = computed(() =>
+    Array.isArray(cleanupResult.value?.orphanDirs) ? cleanupResult.value.orphanDirs : []
+);
+const cleanupMissingFiles = computed(() =>
+    Array.isArray(cleanupResult.value?.missingFiles) ? cleanupResult.value.missingFiles : []
+);
+const cleanupLastRunAtLabel = computed(() =>
+    cleanupLastRunAt.value ? new Date(cleanupLastRunAt.value).toLocaleString() : "—"
+);
 
 // Read-only server-reported effective base (when auto)
 const externalBaseEffective = ref<string | null>(null);
@@ -472,6 +588,69 @@ async function save() {
     } finally {
         busy.value = false;
         setTimeout(() => { saveOk.value = false; }, 2000);
+    }
+}
+
+async function runCleanup(apply: boolean) {
+    cleanupError.value = null;
+    cleanupBusy.value = true;
+    cleanupMode.value = apply ? "apply" : "scan";
+
+    try {
+        const orphanMinAgeMs = Math.max(0, Number(cleanupOrphanMinAgeHours.value || 0)) * 60 * 60 * 1000;
+        const maxMissingFiles = Math.max(1, Number(cleanupMaxMissingFiles.value || 200));
+        const payload = {
+            apply: !!apply,
+            deleteOrphans: !!cleanupDeleteOrphans.value,
+            pruneMissingFiles: !!cleanupPruneMissingFiles.value,
+            maxMissingFiles,
+            orphanMinAgeMs,
+        };
+
+        const resp = await apiFetch("/api/admin/cleanup", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+        cleanupResult.value = resp;
+        cleanupLastRunAt.value = Date.now();
+
+        pushNotification(
+            new Notification(
+                apply ? "Cleanup Applied" : "Cleanup Scan Complete",
+                `Transcode fixes: ${cleanupTranscodeFixes.value.length}, orphan dirs: ${cleanupOrphanDirs.value.length}, missing files: ${cleanupMissingFiles.value.length}`,
+                "success",
+                7000
+            )
+        );
+    } catch (e: any) {
+        cleanupError.value = e?.message || "Cleanup request failed.";
+    } finally {
+        cleanupBusy.value = false;
+        cleanupMode.value = null;
+    }
+}
+
+function exportCleanupReport() {
+    if (!cleanupResult.value) return;
+    try {
+        const payload = {
+            generatedAt: cleanupLastRunAt.value ? new Date(cleanupLastRunAt.value).toISOString() : new Date().toISOString(),
+            result: cleanupResult.value,
+        };
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `studio-cleanup-report-${ts}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        pushNotification(new Notification("Exported", "Cleanup report JSON downloaded.", "success", 4000));
+    } catch (e: any) {
+        pushNotification(new Notification("Export Failed", e?.message || "Unable to export cleanup report.", "error", 6000));
     }
 }
 

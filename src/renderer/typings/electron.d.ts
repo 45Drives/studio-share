@@ -82,6 +82,8 @@ export type AccessRow = {
   name?: string
   user_email?: string
   display_color?: string | null
+  company?: string | null
+  tags?: string[]
   role_id?: number | null
   role_name?: string | null
   role?: {
@@ -105,6 +107,8 @@ export type Commenter = {
   name?: string
   user_email?: string,
   display_color?: string
+  company?: string | null
+  tags?: string[]
   role_id?: number | null
   role_name?: string | null
   role?: Role | null
@@ -117,6 +121,8 @@ export type ExistingUser = {
   name?: string
   user_email?: string
   display_color?: string
+  company?: string | null
+  tags?: string[]
   role_id?: number | null
   role_name?: string | null
   role?: Role | null

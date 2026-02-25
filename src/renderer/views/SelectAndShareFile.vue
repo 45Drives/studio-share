@@ -21,7 +21,7 @@
                                     <span v-else-if="!projectRoots.length" class="ml-1">None detected</span>
                                 </div>
 
-                                <div class="max-h-64 overflow-auto border-default bg-accent rounded-md min-w-0">
+                                <div class="max-h-64 overflow-auto border-default bg-default rounded-md min-w-0">
                                     <div v-for="r in projectRoots" :key="r.mountpoint"
                                         class="flex items-center justify-between gap-2 border-b border-default px-3 py-2 text-base min-w-0">
                                         <div class="min-w-0 flex-1">
@@ -304,7 +304,7 @@
                                         </div>
                                  
                                         <!-- Advanced Video Options -->
-                                        <div class="border-t border-default mt-2 pt-2 min-w-0">
+                                        <div v-if="hasVideoSelected" class="border-t border-default mt-2 pt-2 min-w-0">
                                             <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled"
                                                 class="rounded-md border border-default bg-accent min-w-0">
                                                 <DisclosureButton
@@ -1789,6 +1789,19 @@ async function generateLink() {
                 : { queued: [] as number[], active: [] as number[], skipped: [] as number[] }
             const hlsTrackSet = new Set<number>([...hlsSplit.queued, ...hlsSplit.active])
             const proxyTrackSet = new Set<number>([...proxySplit.queued, ...proxySplit.active])
+            const hlsQueuedSet = new Set<number>(hlsSplit.queued)
+            const hlsActiveSet = new Set<number>(hlsSplit.active)
+            const proxyQueuedSet = new Set<number>(proxySplit.queued)
+            const proxyActiveSet = new Set<number>(proxySplit.active)
+
+            const transcodeDetail = (kind: 'hls' | 'proxy_mp4', assetVersionId: number) => {
+                const queuedSet = kind === 'hls' ? hlsQueuedSet : proxyQueuedSet
+                const activeSet = kind === 'hls' ? hlsActiveSet : proxyActiveSet
+                const kindLabel = kind === 'hls' ? 'HLS' : 'proxy'
+                if (activeSet.has(assetVersionId)) return `Tracking ${kindLabel} (already running)`
+                if (queuedSet.has(assetVersionId)) return `Tracking ${kindLabel} (queued now)`
+                return `Tracking ${kindLabel}`
+            }
 
             if (versionIds.length) {
                 const groupId = `link:${data.viewUrl}`;
@@ -1831,7 +1844,7 @@ async function generateLink() {
                         if (shouldTrackHls && canUsePlayback) {
                             transfer.startPlaybackTranscodeTask({
                                 title: `Transcoding: ${getFileLabel(rec)}`,
-                                detail: 'Tracking HLS',
+                                detail: transcodeDetail('hls', assetVersionId),
                                 intervalMs: 1500,
                                 jobKind: 'hls',
                                 context,
@@ -1849,7 +1862,7 @@ async function generateLink() {
                                 apiFetch,
                                 assetVersionIds: [assetVersionId],
                                 title: `Transcoding: ${getFileLabel(rec)}`,
-                                detail: 'Tracking HLS',
+                                detail: transcodeDetail('hls', assetVersionId),
                                 intervalMs: 1500,
                                 jobKind: 'hls',
                                 context,
@@ -1860,7 +1873,7 @@ async function generateLink() {
                             if (canUsePlayback) {
                                 transfer.startPlaybackTranscodeTask({
                                     title: `Transcoding: ${getFileLabel(rec)}`,
-                                    detail: 'Tracking proxy',
+                                    detail: transcodeDetail('proxy_mp4', assetVersionId),
                                     intervalMs: 1500,
                                     jobKind: 'proxy_mp4',
                                     context,
@@ -1881,7 +1894,7 @@ async function generateLink() {
                                     apiFetch,
                                     assetVersionIds: [assetVersionId],
                                     title: `Transcoding: ${getFileLabel(rec)}`,
-                                    detail: 'Tracking proxy',
+                                    detail: transcodeDetail('proxy_mp4', assetVersionId),
                                     intervalMs: 1500,
                                     jobKind: 'proxy_mp4',
                                     context,

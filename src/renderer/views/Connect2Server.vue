@@ -24,18 +24,31 @@
                             </select>
                         </div>
 
-                        <div class="connect-or">OR</div>
+                        <div class="connect-or mt-2">OR</div>
 
                         <div class="flex flex-col text-left">
                             <span class="connect-label">Connect manually via IP</span>
                             <input v-model="manualIp" type="text" placeholder="192.168.1.123" :disabled="anyBusy"
-                                class="connect-control text-default input-textlike border px-4 py-2 rounded text-lg w-full" />
+                                class="connect-control h-[2.9rem] text-default input-textlike border px-4 rounded-lg text-lg w-full" />
                         </div>
 
-                        <div class="mt-1 text-left">
-                            <span class="block text-sm mb-2 font-semibold">Ports (optional)</span>
+                        <details class="py-2 gap-3 my-2 text-left group " :open="Boolean(portError || portWarning)">
+                            <summary
+                                class="list-none flex w-full items-center justify-between text-left cursor-pointer select-none">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold">Configure Ports</p>
+                                    <p class="text-xs opacity-75">Optional. Leave collapsed unless you need custom ports.</p>
+                                </div>
+                                <svg
+                                    class="h-5 w-5 opacity-70 transition-transform duration-200 group-open:rotate-180"
+                                    viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd"
+                                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.51a.75.75 0 0 1-1.08 0l-4.25-4.51a.75.75 0 0 1 .02-1.06Z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </summary>
 
-                            <div class="connect-port-grid text-sm">
+                            <div class="connect-port-grid text-sm mt-2">
                                 <label class="flex flex-col">
                                     <span class="mb-1 opacity-80">SSH</span>
                                     <input v-model.number="sshPort" type="number" min="1" max="65535" :disabled="anyBusy"
@@ -71,23 +84,25 @@
                             <p v-else-if="portWarning" class="mt-1 text-xs text-warning">
                                 {{ portWarning }}
                             </p>
-                        </div>
+                        </details>
                     </section>
 
-                    <section class="connect-panel">
+                    <section class="connect-panel connect-panel-auth">
                         <div class="connect-section-title">Authentication</div>
-                        <label class="flex flex-col">
+                        <label class="connect-auth-row flex flex-col">
                             <span class="connect-label">Username</span>
                             <input v-model="username" type="text" placeholder="root" :disabled="anyBusy"
-                                class="connect-control text-default input-textlike px-4 py-2 rounded text-lg w-full border" />
+                                class="connect-control h-[2.9rem] text-default input-textlike px-4 py-2 rounded-lg text-lg w-full border" />
                         </label>
 
-                        <label class="flex flex-col">
+                        <div class="connect-or connect-or--ghost" aria-hidden="true"></div>
+
+                        <label class="connect-auth-row flex flex-col">
                             <span class="connect-label">Password</span>
                             <div class="w-full relative">
                                 <input v-model="password" v-enter-next :type="showPassword ? 'text' : 'password'" id="password"
                                     :disabled="anyBusy"
-                                    class="connect-control text-default input-textlike px-4 py-2 rounded text-lg w-full border"
+                                    class="connect-control h-[2.9rem] text-default input-textlike px-4 py-2 rounded-lg text-lg w-full border"
                                     placeholder="••••••••" />
                                 <button type="button" @click="togglePassword" :disabled="anyBusy"
                                     class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
@@ -1007,12 +1022,22 @@ onUnmounted(() => {
     opacity: 0.9;
 }
 
+.connect-panel-auth .connect-section-title {
+    margin-bottom: 0.2rem;
+}
+
 .connect-or {
     text-align: center;
     font-size: 0.78rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     opacity: 0.7;
+    min-height: 1rem;
+    line-height: 1;
+}
+
+.connect-or--ghost {
+    visibility: hidden;
 }
 
 .connect-port-grid {

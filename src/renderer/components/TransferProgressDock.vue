@@ -88,8 +88,9 @@
                                 </div>
                             </div>
 
-                            <progress class="mt-2 w-full h-2 rounded-lg overflow-hidden bg-default"
-                                :value="t.progress || 0" max="100" />
+                            <progress class="transfer-progress mt-2 w-full h-2 rounded-lg overflow-hidden"
+                                :class="{ 'transfer-progress--upload': t.kind === 'upload' }" :value="t.progress || 0"
+                                max="100" />
 
                             <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-1">
                                 <span><b>Status:</b> {{ t.status }}</span>
@@ -354,3 +355,43 @@ function dismissGroup(groupKey: string) {
     for (const t of g.tasksFlat) removeTask(t.taskId)
 }
 </script>
+
+<style scoped>
+.transfer-progress {
+    appearance: none;
+    background: color-mix(in srgb, var(--btn-primary-bg) 14%, #d7dce4);
+    accent-color: var(--btn-primary-bg);
+}
+
+.transfer-progress::-webkit-progress-bar {
+    background: color-mix(in srgb, var(--btn-primary-bg) 14%, #d7dce4);
+}
+
+.transfer-progress::-webkit-progress-value {
+    background: var(--btn-primary-bg);
+}
+
+.transfer-progress::-moz-progress-bar {
+    background: var(--btn-primary-bg);
+}
+
+.transfer-progress--upload {
+    accent-color: var(--btn-success-bg, #22c55e);
+}
+
+.transfer-progress--upload::-webkit-progress-value {
+    background: var(--btn-success-bg, #22c55e);
+}
+
+.transfer-progress--upload::-moz-progress-bar {
+    background: var(--btn-success-bg, #22c55e);
+}
+
+:global(.dark) .transfer-progress {
+    background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
+}
+
+:global(.dark) .transfer-progress::-webkit-progress-bar {
+    background: color-mix(in srgb, var(--btn-primary-bg) 14%, #11151d);
+}
+</style>
