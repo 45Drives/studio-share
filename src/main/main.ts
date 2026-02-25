@@ -982,9 +982,9 @@ ipcMain.on('renderer-ready', (e) => {
 ipcMain.handle('get-client-ident', async () => ({ installId }))
 
 function checkLogDir(logSuccess = true): string {
-  // LINUX: /home/<username>/.config/flow-by-45studio/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
-  // MAC:   /Users/<username>/Library/Application Support/flow-by-45studio/logs
-  // WIN:   C:\Users\<username>\AppData\Roaming\flow-by-45studio\logs
+  // LINUX: /home/<username>/.config/45flow/logs       (IN DEV MODE: /home/<username>/config/Electron/logs/)
+  // MAC:   /Users/<username>/Library/Application Support/45flow/logs
+  // WIN:   C:\Users\<username>\AppData\Roaming\45flow\logs
   const baseLogDir = path.join(app.getPath('userData'), 'logs');
   try {
     if (!fs.existsSync(baseLogDir)) {

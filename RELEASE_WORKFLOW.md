@@ -56,7 +56,7 @@ If Linux artifacts are not post-signed, the generated `latest-linux.yml` is usua
 1. Build Windows installer on Windows build machine (`yarn build:win`).
 2. Sign final `.exe` with your external signing tool.
 3. Regenerate `latest.yml` from the final signed `.exe` using this repo helper:
-   - `yarn release:gen-yml --version 1.0.1 --output /path/to/latest.yml --file /path/to/Flow-by-45Studio-1.0.1-win-x64.exe`
+   - `yarn release:gen-yml --version 1.0.1 --output /path/to/latest.yml --file /path/to/45flow-1.0.1-win-x64.exe`
 4. Copy signed `.exe` and `latest.yml` back to Linux control machine.
 
 ### 4. Build + sign macOS artifacts (ARM build -> Intel sign path)
@@ -67,7 +67,7 @@ If Linux artifacts are not post-signed, the generated `latest-linux.yml` is usua
    - Signed/notarized `.zip` (required for updater)
    - Signed/notarized `.dmg` (optional for updater, useful for manual downloads)
 3. Generate `latest-mac.yml` from final signed outputs:
-   - `yarn release:gen-yml --version 1.0.1 --output /path/to/latest-mac.yml --path Flow-by-45Studio-1.0.1-mac.zip --file /path/to/Flow-by-45Studio-1.0.1-mac.zip --file /path/to/Flow-by-45Studio-1.0.1-mac.dmg`
+   - `yarn release:gen-yml --version 1.0.1 --output /path/to/latest-mac.yml --path 45flow-1.0.1-mac.zip --file /path/to/45flow-1.0.1-mac.zip --file /path/to/45flow-1.0.1-mac.dmg`
 4. Copy `.zip`, `.dmg`, and `latest-mac.yml` back to Linux control machine.
 
 ### 5. Upload all release assets to the same draft
