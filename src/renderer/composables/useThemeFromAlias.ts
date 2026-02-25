@@ -9,10 +9,14 @@ export type Theme =
   | 'theme-studio-original-purple'
   | 'theme-studio-grad-purple-orange'
   | 'theme-studio-grad-purple-pink-orange'
-  | 'theme-studio-grad-pink-orange'
+  | 'theme-studio-grad-purple-pink-blue'
+  | 'theme-studio-grad-purple-blue'
+  | 'theme-studio-grad-red-purple-blue'
+  | 'theme-studio-grad-sunset-laser'
+  | 'theme-studio-grad-neon-studio'
   | 'theme-studio-slate'
   | 'theme-studio-ocean'
-  | 'theme-studio-carbon'
+  | 'theme-studio-grad-moon-mist'
 type Division = 'studio' | 'homelab' | 'professional' | 'default'
 
 const aliasToTheme: Record<string, Theme> = {
@@ -29,10 +33,14 @@ const themeToDivision: Record<Theme, Division> = {
   'theme-studio-original-purple': 'studio',
   'theme-studio-grad-purple-orange': 'studio',
   'theme-studio-grad-purple-pink-orange': 'studio',
-  'theme-studio-grad-pink-orange': 'studio',
+  'theme-studio-grad-purple-pink-blue': 'studio',
+  'theme-studio-grad-purple-blue': 'studio',
+  'theme-studio-grad-red-purple-blue': 'studio',
+  'theme-studio-grad-sunset-laser': 'studio',
+  'theme-studio-grad-neon-studio': 'studio',
   'theme-studio-slate': 'studio',
   'theme-studio-ocean': 'studio',
-  'theme-studio-carbon': 'studio',
+  'theme-studio-grad-moon-mist': 'studio',
   'theme-default': 'default'
 }
 
@@ -47,16 +55,21 @@ function isTheme(value: string): value is Theme {
     'theme-studio-original-purple',
     'theme-studio-grad-purple-orange',
     'theme-studio-grad-purple-pink-orange',
-    'theme-studio-grad-pink-orange',
+    'theme-studio-grad-purple-pink-blue',
+    'theme-studio-grad-purple-blue',
+    'theme-studio-grad-red-purple-blue',
+    'theme-studio-grad-sunset-laser',
+    'theme-studio-grad-neon-studio',
     'theme-studio-slate',
     'theme-studio-ocean',
-    'theme-studio-carbon',
+    'theme-studio-grad-moon-mist',
   ].includes(value)
 }
 
 function loadStoredTheme(): Theme | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (raw === 'theme-studio-carbon') return 'theme-studio-grad-moon-mist'
     return raw && isTheme(raw) ? raw : null
   } catch {
     return null
@@ -84,9 +97,14 @@ function setHtmlThemeClass(theme: Theme) {
     'theme-studio-original-purple',
     'theme-studio-grad-purple-orange',
     'theme-studio-grad-purple-pink-orange',
-    'theme-studio-grad-pink-orange',
+    'theme-studio-grad-purple-pink-blue',
+    'theme-studio-grad-purple-blue',
+    'theme-studio-grad-red-purple-blue',
+    'theme-studio-grad-sunset-laser',
+    'theme-studio-grad-neon-studio',
     'theme-studio-slate',
     'theme-studio-ocean',
+    'theme-studio-grad-moon-mist',
     'theme-studio-carbon'
   )
   root.classList.add(theme)

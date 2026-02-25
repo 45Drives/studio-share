@@ -130,11 +130,16 @@ const studioPalettes: Array<{ label: string; theme: Theme; className: string }> 
     { label: 'Original Purple', theme: 'theme-studio-original-purple', className: 'theme-btn-studio-original-purple' },
     { label: 'Purple + Orange', theme: 'theme-studio-grad-purple-orange', className: 'theme-btn-studio-grad-purple-orange' },
     { label: 'Purple + Pink + Orange', theme: 'theme-studio-grad-purple-pink-orange', className: 'theme-btn-studio-grad-purple-pink-orange' },
-    { label: 'Pink + Orange', theme: 'theme-studio-grad-pink-orange', className: 'theme-btn-studio-grad-pink-orange' },
+    { label: 'Purple + Pink + Blue', theme: 'theme-studio-grad-purple-pink-blue', className: 'theme-btn-studio-grad-purple-pink-blue' },
+    { label: 'Purple + Blue', theme: 'theme-studio-grad-purple-blue', className: 'theme-btn-studio-grad-purple-blue' },
+    { label: 'Red + Purple + Blue', theme: 'theme-studio-grad-red-purple-blue', className: 'theme-btn-studio-grad-red-purple-blue' },
+    { label: 'Sunset Laser', theme: 'theme-studio-grad-sunset-laser', className: 'theme-btn-studio-grad-sunset-laser' },
+    { label: 'Neon Studio', theme: 'theme-studio-grad-neon-studio', className: 'theme-btn-studio-grad-neon-studio' },
+    { label: 'Moon-Mist', theme: 'theme-studio-grad-moon-mist', className: 'theme-btn-studio-grad-moon-mist' },
     { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
     { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
     { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
-    { label: 'Carbon', theme: 'theme-studio-carbon', className: 'theme-btn-studio-carbon' },
+    
 ]
 
 function selectTheme(theme: Theme) {
@@ -263,13 +268,53 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
     filter: brightness(1.05);
 }
 
-.theme-btn-studio-grad-pink-orange {
-    background: linear-gradient(135deg, #D75A99 0%, #E88747 100%);
+.theme-btn-studio-grad-purple-pink-blue {
+    background: linear-gradient(135deg, #6D4FE0 0%, #D65EAE 50%, #4C7CF4 100%);
     border: 1px solid rgba(255, 255, 255, 0.22);
     color: white;
 }
 
-.theme-btn-studio-grad-pink-orange:hover {
+.theme-btn-studio-grad-purple-pink-blue:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-purple-blue {
+    background: linear-gradient(135deg, #7A3CFF 0%, #4A7CEB 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-purple-blue:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-red-purple-blue {
+    background: linear-gradient(135deg, #F43F5E 0%, #8B5CF6 52%, #3B82F6 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-red-purple-blue:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-sunset-laser {
+    background: linear-gradient(135deg, #FF6A00 0%, #FF2D95 48%, #2CF3E9 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-sunset-laser:hover {
+    filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-neon-studio {
+    background: linear-gradient(135deg, #14B8A6 0%, #6D28D9 45%, #F43F5E 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.theme-btn-studio-grad-neon-studio:hover {
     filter: brightness(1.05);
 }
 
@@ -295,15 +340,14 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
     border-color: #31596D;
 }
 
-.theme-btn-studio-carbon {
-    background-color: #3F5368;
-    border: 1px solid #3F5368;
+.theme-btn-studio-grad-moon-mist {
+    background: linear-gradient(135deg, #7A2CFF 0%, #2EA8FF 52%, #FFE44D 100%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     color: white;
 }
 
-.theme-btn-studio-carbon:hover {
-    background-color: #334354;
-    border-color: #334354;
+.theme-btn-studio-grad-moon-mist:hover {
+    filter: brightness(1.05);
 }
 
 .theme-btn {

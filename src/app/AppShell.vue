@@ -12,7 +12,13 @@
 
       <!-- Center (title) -->
       <div class="justify-self-center text-center items-center text-2xl font-semibold whitespace-nowrap">
-        {{ headerTitle || (route.meta.title as string) || '45Flow' }}
+        <!-- {{ headerTitle || (route.meta.title as string) || '45Flow' }} -->
+        <div
+          class="flow-logo-gradient mx-auto my-auto"
+          role="img"
+          aria-label="45Flow"
+          :style="{ '--flow-logo-src': `url(${flowLogo})` }"
+        />
       </div>
 
       <!-- Right (menu) -->
@@ -45,6 +51,7 @@ import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
 import { registerIpcActionListener } from "../renderer/composables/registerIpcActionListener";
 import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
 import UpdateBanner from '../renderer/components/UpdateBanner.vue'
+import flowLogo from '../../assets/logos/45Flow-w.png'
 
 // provide shared refs
 const currentServer = ref<Server | null>(null)
@@ -105,3 +112,20 @@ onBeforeUnmount(() => {
   unregisterIpcListener?.()
 })
 </script>
+
+<style scoped>
+.flow-logo-gradient {
+  width: clamp(9.5rem, 17vw, 12.25rem);
+  aspect-ratio: 841 / 210;
+  background: var(--btn-primary-fill);
+  background-size: cover;
+  -webkit-mask-image: var(--flow-logo-src);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--flow-logo-src);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+</style>

@@ -176,14 +176,22 @@ const connectMainCardBackground = computed(() => {
             return 'linear-gradient(135deg, #6F58B8 0%, #C96E36 100%)'
         case 'theme-studio-grad-purple-pink-orange':
             return 'linear-gradient(135deg, #7A4FD8 0%, #D95AA5 52%, #E57A4A 100%)'
-        case 'theme-studio-grad-pink-orange':
-            return 'linear-gradient(135deg, #D75A99 0%, #E88747 100%)'
+        case 'theme-studio-grad-purple-pink-blue':
+            return 'linear-gradient(135deg, #6D4FE0 0%, #D65EAE 52%, #4C7CF4 100%)'
+        case 'theme-studio-grad-purple-blue':
+            return 'linear-gradient(135deg, #7A3CFF 0%, #4A7CEB 100%)'
+        case 'theme-studio-grad-red-purple-blue':
+            return 'linear-gradient(135deg, #F43F5E 0%, #8B5CF6 52%, #3B82F6 100%)'
+        case 'theme-studio-grad-sunset-laser':
+            return 'linear-gradient(135deg, #FF6A00 0%, #FF2D95 48%, #2CF3E9 100%)'
+        case 'theme-studio-grad-neon-studio':
+            return 'linear-gradient(135deg, #14B8A6 0%, #6D28D9 45%, #F43F5E 100%)'
         case 'theme-studio-slate':
             return '#5F6E82'
         case 'theme-studio-ocean':
             return '#3E6D84'
-        case 'theme-studio-carbon':
-            return '#3F5368'
+        case 'theme-studio-grad-moon-mist':
+            return 'linear-gradient(135deg, #7A2CFF 0%, #2EA8FF 52%, #FFE44D 100%)'
         case 'theme-studio':
         default:
             return '#4E6B93'
