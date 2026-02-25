@@ -1,7 +1,7 @@
 {
   "name": "flow-by-45studio",
   "version": "0.3.0",
-  "description": "Client app allowing users to create/manage collaborator user accounts and send magic links to collaborators allowing them to view/interact/comment on multimedia files for review.",
+  "description": "Client app allowing users to create/manage collaborator user accounts and send Flow links to collaborators allowing them to view/interact/comment on multimedia files for review.",
   "main": "main/src/main/main.js",
   "workspaces": [
     "houston-common/houston-common-*"

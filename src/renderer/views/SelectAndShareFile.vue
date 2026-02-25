@@ -487,13 +487,13 @@
                                 Reset
                             </button>
                             <button class="btn btn-secondary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
-                                @click="generateLink" title="Create a magic link with the selected options">
+                                @click="generateLink" title="Create a Flow link with the selected options">
                                 <span v-if="loading" class="inline-flex items-center gap-2">
                                     <span
                                         class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
                                     Generating…
                                 </span>
-                                <span v-else>Generate magic link</span>
+                                <span v-else>Generate Flow link</span>
                             </button>
                         </div>
                         <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
@@ -1969,8 +1969,8 @@ async function generateLink() {
 
         pushNotification(
             new Notification(
-                'Magic Link Created',
-                `A ${label} magic link was created${titlePart}.`,
+                'Flow link Created',
+                `A ${label} Flow link was created${titlePart}.`,
                 'success',
                 8000,
             )
@@ -1987,7 +1987,7 @@ async function generateLink() {
 
         pushNotification(
             new Notification(
-                'Failed to Create Magic Link',
+                'Failed to Create Flow link',
                 msg,
                 level,
                 8000,
@@ -2018,7 +2018,7 @@ function openInBrowser() {
     pushNotification(
         new Notification(
             'Opening Link',
-            'Magic link opened in your default browser.',
+            'Flow link opened in your default browser.',
             'info',
             4000,
         )

@@ -565,7 +565,6 @@ body {
 .app-bg-textured {
   position: relative;
   isolation: isolate;
-  background: var(--ui-app-bg) !important;
 }
 
 .app-bg-textured::before {
@@ -579,6 +578,10 @@ body {
   background-position: top left;
   opacity: 0.45;
   z-index: -1;
+}
+
+.dark .app-bg-textured::before {
+  opacity: 0.20;
 }
 
 .btn {

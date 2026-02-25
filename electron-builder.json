@@ -16,7 +16,7 @@
   "linux": {
     "target": ["deb", "rpm"],
     "category": "Utility",
-    "synopsis": "Share and review media via magic links",
+    "synopsis": "Share and review media via Flow links",
     "vendor": "45Drives",
     "maintainer": "Jordan Keough <jkeough@45drives.com>",
     "icon": "assets/icons/linux"

@@ -310,7 +310,7 @@ Steps:
 7. Set link title
 8. Enable password protection (optional)
 
-Click **Generate magic link** to create the share URL.
+Click **Generate Flow link** to create the share URL.
 
 If proxy + watermark is selected and files are already processing, you may be prompted before overwriting.
 

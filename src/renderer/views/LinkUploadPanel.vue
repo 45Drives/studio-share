@@ -264,13 +264,13 @@
 									class="btn btn-secondary flex-1 min-w-[14rem]"
 									:disabled="!canGenerate || loading"
 									@click="generateLink"
-									title="Create a magic link with the selected options"
+									title="Create a Flow link with the selected options"
 								>
 									<span v-if="loading" class="inline-flex items-center gap-2">
 										<span class="inline-block w-4 h-4 border-2 border-default border-t-transparent rounded-full animate-spin"></span>
 										Generating…
 									</span>
-									<span v-else>Generate magic link</span>
+									<span v-else>Generate Flow link</span>
 								</button>
 							</div>
 
