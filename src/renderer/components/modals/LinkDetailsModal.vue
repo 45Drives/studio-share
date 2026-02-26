@@ -1103,11 +1103,12 @@ function clearLocalWatermark() {
 
 async function loadExistingWatermarkFilesForEdit() {
   try {
-    const data = await props.apiFetch('/api/files?dir=.45flow/watermarks', { method: 'GET' })
+    const dirRel = resolveWatermarkDirRelForEdit()
+    const data = await props.apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`, { method: 'GET' })
     const entries = Array.isArray(data?.entries) ? data.entries : []
     existingWatermarkFilesForEdit.value = entries
       .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
-      .map((e: any) => `.45flow/watermarks/${String(e.name).trim()}`)
+      .map((e: any) => resolveWatermarkRelPathForEdit(String(e.name).trim()))
       .sort((a: string, b: string) => a.localeCompare(b))
   } catch {
     existingWatermarkFilesForEdit.value = []
@@ -1134,14 +1135,19 @@ function resolveWatermarkStorageRootForEdit() {
   return { abs, rel }
 }
 
+function resolveWatermarkDirRelForEdit() {
+  const { rel } = resolveWatermarkStorageRootForEdit()
+  return rel ? `${rel}/.45flow/watermarks` : '.45flow/watermarks'
+}
+
 function resolveWatermarkUploadDirForEdit() {
-  return '/.45flow/watermarks'
+  return `/${resolveWatermarkDirRelForEdit()}`
 }
 
 function resolveWatermarkRelPathForEdit(name: string) {
   const cleanName = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
   if (!cleanName) return ''
-  return `.45flow/watermarks/${cleanName}`
+  return `${resolveWatermarkDirRelForEdit()}/${cleanName}`
 }
 
 async function ensureServerDirExistsForEdit(dir: string) {
@@ -2576,6 +2582,11 @@ async function saveAll() {
     if (typeof e?.payload === 'object' && e.payload) return e.payload
     if (typeof e?.response === 'object' && e.response) return e.response
     if (typeof e?.data === 'object' && e.data) return e.data
+    if (typeof e?.error === 'string' && e.error.trim()) return { error: e.error.trim() }
+    if (typeof e?.code === 'string' && e.code.trim()) return { error: e.code.trim() }
+    const msg = String(e?.message || '')
+    const match = msg.match(/\b(outputs_exist|hls_exists|watermark_exists)\b/i)
+    if (match?.[1]) return { error: match[1].toLowerCase() }
     if (typeof e?.message === 'string' && e.message.trim()) {
       try {
         return JSON.parse(e.message)

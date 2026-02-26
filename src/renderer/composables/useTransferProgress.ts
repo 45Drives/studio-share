@@ -39,6 +39,8 @@ export type TransferTask =
         detail?: string
         status: TranscodeStatus
         progress: number
+        speed?: string | null
+        eta?: string | null
         error?: string | null
 
         // exactly one of these should be set
@@ -82,6 +84,127 @@ function normalizeProgressPercent(n: any) {
     return clampPct(pct)
 }
 
+function normalizeEtaSeconds(v: any): number | null {
+    const n = Number(v)
+    if (!Number.isFinite(n) || n < 0) return null
+    return Math.max(0, Math.round(n))
+}
+
+function normalizeSpeedX(v: any): number | null {
+    const n = Number(v)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return n
+}
+
+function formatEta(seconds: number | null) {
+    const sec = normalizeEtaSeconds(seconds)
+    if (sec == null) return null
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = sec % 60
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function formatSpeed(speedX: number | null) {
+    const sx = normalizeSpeedX(speedX)
+    if (sx == null) return null
+    return `${sx.toFixed(sx >= 10 ? 1 : 2)}x`
+}
+
+function parseMs(v: any): number {
+    if (v == null) return 0
+    const t = Date.parse(String(v))
+    return Number.isFinite(t) ? t : 0
+}
+
+function normalizeJobStatus(v: any) {
+    return String(v || '').toLowerCase()
+}
+
+function isActiveishJobStatus(v: any) {
+    const s = normalizeJobStatus(v)
+    return s === 'queued' || s === 'running' || s === 'processing' || s === 'pending' || s === 'started'
+}
+
+function proxyJobKey(j: any) {
+    const q = proxyQualityFromJob(j)
+    return q ? `proxy_mp4:${q}` : 'proxy_mp4'
+}
+
+function jobLogicalKey(j: any) {
+    const kind = String(j?.kind || '').toLowerCase()
+    if (!kind) return 'unknown'
+    if (isProxyJobKind(kind)) return proxyJobKey(j)
+    return kind
+}
+
+function latestJobsForSummary(jobs: any[]) {
+    const byKey = new Map<string, any>()
+    for (const j of Array.isArray(jobs) ? jobs : []) {
+        const key = jobLogicalKey(j)
+        const prev = byKey.get(key)
+        if (!prev) {
+            byKey.set(key, j)
+            continue
+        }
+
+        const prevId = Number(prev?.id)
+        const curId = Number(j?.id)
+        const prevTs = Math.max(
+            parseMs(prev?.updated_at),
+            parseMs(prev?.finished_at),
+            parseMs(prev?.started_at),
+            parseMs(prev?.created_at),
+        )
+        const curTs = Math.max(
+            parseMs(j?.updated_at),
+            parseMs(j?.finished_at),
+            parseMs(j?.started_at),
+            parseMs(j?.created_at),
+        )
+
+        if (Number.isFinite(curId) && Number.isFinite(prevId) && curId !== prevId) {
+            if (curId > prevId) byKey.set(key, j)
+            continue
+        }
+        if (curTs !== prevTs) {
+            if (curTs > prevTs) byKey.set(key, j)
+            continue
+        }
+        if (isActiveishJobStatus(j?.status) && !isActiveishJobStatus(prev?.status)) {
+            byKey.set(key, j)
+            continue
+        }
+    }
+    return Array.from(byKey.values())
+}
+
+function collectMetricsFromJobs(
+    jobs: any[],
+    wantedKind: 'proxy_mp4' | 'hls' | 'any' = 'any'
+) {
+    const relevant = latestJobsForSummary(jobs).filter((j) => kindMatchesForSummary(j?.kind, wantedKind))
+    if (!relevant.length) return { etaSeconds: null as number | null, speedX: null as number | null }
+
+    const running = relevant.filter((j) => normalizeJobStatus(j?.status) === 'running')
+    const pool = running.length ? running : relevant
+
+    const etaVals = pool
+        .map((j) => normalizeEtaSeconds(j?.eta_seconds))
+        .filter((n): n is number => Number.isFinite(n as number))
+    const speedVals = pool
+        .map((j) => normalizeSpeedX(j?.speed_x))
+        .filter((n): n is number => Number.isFinite(n as number))
+
+    const etaSeconds = etaVals.length ? Math.max(...etaVals) : null
+    const speedX = speedVals.length
+        ? (speedVals.reduce((a, b) => a + b, 0) / speedVals.length)
+        : null
+
+    return { etaSeconds, speedX }
+}
+
 function makeId(prefix: string) {
     return `${prefix}_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`
 }
@@ -91,7 +214,8 @@ function extractTranscodeError(
     jobKind: 'proxy_mp4' | 'hls' | 'any' = 'any'
 ) {
     for (const it of items || []) {
-        for (const j of (it as any)?.jobs || []) {
+        const jobs = latestJobsForSummary((it as any)?.jobs || [])
+        for (const j of jobs) {
             if (!kindMatchesForSummary(j?.kind, jobKind)) continue
             const st = String(j?.status || '').toLowerCase()
             if (st !== 'failed' && st !== 'error' && st !== 'missing_output') continue
@@ -167,6 +291,11 @@ function isTerminalTranscodeStatus(status: TranscodeStatus) {
     return status === 'done' || status === 'failed'
 }
 
+function isAuthPollingError(err: any) {
+    const s = Number(err?.status)
+    return s === 401 || s === 403 || s === 428
+}
+
 function kindMatchesForSummary(kind: unknown, wanted: 'proxy_mp4' | 'hls' | 'any') {
     if (wanted === 'any') return true
     const k = String(kind || '').toLowerCase()
@@ -203,7 +332,7 @@ function proxyJobProgress(j: any) {
 }
 
 function summarizeProxyCumulativeProgress(jobs: any[], expectedQualities?: string[]) {
-    const proxyJobs = (jobs || []).filter(j => isProxyJobKind(j?.kind))
+    const proxyJobs = latestJobsForSummary(jobs || []).filter(j => isProxyJobKind(j?.kind))
     if (!proxyJobs.length) return null
 
     const expected = normalizeQualityList(expectedQualities)
@@ -227,7 +356,7 @@ function summarizeProxyCumulativeProgress(jobs: any[], expectedQualities?: strin
         const q = proxyQualityFromJob(j)
         if (!q || !byQuality.has(q)) continue
         const next = proxyJobProgress(j)
-        if (next > (byQuality.get(q) || 0)) byQuality.set(q, next)
+        byQuality.set(q, next)
         matchedQualityJobs++
     }
 
@@ -494,6 +623,8 @@ export function useTransferProgress() {
 
         let sumPct = 0
         let pctCount = 0
+        const etaVals: number[] = []
+        const speedVals: number[] = []
 
         for (const it of items) {
             failed += it.summary.failed || 0
@@ -511,6 +642,10 @@ export function useTransferProgress() {
                 sumPct += avg
                 pctCount++
             }
+
+            const m = collectMetricsFromJobs((it as any)?.jobs || [], 'any')
+            if (m.etaSeconds != null) etaVals.push(m.etaSeconds)
+            if (m.speedX != null) speedVals.push(m.speedX)
         }
 
         const progress = pctCount ? clampPct(sumPct / pctCount) : (done > 0 && running === 0 && queued === 0 && failed === 0 ? 100 : 0)
@@ -520,7 +655,10 @@ export function useTransferProgress() {
         else if (running > 0 || queued > 0) status = 'running'
         else if (done > 0) status = 'done'
 
-        return { status, progress, counts: { failed, running, queued, done } }
+        const etaSeconds = etaVals.length ? Math.max(...etaVals) : null
+        const speedX = speedVals.length ? (speedVals.reduce((a, b) => a + b, 0) / speedVals.length) : null
+
+        return { status, progress, etaSeconds, speedX, counts: { failed, running, queued, done } }
     }
 
     function summarizeVersions(
@@ -535,10 +673,12 @@ export function useTransferProgress() {
 
         let sumPct = 0
         let pctCount = 0
+        const etaVals: number[] = []
+        const speedVals: number[] = []
 
         for (const it of items) {
             // status counts should also respect kind if you want the label to match
-            const jobs = (it.jobs || []).filter(j => {
+            const jobs = latestJobsForSummary(it.jobs || []).filter(j => {
                 return kindMatchesForSummary(j?.kind, jobKind)
             })
 
@@ -554,6 +694,10 @@ export function useTransferProgress() {
                     pctCount++
                 }
             }
+
+            const m = collectMetricsFromJobs(it.jobs || [], jobKind)
+            if (m.etaSeconds != null) etaVals.push(m.etaSeconds)
+            if (m.speedX != null) speedVals.push(m.speedX)
 
             if (jobKind === 'proxy_mp4') {
                 const cumulative = summarizeProxyCumulativeProgress(it.jobs || [], context?.proxyQualities)
@@ -604,7 +748,10 @@ export function useTransferProgress() {
             // })
         }
 
-        return { status, progress, counts: { failed, running, queued, done } }
+        const etaSeconds = etaVals.length ? Math.max(...etaVals) : null
+        const speedX = speedVals.length ? (speedVals.reduce((a, b) => a + b, 0) / speedVals.length) : null
+
+        return { status, progress, etaSeconds, speedX, counts: { failed, running, queued, done } }
     }
     
 
@@ -620,7 +767,7 @@ export function useTransferProgress() {
         summarizeItems: (
             items: TItem[],
             task: Extract<TransferTask, { kind: 'transcode' }>
-        ) => { status: TranscodeStatus; progress: number }
+        ) => { status: TranscodeStatus; progress: number; etaSeconds?: number | null; speedX?: number | null }
         initialItems: TItem[]
     }) {
         const normalizedIds = Array.from(new Set((opts.ids || [])
@@ -648,6 +795,8 @@ export function useTransferProgress() {
             detail: opts.detail,
             status: 'queued',
             progress: 0,
+            speed: null,
+            eta: null,
             error: null,
             ...(opts.mode === 'version' ? { assetVersionIds: idsToTrack.slice() } : { fileIds: idsToTrack.slice() }),
             items: opts.initialItems,
@@ -658,6 +807,7 @@ export function useTransferProgress() {
         }
         upsertTask(t)
 
+        let stopPolling: (() => void) | null = null
         const stop = startProgressPolling({
             apiFetch: opts.apiFetch,
             ...(opts.mode === 'version'
@@ -692,10 +842,18 @@ export function useTransferProgress() {
                     : s.status
                 cur.status = nextStatus
                 cur.progress = (nextStatus === 'running' && s.progress >= 100) ? 99 : s.progress
+                cur.speed = (nextStatus === 'running') ? formatSpeed(s.speedX ?? null) : null
+                cur.eta = (nextStatus === 'running') ? formatEta(s.etaSeconds ?? null) : null
                 if (nextStatus === 'failed') {
                     cur.error = extractTranscodeError(castItems as Array<ProgressItem | VersionProgressItem>, cur.jobKind ?? 'any')
+                    cur.speed = null
+                    cur.eta = null
                 } else if (nextStatus === 'running' || nextStatus === 'done') {
                     cur.error = null
+                    if (nextStatus === 'done') {
+                        cur.speed = null
+                        cur.eta = null
+                    }
                 }
                 if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
                     cur.detail = proxyDetailFromProgress(cur.progress, cur.context?.proxyQualities)
@@ -711,10 +869,22 @@ export function useTransferProgress() {
                     | Extract<TransferTask, { kind: 'transcode' }>
                     | undefined
                 if (!cur) return
+                if (isAuthPollingError(e)) {
+                    cur.status = 'failed'
+                    cur.error = (e as any)?.message || 'Unauthorized'
+                    cur.speed = null
+                    cur.eta = null
+                    cur.completedAt = now()
+                    try { stopPolling?.() } catch { }
+                    return
+                }
                 cur.status = 'unknown'
                 cur.error = (e as any)?.message || String(e)
+                cur.speed = null
+                cur.eta = null
             },
         })
+        stopPolling = stop
 
         ; (t as any).stop = stop
         return taskId
@@ -759,6 +929,8 @@ export function useTransferProgress() {
             detail: opts.detail,
             status: 'queued',
             progress: 0,
+            speed: null,
+            eta: null,
             error: null,
             items: [],
             startedAt: now(),
@@ -846,6 +1018,14 @@ export function useTransferProgress() {
                     | Extract<TransferTask, { kind: 'transcode' }>
                     | undefined
                 if (cur) {
+                    if (isAuthPollingError(e)) {
+                        cur.status = 'failed'
+                        cur.error = e?.message || 'Unauthorized'
+                        cur.completedAt = now()
+                        stopped = true
+                        if (timer) clearTimeout(timer)
+                        return
+                    }
                     cur.status = 'unknown'
                     cur.error = e?.message || String(e)
                 }

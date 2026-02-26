@@ -4,6 +4,8 @@ export type ProgressJob = {
     kind: string
     status: 'queued' | 'running' | 'done' | 'failed' | 'unknown' | string
     progress: number | null
+    eta_seconds?: number | null
+    speed_x?: number | null
     error: string | null
     created_at: string | null
     updated_at: string | null

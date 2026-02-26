@@ -34,7 +34,7 @@
 				</button>
 			</div>
 
-			<div v-if="error" class="p-3 rounded bg-red-900/30 text-default border border-red-800 mb-3">
+			<div v-if="error" class="p-3 rounded bg-red-900/30 text-default border border-red-800 mb-3 text-center items-center justify-self-center">
 				{{ error }}
 			</div>
 

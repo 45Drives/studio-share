@@ -95,10 +95,8 @@
                             <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-1">
                                 <span><b>Status:</b> {{ t.status }}</span>
 
-                                <template v-if="t.kind === 'upload'">
-                                    <span v-if="t.speed"><b>Speed:</b> {{ t.speed }}</span>
-                                    <span v-if="t.eta"><b>ETA:</b> {{ t.eta }}</span>
-                                </template>
+                                <span v-if="t.speed"><b>Speed:</b> {{ t.speed }}</span>
+                                <span v-if="t.eta"><b>ETA:</b> {{ t.eta }}</span>
 
                                 <span><b>Progress:</b> {{ Math.round(t.progress || 0) }}%</span>
                             </div>
