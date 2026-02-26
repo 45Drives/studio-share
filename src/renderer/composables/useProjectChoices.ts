@@ -21,6 +21,11 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
     const browseMode = ref<'roots' | 'dir'>('roots')
     const currentRoot = ref<string>('')   // active root mountpoint (when restricted)
     const browsePath = ref<string>('')   // current directory path
+    const forceProjectRoot = ref(false)
+    const configuredProjectRoot = ref('')
+    const useConfiguredProjectRoot = ref(false)
+    const hasConfiguredProjectRoot = computed(() => !!configuredProjectRoot.value)
+    let configuredToggleInitialized = false
 
     // derived
     const canGoUp = computed(() => {
@@ -67,6 +72,13 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
     }
 
     function backToRoots() {
+        if (!showEntireTree.value && useConfiguredProjectRoot.value && configuredProjectRoot.value) {
+            browseMode.value = 'dir'
+            currentRoot.value = configuredProjectRoot.value
+            browsePath.value = configuredProjectRoot.value
+            listDirs(configuredProjectRoot.value)
+            return
+        }
         browseMode.value = 'roots'
         currentRoot.value = ''
         browsePath.value = ''
@@ -109,9 +121,40 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
         browsePath.value = ''
 
         try {
+            try {
+                const settings = await apiFetch('/api/settings', { method: 'GET' })
+                forceProjectRoot.value = !!settings?.forceProjectRoot
+                if (typeof settings?.projectRoot === 'string') {
+                    let root = String(settings.projectRoot).trim().replace(/\\/g, '/')
+                    if (root && !root.startsWith('/')) root = `/${root}`
+                    root = root.replace(/\/+$/, '') || '/'
+                    configuredProjectRoot.value = root
+                } else {
+                    configuredProjectRoot.value = ''
+                }
+                if (!configuredToggleInitialized) {
+                    useConfiguredProjectRoot.value = !!(forceProjectRoot.value && configuredProjectRoot.value)
+                    configuredToggleInitialized = true
+                } else if (!configuredProjectRoot.value) {
+                    useConfiguredProjectRoot.value = false
+                }
+            } catch {
+                forceProjectRoot.value = false
+                configuredProjectRoot.value = ''
+                useConfiguredProjectRoot.value = false
+            }
+
             if (showEntireTree.value) {
                 browseMode.value = 'dir'
                 await listDirs('/')
+                return
+            }
+
+            if (useConfiguredProjectRoot.value && configuredProjectRoot.value) {
+                browseMode.value = 'dir'
+                currentRoot.value = configuredProjectRoot.value
+                browsePath.value = configuredProjectRoot.value
+                await listDirs(configuredProjectRoot.value)
                 return
             }
 
@@ -122,7 +165,10 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
                 return
             }
 
-            const roots = await apiFetch('/api/zfs/roots').catch(() => [])
+            const rootsUrl = (!useConfiguredProjectRoot.value && forceProjectRoot.value)
+                ? '/api/zfs/roots?ignoreConfiguredRoot=1'
+                : '/api/zfs/roots'
+            const roots = await apiFetch(rootsUrl).catch(() => [])
             projectRoots.value = Array.isArray(roots) ? roots : []
             zfsRootsCache = projectRoots.value
             browseMode.value = 'roots'
@@ -139,6 +185,7 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
         // state/derived
         detecting, detectError, projectRoots, projectDirs,
         browseMode, currentRoot, browsePath, canGoUp,
+        forceProjectRoot, configuredProjectRoot, useConfiguredProjectRoot, hasConfiguredProjectRoot,
         // actions
         listDirs, backToRoots, goUp, drillInto, openRoot, loadProjectChoices,
     }

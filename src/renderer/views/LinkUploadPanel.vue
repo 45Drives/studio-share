@@ -3,31 +3,30 @@
 		<div class="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 ">
 			<div class="grid w-full grid-cols-1 gap-4 text-xl min-w-0">
 				<CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
-					<template #header>
+					<div class="ss-toned-panel flex flex-col gap-2 text-left min-w-0 p-3">
 						<div class="flex flex-col gap-2 text-left min-w-0">
 							<h2 class="text-xl font-semibold">Share a Folder</h2>
 							<div class="text-sm opacity-80 -mt-1">
 								Pick a folder on the server and generate a shareable link.
 							</div>
 						</div>
-					</template>
 
-					<div class="-mt-2 min-w-0">
-						<FolderPicker
-							v-model="destFolderRel"
-							:apiFetch="apiFetch"
-							useCase="upload"
-							subtitle="Pick the folder on the server where these files will be uploaded."
-							:auto-detect-roots="true"
-							:allow-entire-tree="true"
-							v-model:project="projectBase"
-							v-model:dest="destFolderRel"
-							:uploadLink="true"
-						/>
-					</div>
+						<div class="min-w-0">
+							<FolderPicker
+								v-model="destFolderRel"
+								:apiFetch="apiFetch"
+								useCase="upload"
+								subtitle="Pick the folder on the server where these files will be uploaded."
+								:auto-detect-roots="true"
+								:allow-entire-tree="true"
+								v-model:project="projectBase"
+								v-model:dest="destFolderRel"
+								:uploadLink="true"
+							/>
+						</div>
 
-					<div class="border-t border-default mt-4 pt-4 min-w-0">
-						<CommonLinkControls>
+						<div class="border-t border-default mt-2 pt-3 min-w-0">
+							<CommonLinkControls>
 							<template #expiry>
 								<div class="flex flex-col gap-3 min-w-0">
 									<div class="flex items-center gap-3 min-w-0">
@@ -121,7 +120,7 @@
 							<!-- Link Access row -->
 							<template #after class="">
 								<div class="border-t border-default mt-2 pt-2 min-w-0 text-left">
-									<div class="rounded-md border border-default bg-accent min-w-0 p-3">
+									<div class="ss-toned-panel min-w-0 p-3">
 										<div class="font-semibold mb-2">Link Access Mode</div>
 										<div class="grid grid-cols-3 gap-2 min-w-0">
 											<div>
@@ -234,7 +233,8 @@
 									</div>
 								</div>
 							</template>
-						</CommonLinkControls>
+							</CommonLinkControls>
+						</div>
 					</div>
 
 					<AddUsersModal
@@ -430,7 +430,7 @@ async function generateLink() {
 			title: linkTitle.value || undefined,
 			baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
 			access_mode: accessMode.value === 'restricted' ? 'restricted' : 'open',
-			auth_mode: accessMode.value === 'open' ? 'none' : 'password',
+			auth_mode: accessMode.value === 'open_password' ? 'password' : 'none',
 		}
 
 		if (accessMode.value === 'open_password') {

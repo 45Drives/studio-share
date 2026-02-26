@@ -10,7 +10,7 @@
 
         <!-- icon grid -->
         <div v-else class="grid gap-3 justify-start [grid-template-columns:repeat(auto-fill,minmax(9rem,9rem))]">
-            <button v-for="ent in entries" :key="ent.path" data-fp-item type="button" class="group relative rounded-xl border border-default bg-default hover:bg-white/5
+            <button v-for="ent in entries" :key="ent.path" data-fp-item type="button" class="group relative rounded-xl border border-default bg-default ss-explorer-tile-hover
          focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-offset-0 focus-visible:ring-[var(--btn-primary-border)]
          p-1 text-left" :class="[
             foldersOnly && !ent.isDir ? 'pointer-events-none opacity-60 select-none' : '',

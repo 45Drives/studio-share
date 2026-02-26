@@ -326,6 +326,20 @@
                     Use an existing file name already available on the server.
                   </p>
                   <div class="flex flex-wrap items-center gap-2 mt-1">
+                    <select
+                      v-model="draftWatermarkFile"
+                      class="input-textlike border rounded px-2 py-1 text-sm min-w-[20rem]"
+                    >
+                      <option value="">Select existing watermark file…</option>
+                      <option v-for="wm in existingWatermarkFilesForEdit" :key="wm" :value="wm">
+                        {{ wm }}
+                      </option>
+                    </select>
+                    <button type="button" class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFilesForEdit">
+                      Refresh
+                    </button>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 mt-1">
                     <button type="button" class="btn btn-secondary" @click="pickLocalWatermark">
                       Choose Local Image
                     </button>
@@ -767,6 +781,7 @@ const draftWatermarkEnabled = ref(false)
 const draftWatermarkFile = ref('')
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 const draftWatermarkLocalFile = ref<LocalFile | null>(null)
+const existingWatermarkFilesForEdit = ref<string[]>([])
 
 const filesEditorOpen = ref(false)
 const draftFilePaths = ref<string[]>([])
@@ -1086,6 +1101,19 @@ function clearLocalWatermark() {
   draftWatermarkLocalFile.value = null
 }
 
+async function loadExistingWatermarkFilesForEdit() {
+  try {
+    const data = await props.apiFetch('/api/files?dir=.studio/watermarks', { method: 'GET' })
+    const entries = Array.isArray(data?.entries) ? data.entries : []
+    existingWatermarkFilesForEdit.value = entries
+      .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
+      .map((e: any) => `.studio/watermarks/${String(e.name).trim()}`)
+      .sort((a: string, b: string) => a.localeCompare(b))
+  } catch {
+    existingWatermarkFilesForEdit.value = []
+  }
+}
+
 function rootOfServerPath(p: string) {
   const clean = String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
   if (!clean) return '/'
@@ -1107,16 +1135,13 @@ function resolveWatermarkStorageRootForEdit() {
 }
 
 function resolveWatermarkUploadDirForEdit() {
-  const { abs } = resolveWatermarkStorageRootForEdit()
-  const cleanRoot = abs === '/' ? '' : abs
-  return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
+  return '/.studio/watermarks'
 }
 
 function resolveWatermarkRelPathForEdit(name: string) {
   const cleanName = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
   if (!cleanName) return ''
-  const { rel } = resolveWatermarkStorageRootForEdit()
-  return `${rel ? rel + '/' : ''}45flow-watermarks/${cleanName}`
+  return `.studio/watermarks/${cleanName}`
 }
 
 async function ensureServerDirExistsForEdit(dir: string) {
@@ -3131,8 +3156,23 @@ watch(
 watch(
   () => draftWatermarkEnabled.value,
   (v) => {
+    if (v) {
+      void loadExistingWatermarkFilesForEdit()
+      return
+    }
     if (!v) {
       draftWatermarkFile.value = ''
+      draftWatermarkLocalFile.value = null
+    }
+  }
+)
+
+watch(
+  () => draftWatermarkFile.value,
+  (v) => {
+    const localName = String(draftWatermarkLocalFile.value?.name || '').trim()
+    if (!localName) return
+    if (String(v || '').trim() !== localName) {
       draftWatermarkLocalFile.value = null
     }
   }

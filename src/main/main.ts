@@ -2182,8 +2182,8 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
         add(normalizedRaw)
         if (baseName) add(baseName)
-        if (baseName) add(`45flow-watermarks/${baseName}`)
-        if (destRootSeg && baseName) add(`${destRootSeg}/45flow-watermarks/${baseName}`)
+        if (baseName) add(`.studio/watermarks/${baseName}`)
+        if (destRootSeg && baseName) add(`${destRootSeg}/.studio/watermarks/${baseName}`)
         if (destRootSeg && normalizedRaw && !normalizedRaw.startsWith(destRootSeg + '/')) {
           add(`${destRootSeg}/${normalizedRaw}`)
         }
@@ -2213,11 +2213,15 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
           const text = await r.text()
           let j: any = {}
           try { j = JSON.parse(text) } catch { j = { raw: text } }
+          const requestId = String(
+            r.headers.get('x-request-id') ||
+            (typeof j?.requestId === 'string' ? j.requestId : '')
+          ).trim()
 
-          jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, resp: j, watermarkFileCandidate })
+          jl('info', 'ingest.register', { id, ok: r.ok, status: r.status, requestId: requestId || undefined, resp: j, watermarkFileCandidate })
 
           if (!r.ok || !j?.ok) {
-            jl('warn', 'ingest.register.not_ok', { id, status: r.status, resp: j, url, watermarkFileCandidate })
+            jl('warn', 'ingest.register.not_ok', { id, status: r.status, requestId: requestId || undefined, resp: j, url, watermarkFileCandidate })
           }
 
           if (j?.ok) {
@@ -2264,6 +2268,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
               ok: false,
               error: j?.error || 'ingest not ok',
               status: r.status,
+              requestId: requestId || null,
               destRel,
               name: fileName,
               existing: j?.existing || null,

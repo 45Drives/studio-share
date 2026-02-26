@@ -1,5 +1,5 @@
 <template>
-  <section class="fp-shell flex flex-col gap-2 text-left text-base rounded-md">
+  <section class="fp-shell bg-accent flex flex-col gap-2 text-left text-base rounded-md">
     <div class="fp-meta flex flex-col gap-2 text-sm">
       <label v-if="allowEntireTree" class="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" v-model="showEntireTree" @change="changeProject" />
@@ -15,19 +15,41 @@
         <button class="btn btn-secondary" @click="changeProject()">Change Project Directory</button>
       </div>
 
-      <div class="flex flex-row gap-2 items-center">
+      <div v-if="pickerReady" class="flex flex-row gap-2 items-center">
         <span class="whitespace-nowrap">Destination folder:</span>
         <PathInput v-model="destAbs" :apiFetch="apiFetch" :dirsOnly="true" @choose="onChooseDest" />
       </div>
+      <div v-else class="text-xs opacity-70">Loading destination...</div>
 
       <div v-if="(autoDetectRoots ?? true) && !showEntireTree" class="text-xs opacity-70">
-        <template v-if="detecting">Detecting ZFS pools…</template>
+        <template v-if="useConfiguredProjectRoot && configuredProjectRoot">
+          Using configured project root: <code>{{ configuredProjectRoot }}</code>
+        </template>
+        <template v-else-if="detecting">Detecting ZFS pools…</template>
         <template v-else-if="browseMode === 'roots' && !projectRoots.length">No ZFS pools found; browsing /</template>
       </div>
+
+      <label
+        v-if="hasConfiguredProjectRoot && !showEntireTree && (autoDetectRoots ?? true)"
+        class="flex items-center gap-2 cursor-pointer select-none text-xs opacity-80"
+      >
+        <input type="checkbox" v-model="useConfiguredProjectRoot" />
+        <span>Use configured project root by default</span>
+      </label>
+
+      <label
+        v-if="showDefaultRootOption"
+        class="flex items-center gap-2 cursor-pointer select-none text-xs opacity-80"
+      >
+        <input type="checkbox" v-model="rememberProjectAsDefault" :disabled="savingDefaultRoot" />
+        <span>
+          Use selected project as default share root (change later in Settings -> Project Root (Share / Upload)).
+        </span>
+      </label>
     </div>
 
-    <div class="fp-browser border rounded overflow-auto bg-default" :class="containerHeights">
-      <div class="fp-toolbar sticky top-0 bg-default border-b border-default px-2 py-1 flex items-center gap-2 z-10">
+    <div class="fp-browser border rounded overflow-auto bg-accent" :class="containerHeights">
+      <div class="fp-toolbar sticky top-0 bg-accent border-b border-default px-2 py-1 flex items-center gap-2 z-10">
         <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
           title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
@@ -61,7 +83,7 @@
         </div>
       </div>
 
-      <template v-if="browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
+      <template v-if="pickerReady && browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
         <div v-for="r in projectRoots" :key="r.mountpoint" class="fp-root-row grid items-center border-b border-default px-3 py-1 bg-default
                  [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
           <div></div>
@@ -75,7 +97,7 @@
           </div>
         </div>
       </template>
-      <template v-if="browseMode !== 'roots' && viewMode === 'tree'">
+      <template v-if="pickerReady && browseMode !== 'roots' && viewMode === 'tree'">
         <div class="min-h-full" @click="onBrowserBackgroundClick">
           <TreeNode :key="'tree-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
             :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
@@ -84,7 +106,7 @@
         </div>
       </template>
 
-      <template v-if="browseMode !== 'roots' && viewMode === 'icons'">
+      <template v-if="pickerReady && browseMode !== 'roots' && viewMode === 'icons'">
         <div class="min-h-full" @click="onBrowserBackgroundClick">
           <IconMode :key="'icons-' + browseCwd + refreshKey" :apiFetch="apiFetch" :selected="internalSelected"
             :selectedVersion="selectedVersion" :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0"
@@ -92,6 +114,10 @@
             @select-folder="onSelectFolder" @toggle="togglePath" @navigate="navigateTo" />
         </div>
       </template>
+
+      <div v-if="!pickerReady" class="p-3 text-xs opacity-70">
+        Loading project roots...
+      </div>
 
       <div v-if="showNewFolderModal" class="fixed inset-0 z-[2000] bg-gray-600/80 flex items-center justify-center p-4">
         <div class="fp-modal bg-accent p-6 rounded-lg shadow-2xl w-full max-w-sm border border-default">
@@ -182,7 +208,15 @@ const selectedFolderBridge = computed<string | null>({
 
 /* Roots auto-detect */
 const showEntireTree = ref(false)
-const { detecting, projectRoots, loadProjectChoices } = useProjectChoices(showEntireTree)
+const {
+  detecting,
+  projectRoots,
+  loadProjectChoices,
+  forceProjectRoot,
+  configuredProjectRoot,
+  useConfiguredProjectRoot,
+  hasConfiguredProjectRoot,
+} = useProjectChoices(showEntireTree)
 
 /* Local state */
 const clampBase = ref<string>(internalProject.value || props.base || '')
@@ -191,7 +225,7 @@ const viewMode = ref<ViewMode>('icons')
 const browseCwd = ref<string>(props.startDir ?? props.base ?? '/')
 
 /* Destination (what PathInput shows) */
-const destAbs = ref<string>('/')
+const destAbs = ref<string>('')
 
 /* Root rel for children (driven by browseCwd) */
 const rootRel = computed(() => (browseCwd.value || '').replace(/^\/+/, '').replace(/\/+$/, ''))
@@ -200,6 +234,17 @@ const internalSelected = ref<Set<string>>(new Set())
 const selectedVersion = ref(0)
 const expandCache = new Map<string, string[]>()
 const refreshKey = ref(0)
+const pickerReady = ref(false)
+const rememberProjectAsDefault = ref(true)
+const savingDefaultRoot = ref(false)
+const showDefaultRootOption = computed(
+  () =>
+    browseMode.value === 'roots' &&
+    !showEntireTree.value &&
+    (props.autoDetectRoots ?? true) &&
+    !configuredProjectRoot.value &&
+    !forceProjectRoot.value,
+)
 
 /* Persist view mode */
 onMounted(() => {
@@ -212,6 +257,7 @@ watch(viewMode, (m) => localStorage.setItem('folderpicker:viewMode', m))
 watch(
   () => internalDest.value,
   (rel) => {
+    if (!pickerReady.value && !(rel || '').trim()) return
     const abs = ensureSlash('/' + (rel || '').replace(/^\/+/, ''))
     destAbs.value = abs
   },
@@ -220,11 +266,21 @@ watch(
 
 /* Initial mount logic */
 onMounted(async () => {
+  pickerReady.value = false
   await loadProjectChoices()
 
   if (internalProject.value) {
     browseMode.value = 'dir'
     browseCwd.value = ensureSlash(internalProject.value)
+  } else if (
+    !showEntireTree.value &&
+    useConfiguredProjectRoot.value &&
+    configuredProjectRoot.value
+  ) {
+    const root = ensureSlash(configuredProjectRoot.value)
+    internalProject.value = root.replace(/\/+$/, '')
+    browseMode.value = 'dir'
+    browseCwd.value = root
   } else if (props.autoDetectRoots ?? true) {
     browseMode.value = 'roots'
     browseCwd.value = '/'
@@ -241,6 +297,7 @@ onMounted(async () => {
   } else {
     destAbs.value = ensureSlash('/' + internalDest.value.replace(/^\/+/, ''))
   }
+  pickerReady.value = true
 })
 
 watch(
@@ -267,6 +324,25 @@ watch(projectRoots, (roots) => {
 
 watch(browseCwd, (v) => {
   if (browseMode.value === 'roots' && v !== '/') browseMode.value = 'dir'
+})
+
+watch(useConfiguredProjectRoot, async () => {
+  pickerReady.value = false
+  await loadProjectChoices()
+  if (!showEntireTree.value && useConfiguredProjectRoot.value && configuredProjectRoot.value) {
+    const root = ensureSlash(configuredProjectRoot.value)
+    internalProject.value = root.replace(/\/+$/, '')
+    browseMode.value = 'dir'
+    browseCwd.value = root
+    destAbs.value = root
+    internalDest.value = root.replace(/^\/+/, '').replace(/\/+$/, '')
+    emit('changed-cwd', browseCwd.value)
+  } else if (!internalProject.value && (props.autoDetectRoots ?? true)) {
+    browseMode.value = 'roots'
+    browseCwd.value = '/'
+    emit('changed-cwd', browseCwd.value)
+  }
+  pickerReady.value = true
 })
 
 /* Helpers */
@@ -452,8 +528,9 @@ function onSelectFolder(relOrAbs: string) {
   internalDest.value = clampedAbs.replace(/^\/+/, '').replace(/\/+$/, '')
 }
 
-function chooseProject(dirPath: string) {
+async function chooseProject(dirPath: string) {
   const absNoTrail = ensureSlash(dirPath).replace(/\/+$/, '')
+  void maybePersistDefaultProjectRoot(absNoTrail)
   internalProject.value = absNoTrail
   browseMode.value = 'dir'
 
@@ -464,12 +541,62 @@ function chooseProject(dirPath: string) {
   internalDest.value = absNoTrail.replace(/^\/+/, '')
 }
 
-function changeProject() {
+async function maybePersistDefaultProjectRoot(absNoTrail: string) {
+  if (!showDefaultRootOption.value) return
+  if (!rememberProjectAsDefault.value) return
+  if (savingDefaultRoot.value) return
+  if (!absNoTrail) return
+  savingDefaultRoot.value = true
+  try {
+    await props.apiFetch('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectRoot: absNoTrail,
+        forceProjectRoot: true,
+      }),
+    })
+    configuredProjectRoot.value = absNoTrail
+    forceProjectRoot.value = true
+    pushNotification(
+      new Notification(
+        'Default Share Root Saved',
+        `Using ${absNoTrail} as the default share root. Update this in Settings -> Project Root (Share / Upload).`,
+        'success',
+        8000,
+      ),
+    )
+  } catch (e: any) {
+    pushNotification(
+      new Notification(
+        'Could Not Save Default Share Root',
+        e?.message || 'Project was selected, but the default share root could not be saved.',
+        'warning',
+        8000,
+      ),
+    )
+  } finally {
+    savingDefaultRoot.value = false
+  }
+}
+
+async function changeProject() {
+  pickerReady.value = false
   internalProject.value = ''
   internalDest.value = ''
-  browseMode.value = (props.autoDetectRoots ?? true) && !showEntireTree.value ? 'roots' : 'dir'
-  browseCwd.value = '/'
+  await loadProjectChoices()
+
+  if (!showEntireTree.value && useConfiguredProjectRoot.value && configuredProjectRoot.value) {
+    browseMode.value = 'dir'
+    browseCwd.value = ensureSlash(configuredProjectRoot.value)
+    destAbs.value = browseCwd.value
+    internalDest.value = browseCwd.value.replace(/^\/+/, '').replace(/\/+$/, '')
+  } else {
+    browseMode.value = (props.autoDetectRoots ?? true) && !showEntireTree.value ? 'roots' : 'dir'
+    browseCwd.value = '/'
+    destAbs.value = '/'
+  }
   emit('changed-cwd', browseCwd.value)
+  pickerReady.value = true
 }
 
 const containerHeights = computed(() => props.heightClass || 'max-h-[28rem] min-h-[18rem]')
@@ -480,7 +607,6 @@ const containerHeights = computed(() => props.heightClass || 'max-h-[28rem] min-
     border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 20%, #4d4d5e);
     border-radius: 0.78rem;
     padding: 0.55rem;
-    background: color-mix(in srgb, black 16%, transparent);
 }
 
 .fp-meta {

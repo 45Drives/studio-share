@@ -39,7 +39,7 @@
 			</div>
 
 			<div class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x flex-1 min-h-0">
-				<table class="manage-table min-w-[1180px] text-sm border border-default border-collapse">
+				<table class="manage-table min-w-[1180px] text-sm border-collapse">
 					<colgroup>
 						<col class="w-[22%]" /> <!-- Title -->
 						<col class="w-[8%]" /> <!-- Type -->
@@ -47,35 +47,59 @@
 						<col class="w-[12%]" /> <!-- Expires -->
 						<col class="w-[6%]" /> <!-- Status -->
 						<col class="w-[8%]" /> <!-- Access -->
-						<col class="w-[4%]" /> <!-- Password -->
 						<col class="w-[10%]" /> <!-- Created -->
 						<col class="w-[14%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
-						<tr class="bg-default/95 text-default border-b border-default">
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('title')">Title {{ sortIndicator('title') }}</button>
+						<tr class="manage-table-head-row border-b border-default">
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('title')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Title</span>
+									<span>{{ sortIndicator('title') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('type')">Type {{ sortIndicator('type') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('type')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Type</span>
+									<span>{{ sortIndicator('type') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('url')">Link {{ sortIndicator('url') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('url')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Link</span>
+									<span>{{ sortIndicator('url') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('expires')">Expires {{ sortIndicator('expires') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('expires')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Expires</span>
+									<span>{{ sortIndicator('expires') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('status')">Status {{ sortIndicator('status') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('status')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Status</span>
+									<span>{{ sortIndicator('status') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('access')">Access {{ sortIndicator('access') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('access')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Access</span>
+									<span>{{ sortIndicator('access') }}</span>
+								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('password')">Password {{ sortIndicator('password') }}</button>
-							</th>
-							<th class="text-left p-2 font-semibold border border-default">
-								<button class="hover:underline" @click="setSort('created')">Created {{ sortIndicator('created') }}</button>
+							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
+								@click="setSort('created')">
+								<span class="flex items-center justify-between gap-2 w-full">
+									<span class="hover:underline">Created</span>
+									<span>{{ sortIndicator('created') }}</span>
+								</span>
 							</th>
 							<th class="text-left p-2 font-semibold border border-default">Actions</th>
 						</tr>
@@ -83,7 +107,7 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="loading">
-							<td colspan="9" class="p-0 border border-default">
+							<td colspan="8" class="p-0 border border-default">
 								<div class="w-full min-h-[140px] flex items-center justify-center">
 									<div
 										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
@@ -99,7 +123,7 @@
 						</tr>
 
 						<tr v-else-if="filteredRows.length === 0">
-							<td colspan="9"
+							<td colspan="8"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
@@ -208,12 +232,6 @@
 								</span>
 							</td>
 
-							<!-- Password -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
-								<span class="text-xs">{{ it.passwordRequired ? 'Yes' : 'No' }}</span>
-								<!-- <button class="ml-2 text-blue-500 hover:underline text-xs" @click="openDetails(it)">Manage</button> -->
-							</td>
-
 							<!-- Created -->
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<div class="flex flex-col leading-tight">
@@ -242,7 +260,7 @@
 							</td>
 						</tr>
 						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
-							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
+							<td colspan="8" class="p-0 bg-well">&nbsp;</td>
 						</tr>
 					</tbody>
 				</table>
@@ -275,7 +293,7 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
-type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'password' | 'created'
+type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'created'
 type SortDir = 'asc' | 'desc'
 
 const { apiFetch } = useApi()
@@ -424,14 +442,14 @@ function hasOpenPassword(it: LinkItem) {
 }
 
 function accessLabel(it: LinkItem) {
-	if (isRestricted(it)) return 'Restricted'
-	return hasOpenPassword(it) ? 'Open + Password' : 'Open'
+	if (isRestricted(it)) return 'Users only'
+	return hasOpenPassword(it) ? 'Password' : 'Open'
 }
 
 function accessDetail(it: LinkItem) {
 	if (isRestricted(it)) return 'Users only'
 	const comments = it.allow_comments ? 'Comments: on' : 'Comments: off'
-	return hasOpenPassword(it) ? `Open link • ${comments} • Password required` : `Open link • ${comments}`
+	return hasOpenPassword(it) ? `Password protected • ${comments}` : `Open link • ${comments}`
 }
 
 function accessChipClass(it: LinkItem) {
@@ -692,11 +710,6 @@ function compareByKey(a: LinkItem, b: LinkItem, key: SortKey) {
 			return compareText(statusOf(a), statusOf(b))
 		case 'access':
 			return compareText(accessLabel(a), accessLabel(b))
-		case 'password': {
-			const va = a.passwordRequired ? 1 : 0
-			const vb = b.passwordRequired ? 1 : 0
-			return va - vb
-		}
 		case 'created': {
 			const va = toDateUTC(a.createdAt)?.getTime() || 0
 			const vb = toDateUTC(b.createdAt)?.getTime() || 0
@@ -903,12 +916,17 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 .manage-table-wrap {
 	border-radius: 0.72rem;
 	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 22%, #4a4b57);
-	background: color-mix(in srgb, black 24%, transparent);
+	background:
+		var(--btn-primary-fill) top / 100% 2.6rem no-repeat,
+		color-mix(in srgb, black 24%, transparent);
+	position: relative;
 }
 
 .manage-table {
 	width: 100%;
 	min-width: 1180px;
+	border-spacing: 0;
+	margin: 0;
 }
 
 .manage-table-wrap thead tr {
@@ -916,6 +934,27 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 	top: 0;
 	z-index: 2;
 	backdrop-filter: blur(6px);
+}
+
+.manage-table-head-row {
+	background: var(--btn-primary-fill);
+	color: #ffffff;
+}
+
+.manage-table-head-row button {
+	color: inherit;
+}
+
+.manage-table-head-row > th {
+	border-top: 0;
+}
+
+.manage-table-head-row > th:first-child {
+	border-left: 0;
+}
+
+.manage-table-head-row > th:last-child {
+	border-right: 0;
 }
 
 @media (max-width: 980px) {

@@ -97,25 +97,68 @@ echo "Building macOS (${MAC_BUILD_KIND}) unsigned..."
 
 rm -rf dist/mac-universal dist/mac-arm64 dist/mac-x64 dist/sign-stage || true
 
+resolve_app_path() {
+  local kind="$1"
+  local builder_product_name
+  local -a candidate_dirs=()
+  local -a candidate_names=()
+  local -a discovered_apps=()
+
+  case "$kind" in
+    universal) candidate_dirs=("${ROOT_DIR}/dist/mac-universal") ;;
+    arm64) candidate_dirs=("${ROOT_DIR}/dist/mac-arm64") ;;
+    x64) candidate_dirs=("${ROOT_DIR}/dist/mac" "${ROOT_DIR}/dist/mac-x64") ;;
+    *) return 1 ;;
+  esac
+
+  if [[ -n "${APP_PRODUCT_FILENAME:-}" ]]; then
+    candidate_names+=("${APP_PRODUCT_FILENAME}")
+  fi
+
+  builder_product_name="$(
+    node -e "const b=require('./electron-builder.json'); console.log((b.mac&&b.mac.productName)||b.productName||'')"
+  )"
+  if [[ -n "$builder_product_name" ]]; then
+    candidate_names+=("$builder_product_name")
+  fi
+
+  for dir in "${candidate_dirs[@]}"; do
+    for name in "${candidate_names[@]}"; do
+      if [[ -d "${dir}/${name}.app" ]]; then
+        printf '%s\n' "${dir}/${name}.app"
+        return 0
+      fi
+    done
+
+    shopt -s nullglob
+    discovered_apps=("${dir}/"*.app)
+    shopt -u nullglob
+    if [[ "${#discovered_apps[@]}" -eq 1 ]]; then
+      printf '%s\n' "${discovered_apps[0]}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
   CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:universal
-  APP_PATH="${ROOT_DIR}/dist/mac-universal/${APP_PRODUCT_FILENAME}.app"
 elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
   CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:arm64
-  APP_PATH="${ROOT_DIR}/dist/mac-arm64/${APP_PRODUCT_FILENAME}.app"
 elif [[ "${MAC_BUILD_KIND}" == "x64" ]]; then
   CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:x64
-  if [[ -d "${ROOT_DIR}/dist/mac/${APP_PRODUCT_FILENAME}.app" ]]; then
-    APP_PATH="${ROOT_DIR}/dist/mac/${APP_PRODUCT_FILENAME}.app"
-  else
-    APP_PATH="${ROOT_DIR}/dist/mac-x64/${APP_PRODUCT_FILENAME}.app"
-  fi
 else
   echo "MAC_BUILD_KIND must be 'arm64', 'x64', or 'universal'" >&2
   exit 1
 fi
 
-test -d "$APP_PATH" || { echo "Missing app bundle: $APP_PATH" >&2; exit 1; }
+APP_PATH="$(resolve_app_path "${MAC_BUILD_KIND}" || true)"
+if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
+  echo "Missing app bundle for kind '${MAC_BUILD_KIND}'." >&2
+  echo "Tried APP_PRODUCT_FILENAME='${APP_PRODUCT_FILENAME:-}' and productName from electron-builder.json." >&2
+  exit 1
+fi
 
 echo "Shipping to signing Mac: ${SIGN_USER}@${SIGN_HOST}:${REMOTE_DIR}"
 "${SSH[@]}" "${SIGN_USER}@${SIGN_HOST}" "mkdir -p '$REMOTE_DIR'"

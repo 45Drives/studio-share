@@ -109,6 +109,27 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="space-y-4 mt-6 border-t border-default pt-4">
+                                <div class="text-base font-semibold">Project Root (Share / Upload)</div>
+
+                                <label class="flex items-center gap-2 text-sm">
+                                    <input type="checkbox" v-model="forceProjectRoot" :disabled="busy" />
+                                    <span>Ignore ZFS pools and use project root by default</span>
+                                </label>
+
+                                <div>
+                                    <label class="block text-sm opacity-80 mb-1">Project root path</label>
+                                    <PathInput
+                                        v-model="projectRoot"
+                                        :apiFetch="apiFetch"
+                                        :dirsOnly="true"
+                                    />
+                                    <div class="text-xs opacity-70 mt-1">
+                                        Absolute path used as the default root when creating share/upload destinations.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="text-left space-y-3 bg-default px-6 py-4 rounded-md">
@@ -317,6 +338,7 @@ import { CardContainer } from "@45drives/houston-common-ui";
 import { Switch } from "@headlessui/vue";
 import { useApi } from "../../composables/useApi";
 import { pushNotification, Notification } from '@45drives/houston-common-ui';
+import PathInput from "../PathInput.vue";
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -330,6 +352,8 @@ const emit = defineEmits<{
         defaultRestrictAccess: boolean;
         defaultAllowComments: boolean;
         defaultUseProxyFiles: boolean;
+        projectRoot: string | null;
+        forceProjectRoot: boolean;
     }): void;
 }>();
 
@@ -361,6 +385,8 @@ const externalHttpsPort = ref<number>(443);
 const defaultRestrictAccess = ref(false);
 const defaultAllowComments = ref(true);
 const defaultUseProxyFiles = ref(false);
+const projectRoot = ref<string>("");
+const forceProjectRoot = ref(false);
 
 const cleanupBusy = ref(false);
 const cleanupMode = ref<"scan" | "apply" | null>(null);
@@ -488,6 +514,10 @@ const validationError = computed(() => {
         }
     }
 
+    if (forceProjectRoot.value && !projectRoot.value.trim()) {
+        return "Project root is required when forcing project root mode.";
+    }
+
     return null;
 });
 
@@ -523,6 +553,8 @@ async function reload() {
             typeof data.defaultAllowComments === "boolean" ? data.defaultAllowComments : true;
         defaultUseProxyFiles.value =
             typeof data.defaultUseProxyFiles === "boolean" ? data.defaultUseProxyFiles : false;
+        projectRoot.value = typeof data.projectRoot === "string" ? data.projectRoot : "";
+        forceProjectRoot.value = typeof data.forceProjectRoot === "boolean" ? data.forceProjectRoot : false;
     } catch (e: any) {
         loadError.value = e?.message ? `Failed to load settings: ${e.message}` : "Failed to load settings.";
     } finally {
@@ -553,6 +585,8 @@ async function save() {
             defaultRestrictAccess: !!defaultRestrictAccess.value,
             defaultAllowComments: !!defaultAllowComments.value,
             defaultUseProxyFiles: !!defaultUseProxyFiles.value,
+            projectRoot: (projectRoot.value || "").trim() || null,
+            forceProjectRoot: !!forceProjectRoot.value,
         };
 
         await apiFetch("/api/settings", {
@@ -581,6 +615,8 @@ async function save() {
             defaultRestrictAccess: !!defaultRestrictAccess.value,
             defaultAllowComments: !!defaultAllowComments.value,
             defaultUseProxyFiles: !!defaultUseProxyFiles.value,
+            projectRoot: (projectRoot.value || "").trim() || null,
+            forceProjectRoot: !!forceProjectRoot.value,
         });
         emit("close")
     } catch (e: any) {

@@ -8,6 +8,21 @@ type Listener = (event: any, payload: any) => void;
     // leave as '' so fetch('/api/...') is same-origin (no CORS headaches).
     const API_BASE = (window as any).__API_BASE__ || '';
 
+    async function readHttpError(res: Response): Promise<string> {
+        const requestId = String(res.headers.get('x-request-id') || '').trim();
+        const raw = await res.text().catch(() => '');
+        let parsed: any = null;
+        try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+        const base =
+            (parsed && typeof parsed.error === 'string' && parsed.error) ||
+            (parsed && typeof parsed.message === 'string' && parsed.message) ||
+            raw ||
+            `HTTP ${res.status}`;
+        const bodyReqId = parsed && typeof parsed.requestId === 'string' ? parsed.requestId : '';
+        const rid = bodyReqId || requestId;
+        return rid && !String(base).includes(rid) ? `${base} (request ${rid})` : String(base);
+    }
+
     // Minimal EventEmitter
     const listeners = new Map<string, Set<Listener>>();
     function emit(channel: string, payload: any) {
@@ -58,8 +73,10 @@ type Listener = (event: any, payload: any) => void;
             switch (channel) {
                 case 'scan-network-fallback': {
                     // Kick off the server scan, then fetch current list
-                    await fetch(`${API_BASE}/api/discovery/scan`, { method: 'POST' });
+                    const scanResp = await fetch(`${API_BASE}/api/discovery/scan`, { method: 'POST' });
+                    if (!scanResp.ok) throw new Error(await readHttpError(scanResp));
                     const r = await fetch(`${API_BASE}/api/discovery`);
+                    if (!r.ok) throw new Error(await readHttpError(r));
                     const json = await r.json();
                     return json.servers || [];
                 }
@@ -69,7 +86,7 @@ type Listener = (event: any, payload: any) => void;
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ args }),
                     });
-                    if (!r.ok) throw new Error(`IPC invoke failed: ${channel}`);
+                    if (!r.ok) throw new Error(`IPC invoke failed: ${channel}: ${await readHttpError(r)}`);
                     return r.json();
             }
         },

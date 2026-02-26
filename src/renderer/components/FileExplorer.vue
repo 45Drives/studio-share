@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-3 max-h-[500px] mt-2 bg-default rounded-md">
+  <div class="flex flex-col gap-3 max-h-[500px] mt-2 rounded-md">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
       <div class="text-muted">Click on files to select or deselect them. <span v-if="viewMode === 'grid'">Double-click

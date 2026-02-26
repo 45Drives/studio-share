@@ -203,7 +203,7 @@
 								</table>
 							</div>
 
-							<div v-if="hasVideoSelected" class="advanced-video-card">
+							<div v-if="hasVideoSelected" class="advanced-video-card ss-toned-panel">
 								<div class="advanced-video-header">
 									<p class="font-semibold">Advanced video options</p>
 									<p class="text-xs text-muted">
@@ -277,9 +277,19 @@
 												<span class="text-sm truncate min-w-0" :title="watermarkFile ? watermarkFile.name : 'No image selected'">
 													{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
 												</span>
+												<select
+													v-model="selectedExistingWatermark"
+													class="input-textlike border rounded px-2 py-1 text-sm min-w-[16rem]"
+												>
+													<option value="">Select existing watermark file…</option>
+													<option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">
+														{{ wm }}
+													</option>
+												</select>
+												<button class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFiles">Refresh</button>
 											</div>
 
-											<div v-if="watermarkAfterUpload && !watermarkFile" class="text-xs text-amber-300">
+											<div v-if="watermarkAfterUpload && !watermarkFile && !selectedExistingWatermark" class="watermark-warning">
 												Select a watermark image to continue.
 											</div>
 										</div>
@@ -374,7 +384,7 @@ const nextDisabled = computed(() => {
 	if (step.value === 2) return !canNext.value;
 	// step 3: disable while actively uploading (until done), otherwise allow Start/Finish
 	if (transcodeProxyAfterUpload.value && proxyQualities.value.length === 0) return true;
-	if (watermarkAfterUpload.value && !watermarkFile.value) return true;
+	if (watermarkAfterUpload.value && !watermarkFile.value && !selectedExistingWatermark.value) return true;
 	return isUploading.value && !allDone.value;
 });
 
@@ -432,21 +442,29 @@ function resolveWatermarkStorageRoot() {
 	return { abs, rel }
 }
 
+function resolveWatermarkDirRel() {
+	const { rel } = resolveWatermarkStorageRoot()
+	return rel ? `${rel}/.studio/watermarks` : '.studio/watermarks'
+}
+
 function resolveWatermarkUploadDir() {
-	const { abs } = resolveWatermarkStorageRoot()
-	const cleanRoot = abs === '/' ? '' : abs
-	return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
+	return `/${resolveWatermarkDirRel()}`
 }
 
 function resolveWatermarkRelPath() {
 	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
 	if (!name) return ''
-	const { rel } = resolveWatermarkStorageRoot()
-	return `${rel ? rel + '/' : ''}45flow-watermarks/${name}`
+	return `${resolveWatermarkDirRel()}/${name}`
 }
 
 function resolveWatermarkProjectRoot() {
 	return resolveWatermarkStorageRoot().abs
+}
+
+function resolveLegacyWatermarkRelPath() {
+	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
+	if (!name) return ''
+	return `.studio/watermarks/${name}`
 }
 
 function resolveCandidateServerWatermarkRelPath() {
@@ -505,8 +523,13 @@ async function ensureServerDirExists(dir: string) {
 
 async function resolveExistingServerWatermarkRelPath() {
 	const candidate = resolveCandidateServerWatermarkRelPath()
-	if (!candidate) return ''
-	return (await serverFileExists(candidate)) ? candidate : ''
+	const rooted = resolveWatermarkRelPath()
+	const legacy = resolveLegacyWatermarkRelPath()
+	const candidates = Array.from(new Set([candidate, rooted, legacy].filter(Boolean)))
+	for (const relPath of candidates) {
+		if (await serverFileExists(relPath)) return relPath
+	}
+	return ''
 }
 
 function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: string[]; skippedKinds: string[] }> {
@@ -681,10 +704,11 @@ function waitForIngestAndStartTranscode(opts: {
 							);
 						}
 					} else {
+						const requestSuffix = payload?.requestId ? ` (request ${String(payload.requestId)})` : '';
 						pushNotification(
 							new Notification(
 							'Ingest Failed',
-							payload?.error || 'Ingest failed.',
+							`${payload?.error || 'Ingest failed.'}${requestSuffix}`,
 							'error',
 							8000
 						)
@@ -718,10 +742,27 @@ function removeSelected(file: LocalFile) { selected.value = selected.value.filte
 function clearSelected() { selected.value = [] }
 function pickWatermark() {
 	window.electron.pickWatermark().then(f => {
-		if (f) watermarkFile.value = f;
+		if (f) {
+			watermarkFile.value = f;
+			selectedExistingWatermark.value = '';
+		}
 	});
 }
 function clearWatermark() { watermarkFile.value = null }
+
+async function loadExistingWatermarkFiles() {
+	try {
+		const dirRel = resolveWatermarkDirRel()
+		const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`, { method: 'GET' })
+		const entries = Array.isArray(data?.entries) ? data.entries : []
+		existingWatermarkFiles.value = entries
+			.filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
+			.map((e: any) => `${dirRel}/${String(e.name).trim()}`)
+			.sort((a: string, b: string) => a.localeCompare(b))
+	} catch {
+		existingWatermarkFiles.value = []
+	}
+}
 
 const totalSelectedBytes = computed(() =>
 	selected.value.reduce((sum, f) => sum + (f.size || 0), 0)
@@ -808,6 +849,8 @@ const transcodeProxyAfterUpload = ref(false)
 const proxyQualities = ref<string[]>([])
 const watermarkAfterUpload = ref(false)
 const watermarkFile = ref<LocalFile | null>(null)
+const existingWatermarkFiles = ref<string[]>([])
+const selectedExistingWatermark = ref('')
 const adaptiveHls = ref(false);
 
 watch(transcodeProxyAfterUpload, (v) => {
@@ -818,7 +861,17 @@ watch(transcodeProxyAfterUpload, (v) => {
 		proxyQualities.value = []
 		watermarkAfterUpload.value = false
 		watermarkFile.value = null
+		selectedExistingWatermark.value = ''
 	}
+})
+
+watch(selectedExistingWatermark, (v) => {
+	if (String(v || '').trim()) watermarkFile.value = null
+})
+
+watch(watermarkAfterUpload, (enabled) => {
+	if (enabled) void loadExistingWatermarkFiles()
+	else selectedExistingWatermark.value = ''
 })
 
 function finish() {
@@ -965,7 +1018,8 @@ async function startUploads() {
 
 	if (watermarkAfterUpload.value) {
 		isUploading.value = true
-		if (!watermarkFile.value) {
+		const selectedServerWatermark = String(selectedExistingWatermark.value || '').trim()
+		if (!watermarkFile.value && !selectedServerWatermark) {
 			pushNotification(
 				new Notification(
 					'Watermark Image Required',
@@ -978,8 +1032,12 @@ async function startUploads() {
 			return
 		}
 
-		watermarkRelPathForIngest = await resolveExistingServerWatermarkRelPath()
-		if (!watermarkRelPathForIngest) {
+		if (selectedServerWatermark) {
+			watermarkRelPathForIngest = selectedServerWatermark
+		} else {
+			watermarkRelPathForIngest = await resolveExistingServerWatermarkRelPath()
+		}
+		if (!watermarkRelPathForIngest && watermarkFile.value) {
 			const watermarkDestDir = resolveWatermarkUploadDir()
 			const ensured = await ensureServerDirExists(watermarkDestDir)
 			if (!ensured) {
@@ -1320,7 +1378,11 @@ function goBack() {
 }
 
 .advanced-video-card {
-	@apply shrink-0 rounded-md border border-default bg-accent p-3;
+	@apply shrink-0 p-3 rounded-md border;
+	border-color: color-mix(in srgb, var(--btn-primary-bg) 22%, #c8ced9);
+	background:
+		linear-gradient(135deg, color-mix(in srgb, #ffffff 92%, #edf3ff) 0%, color-mix(in srgb, #ffffff 86%, #e4eeff) 100%),
+		radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--btn-primary-bg) 10%, transparent) 0%, transparent 55%);
 }
 
 .advanced-video-header {
@@ -1334,6 +1396,14 @@ function goBack() {
 
 .advanced-col {
 	@apply rounded-md p-2 min-w-0;
+}
+
+.watermark-warning {
+	@apply text-xs font-semibold;
+	color: #9a6a00;
+	background: color-mix(in srgb, #ffda7a 20%, transparent);
+	padding: 0.25rem 0.4rem;
+	border-radius: 0.35rem;
 }
 
 @media (min-width: 1024px) {
@@ -1393,6 +1463,18 @@ function goBack() {
 
 :global(.dark) .wizard-progress::-webkit-progress-bar {
 	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #11151d);
+}
+
+:global(.dark) .advanced-video-card {
+	border-color: color-mix(in srgb, var(--btn-primary-bg) 40%, #55607a);
+	background:
+		linear-gradient(135deg, color-mix(in srgb, #1b2333 88%, #2f3c55) 0%, color-mix(in srgb, #202a3f 86%, #35486b) 100%),
+		radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--btn-primary-bg) 16%, transparent) 0%, transparent 55%);
+}
+
+:global(.dark) .watermark-warning {
+	color: #ffd772;
+	background: color-mix(in srgb, #ffd772 20%, transparent);
 }
 
 @media (max-width: 920px) {

@@ -23,7 +23,14 @@
 
       <!-- Right (menu) -->
       <div class="justify-self-end text-right">
-        <GlobalMenu />
+        <button
+          class="theme-icon-btn"
+          :class="darkMode ? 'theme-icon-btn--sun' : 'theme-icon-btn--moon'"
+          :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="toggleDarkMode()"
+        >
+          <component :is="darkMode ? SunIcon : MoonIcon" class="w-6 h-6" />
+        </button>
       </div>
     </header>
 
@@ -40,8 +47,8 @@
 
 <script setup lang="ts">
 import { ref, provide, onMounted, onBeforeUnmount, watch, computed } from 'vue'
-import { DynamicBrandingLogo, GlobalModalConfirm, NotificationView, reportError, reportSuccess } from '@45drives/houston-common-ui'
-import GlobalMenu from '../renderer/components/GlobalMenu.vue'
+import { DynamicBrandingLogo, GlobalModalConfirm, NotificationView, reportError, reportSuccess, toggleDarkMode, useDarkModeState } from '@45drives/houston-common-ui'
+import { MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { divisionCodeInjectionKey, currentServerInjectionKey, discoveryStateInjectionKey, thisOsInjectionKey, connectionMetaInjectionKey } from '../renderer/keys/injection-keys'
 import type { Server, DivisionType, DiscoveryState, ConnectionMeta } from '../renderer/types'
 import { useServerDiscovery } from '../renderer/composables/useServerDiscovery'
@@ -62,6 +69,7 @@ const router = useRouter()
 const hideHeader = computed(() => route.meta.hideHeader === true)
 const { headerTitle } = useHeaderTitle()
 const hideTransfers = computed(() => route.meta.hideTransfers === true)
+const darkMode = useDarkModeState()
 
 const hasToken = computed(() => {
   if (connectionMeta.value?.token) return true
@@ -114,6 +122,36 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.theme-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.theme-icon-btn--moon {
+  color: #60a5fa;
+  text-shadow: 0 0 10px rgba(96, 165, 250, 0.45);
+}
+
+.theme-icon-btn--moon:hover {
+  color: #bfdbfe;
+}
+
+.theme-icon-btn--sun {
+  color: #f59e0b;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+}
+
+.theme-icon-btn--sun:hover {
+  color: #fde68a;
+}
+
 .flow-logo-gradient {
   width: clamp(9.5rem, 17vw, 12.25rem);
   aspect-ratio: 841 / 210;

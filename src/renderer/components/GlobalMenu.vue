@@ -26,23 +26,18 @@
                         {{ updateBusy ? 'Checking...' : 'Check for Updates' }}
                     </button>
                 </div> -->
-
-                <details class="menu-disclosure mb-2" open>
+                <!-- <details class="menu-disclosure mb-2" open>
                     <summary class="menu-disclosure-summary">Studio Palette</summary>
                     <div class="disclosure-content">
                         <div class="palette-grid">
-                            <button
-                                v-for="palette in studioPalettes"
-                                :key="palette.theme"
-                                class="btn theme-btn w-full"
+                            <button v-for="palette in studioPalettes" :key="palette.theme" class="btn theme-btn w-full"
                                 :class="[palette.className, currentTheme === palette.theme ? 'theme-btn-active' : '']"
-                                @click="selectTheme(palette.theme)"
-                            >
+                                @click="selectTheme(palette.theme)">
                                 {{ palette.label }}
                             </button>
                         </div>
                     </div>
-                </details>
+                </details> -->
 
                 <!-- Dark mode -->
                 <div class="mb-2 items-center">
@@ -126,27 +121,30 @@ const darkMode = useDarkModeState()
 const darkModeLabel = computed(() => (darkMode.value ? 'Light Mode' : 'Dark Mode'))
 const darkModeButtonClass = computed(() => (darkMode.value ? 'btn-sun' : 'btn-moon'))
 
-const { setTheme, currentTheme } = useThemeFromAlias()
+useThemeFromAlias()
 
-const studioPalettes: Array<{ label: string; theme: Theme; className: string }> = [
-    { label: 'Original Purple', theme: 'theme-studio-original-purple', className: 'theme-btn-studio-original-purple' },
-    { label: 'Purple + Orange', theme: 'theme-studio-grad-purple-orange', className: 'theme-btn-studio-grad-purple-orange' },
-    { label: 'Purple + Pink + Orange', theme: 'theme-studio-grad-purple-pink-orange', className: 'theme-btn-studio-grad-purple-pink-orange' },
-    { label: 'Purple + Pink + Blue', theme: 'theme-studio-grad-purple-pink-blue', className: 'theme-btn-studio-grad-purple-pink-blue' },
-    { label: 'Purple + Blue', theme: 'theme-studio-grad-purple-blue', className: 'theme-btn-studio-grad-purple-blue' },
-    { label: 'Red + Purple + Blue', theme: 'theme-studio-grad-red-purple-blue', className: 'theme-btn-studio-grad-red-purple-blue' },
-    { label: 'Sunset Laser', theme: 'theme-studio-grad-sunset-laser', className: 'theme-btn-studio-grad-sunset-laser' },
-    { label: 'Neon Studio', theme: 'theme-studio-grad-neon-studio', className: 'theme-btn-studio-grad-neon-studio' },
-    { label: 'Moon-Mist', theme: 'theme-studio-grad-moon-mist', className: 'theme-btn-studio-grad-moon-mist' },
-    { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
-    { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
-    { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
-    
-]
+// const { setTheme, currentTheme } = useThemeFromAlias()
 
-function selectTheme(theme: Theme) {
-    setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
-}
+// const studioPalettes: Array<{ label: string; theme: Theme; className: string }> = [
+//     { label: 'Original Purple', theme: 'theme-studio-original-purple', className: 'theme-btn-studio-original-purple' },
+//     { label: 'Purple + Orange', theme: 'theme-studio-grad-purple-orange', className: 'theme-btn-studio-grad-purple-orange' },
+//     { label: 'Purple + Pink + Orange', theme: 'theme-studio-grad-purple-pink-orange', className: 'theme-btn-studio-grad-purple-pink-orange' },
+//     { label: 'Purple + Pink + Blue', theme: 'theme-studio-grad-purple-pink-blue', className: 'theme-btn-studio-grad-purple-pink-blue' },
+//     { label: 'Purple + Blue', theme: 'theme-studio-grad-purple-blue', className: 'theme-btn-studio-grad-purple-blue' },
+//     { label: 'Red + Purple + Blue', theme: 'theme-studio-grad-red-purple-blue', className: 'theme-btn-studio-grad-red-purple-blue' },
+//     { label: 'Sunset Laser', theme: 'theme-studio-grad-sunset-laser', className: 'theme-btn-studio-grad-sunset-laser' },
+//     { label: 'Neon Studio', theme: 'theme-studio-grad-neon-studio', className: 'theme-btn-studio-grad-neon-studio' },
+//     { label: 'Moon-Mist', theme: 'theme-studio-grad-moon-mist', className: 'theme-btn-studio-grad-moon-mist' },
+//     { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
+//     { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
+//     { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
+
+// ]
+
+// function selectTheme(theme: Theme) {
+//     setTheme(theme) // updates currentTheme, which updates currentDivision, which updates the logo
+// }
+
 
 function gotoHome() {
     const target = isLoggedIn.value

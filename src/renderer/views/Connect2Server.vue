@@ -591,6 +591,22 @@ function listenBootstrap(id: string) {
     return () => window.electron?.ipcRenderer.removeListener('bootstrap-progress', handler);
 }
 
+async function readHttpError(res: Response): Promise<string> {
+    const requestId = String(res.headers.get('x-request-id') || '').trim();
+    const raw = await res.text().catch(() => '');
+    let parsed: any = null;
+    try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+
+    const base =
+        (parsed && typeof parsed.error === 'string' && parsed.error) ||
+        (parsed && typeof parsed.message === 'string' && parsed.message) ||
+        raw ||
+        `HTTP ${res.status}`;
+    const bodyReqId = parsed && typeof parsed.requestId === 'string' ? parsed.requestId : '';
+    const rid = bodyReqId || requestId;
+    return rid && !String(base).includes(rid) ? `${base} (request ${rid})` : String(base);
+}
+
 async function ensureLicenseActivated(apiBase: string) {
     let statusResp: Response
     try {
@@ -619,7 +635,12 @@ async function ensureLicenseActivated(apiBase: string) {
     try { activateBody = activateText ? JSON.parse(activateText) : null } catch { /* keep raw text fallback */ }
 
     if (!activateResp.ok || !activateBody?.ok) {
-        const msg = activateBody?.error || activateBody?.detail?.error || activateText || `HTTP ${activateResp.status}`
+        const requestId = String(
+            activateResp.headers.get('x-request-id') ||
+            (typeof activateBody?.requestId === 'string' ? activateBody.requestId : '')
+        ).trim()
+        const base = activateBody?.error || activateBody?.detail?.error || activateText || `HTTP ${activateResp.status}`
+        const msg = requestId && !String(base).includes(requestId) ? `${base} (request ${requestId})` : String(base)
         throw new Error(`License activation failed: ${msg}`)
     }
 
@@ -829,7 +850,7 @@ async function connectToServer() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: username.value, password: password.value }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readHttpError(res));
         const { token } = await res.json();
 
         connectionMeta.value = {

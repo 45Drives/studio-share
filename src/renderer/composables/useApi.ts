@@ -114,18 +114,35 @@ export function useApi() {
                 }
 
                 if (!res.ok) {
+                    const requestIdHeader = res.headers.get('x-request-id') || ''
                     const detail = await res.text().catch(() => res.statusText)
-                    try {
-                        const parsed = detail ? JSON.parse(detail) : null
-                        if (parsed && typeof parsed === 'object' && 'security' in parsed) {
-                            window.appLog?.warn?.('api.security', {
-                                url,
-                                status: res.status,
-                                security: (parsed as any).security
-                            })
-                        }
-                    } catch { /* non-json */ }
-                    const e = Object.assign(new Error(detail || `HTTP ${res.status}`), { status: res.status })
+                    let parsed: any = null
+                    try { parsed = detail ? JSON.parse(detail) : null } catch { parsed = null }
+
+                    if (parsed && typeof parsed === 'object' && 'security' in parsed) {
+                        window.appLog?.warn?.('api.security', {
+                            url,
+                            status: res.status,
+                            security: (parsed as any).security
+                        })
+                    }
+
+                    const requestIdBody = parsed && typeof parsed.requestId === 'string' ? parsed.requestId : ''
+                    const requestId = requestIdBody || requestIdHeader
+                    const parsedError = parsed && typeof parsed.error === 'string' ? parsed.error : ''
+                    const parsedMessage = parsed && typeof parsed.message === 'string' ? parsed.message : ''
+                    const baseMessage = res.status >= 500
+                        ? 'Internal server error'
+                        : (parsedError || parsedMessage || detail || `HTTP ${res.status}`)
+                    const withRequestId = requestId && !baseMessage.includes(requestId)
+                        ? `${baseMessage} (request ${requestId})`
+                        : baseMessage
+
+                    const e = Object.assign(new Error(withRequestId), {
+                        status: res.status,
+                        requestId: requestId || undefined,
+                        code: parsed && typeof parsed.code === 'string' ? parsed.code : undefined,
+                    })
                     throw e
                 }
 
@@ -149,6 +166,9 @@ export function useApi() {
 
                 window.appLog?.warn?.('api.request.error', {
                     url,
+                    status: err?.status,
+                    code: err?.code,
+                    requestId: err?.requestId,
                     message: String(err?.message || err),
                     attempt,
                     willRetry: canRetry

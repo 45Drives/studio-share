@@ -5,12 +5,30 @@
                 <CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
                     <template #header>
                         <!-- ===== Step 1: Project selection ===== -->
-                        <div v-if="!projectSelected" class="flex w-full flex-col gap-3 text-left min-w-0 bg-accent rounded-md p-4">
+                        <div v-if="!projectSelected" class="ss-toned-panel flex w-full flex-col gap-3 text-left min-w-0 p-4">
                             <h2 class="text-xl font-semibold">Select a project</h2>
 
                             <label class="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
                                 <input type="checkbox" v-model="showEntireTree" @change="loadProjectChoices" />
                                 <span class="min-w-0">Show entire directory tree from root</span>
+                            </label>
+
+                            <label
+                                v-if="hasConfiguredProjectRoot && !showEntireTree"
+                                class="flex items-center gap-2 text-xs opacity-80 cursor-pointer select-none min-w-0"
+                            >
+                                <input type="checkbox" v-model="useConfiguredProjectRoot" @change="loadProjectChoices" />
+                                <span class="min-w-0">Use configured project root by default</span>
+                            </label>
+
+                            <label
+                                v-if="showDefaultRootOption"
+                                class="flex items-center gap-2 text-xs opacity-80 cursor-pointer select-none min-w-0"
+                            >
+                                <input type="checkbox" v-model="rememberProjectAsDefault" />
+                                <span class="min-w-0">
+                                    Use selected project as default share root (change later in Settings -> Project Root (Share / Upload)).
+                                </span>
                             </label>
 
                             <!-- Mode: ROOTS -->
@@ -34,6 +52,22 @@
                                     </div>
                                 </div>
                             </template>
+                            <template v-else-if="useConfiguredProjectRoot && currentRoot">
+                                <div class="text-sm opacity-80 min-w-0">
+                                    <span class="font-semibold">Configured project root:</span>
+                                    <code class="ml-2">{{ currentRoot }}</code>
+                                </div>
+                                <div class="max-h-64 overflow-auto border-default bg-default rounded-md min-w-0">
+                                    <div class="flex items-center justify-between gap-2 border-b border-default px-3 py-2 text-base min-w-0">
+                                        <div class="min-w-0 flex-1">
+                                            <code class="block truncate" :title="currentRoot">{{ currentRoot }}</code>
+                                        </div>
+                                        <div class="flex gap-2 flex-shrink-0">
+                                            <button class="btn btn-primary" @click="chooseProject(currentRoot)">Select</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
 
                             <div class="text-sm text-red-400" v-if="detectError">
                                 {{ detectError }}
@@ -41,7 +75,13 @@
                         </div>
 
                         <!-- ===== Step 2: select file content (only after project chosen) ===== -->
-                        <div v-else class="flex flex-col gap-2 text-left min-w-0">
+                        <div v-else class="ss-toned-panel flex flex-col gap-2 text-left min-w-0 p-3">
+                            <div class="flex flex-col gap-2 text-left min-w-0">
+                                <h2 class="text-xl font-semibold">Share Files</h2>
+                                <div class="text-sm opacity-80 -mt-1">
+                                    Pick files to share and generate a shareable link.
+                                </div>
+                            </div>
                             <div class="text-sm text-muted -mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                                 <span class="font-semibold">Project:</span>
                                 <code class="min-w-0 truncate">{{ projectBase }}</code>
@@ -177,7 +217,7 @@
                                     <!-- Link Access row -->
                                     <template #after class="">
                                         <div class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <div class="rounded-md border border-default bg-accent min-w-0 p-3">
+                                            <div class="ss-toned-panel min-w-0 p-3">
                                                 <div class="font-semibold mb-2">Link Access Mode</div>
                                                 <div class="grid grid-cols-3 gap-2 min-w-0">
                                                     <div>
@@ -306,9 +346,9 @@
                                         <!-- Advanced Video Options -->
                                         <div v-if="hasVideoSelected" class="border-t border-default mt-2 pt-2 min-w-0">
                                             <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled"
-                                                class="rounded-md border border-default bg-accent min-w-0">
+                                                class="ss-toned-panel min-w-0">
                                                 <DisclosureButton
-                                                    class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left min-w-0 bg-accent rounded-md">
+                                                    class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left min-w-0 rounded-md">
                                                     <div class="min-w-0">
                                                         <p class="font-semibold">Advanced video options</p>
                                                         <p class="text-xs text-muted truncate">
@@ -318,7 +358,7 @@
                                                     <ChevronDownIcon class="h-5 w-5 text-muted transition-transform duration-200"
                                                         :class="open ? 'rotate-180' : ''" />
                                                 </DisclosureButton>
-                                                <DisclosurePanel class="border-t border-default px-3 py-2.5 min-w-0 bg-accent rounded-b-md">
+                                                <DisclosurePanel class="border-t border-default px-3 py-2.5 min-w-0 rounded-b-md">
                                                     <div class="grid grid-cols-3 gap-2.5 items-start">
                                                         <div class="rounded-md p-2.5 min-w-0">
                                                             <div class="flex flex-wrap items-center gap-2 min-w-0">
@@ -340,7 +380,6 @@
                                                                 </Switch>
                                                                 <span class="text-sm truncate min-w-0 flex-1" :title="transcodeSwitchTitle">
                                                                     <template v-if="!canTranscodeSelected">(Only for Videos)</template>
-                                                                    <template v-else-if="preflightProxyBlocked">{{ proxyBlockReason }}</template>
                                                                     <template v-else>
                                                                         {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share raw files only' }}
                                                                     </template>
@@ -398,7 +437,7 @@
                                                                     ]" />
                                                                 </Switch>
                                                                 <span class="text-sm truncate min-w-0 flex-1" :title="watermarkSwitchTitle">
-                                                                    {{ preflightWatermarkBlocked ? watermarkBlockReason : (watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark') }}
+                                                                    {{ watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark' }}
                                                                 </span>
                                                             </div>
                                                             <div v-else class="text-sm text-muted">
@@ -417,9 +456,21 @@
                                                                 <span class="text-sm truncate min-w-0"
                                                                     :title="watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected')">
                                                                     {{ watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected') }}
-                                                                </span>                                                       
+                                                                </span>
+                                                                <select
+                                                                    v-model="selectedExistingWatermark"
+                                                                    class="input-textlike border rounded px-2 py-1 text-sm min-w-[16rem]"
+                                                                >
+                                                                    <option value="">Select existing watermark file…</option>
+                                                                    <option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">
+                                                                        {{ wm }}
+                                                                    </option>
+                                                                </select>
+                                                                <button class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFiles">
+                                                                    Refresh
+                                                                </button>
                                                             </div>
-                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile && !usingExistingWatermark"
+                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile && !selectedExistingWatermark && !usingExistingWatermark"
                                                                 class="text-xs text-amber-700 dark:text-amber-300 mb-2">
                                                                 Select a watermark image to continue.
                                                             </div>
@@ -468,8 +519,8 @@
                                 }))" @apply="onApplyUsers" />
                             <ConfirmDeleteModal
                                 v-model="outputsExistModalOpen"
-                                title="Outputs Already Exist"
-                                message="Outputs already exist for one or more files. Overwrite them?"
+                                :title="outputsConflictTitle"
+                                :message="outputsConflictMessage"
                                 confirmText="Overwrite"
                                 cancelText="Generate Link"
                                 :danger="false"
@@ -497,7 +548,7 @@
                             </button>
                         </div>
                         <div v-if="hasActiveTranscodeForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
-                            A transcode is already running for this selection. Please wait until it finishes, or select a different video to start another.
+                            A transcode is already running for this selection. You can still generate a link and choose whether to overwrite or keep existing/in-progress outputs.
                         </div>
                         <div v-if="hasActiveUploadForSelection" class="text-xs text-amber-700 dark:text-amber-300 mt-2">
                             One or more selected files are still uploading. Wait for upload completion before creating a link (transcodes run after upload completes).
@@ -589,8 +640,26 @@ const projectSelected = ref(false)
 const showEntireTree = ref(false)
 const projectBase = ref<string>('')
 const {
-    detecting, detectError, projectRoots, browseMode, loadProjectChoices,
+    detecting,
+    detectError,
+    projectRoots,
+    browseMode,
+    loadProjectChoices,
+    currentRoot,
+    forceProjectRoot,
+    configuredProjectRoot,
+    useConfiguredProjectRoot,
+    hasConfiguredProjectRoot,
 } = useProjectChoices(showEntireTree)
+const rememberProjectAsDefault = ref(true)
+const savingDefaultRoot = ref(false)
+const showDefaultRootOption = computed(
+    () =>
+        !showEntireTree.value &&
+        browseMode.value === 'roots' &&
+        !forceProjectRoot.value &&
+        !configuredProjectRoot.value,
+)
 const accessUsers = ref<Commenter[]>([])
 type AccessMode = 'open' | 'open_password' | 'restricted'
 const accessMode = ref<AccessMode>('open')
@@ -639,12 +708,52 @@ function resetAll() {
     }
 }
 
-function chooseProject(dirPath: string) {
+async function chooseProject(dirPath: string) {
+    void maybePersistDefaultProjectRoot(dirPath)
     projectBase.value = dirPath
     projectSelected.value = true
     // Optional: clear previously selected files when switching projects
     files.value = []
     invalidateLink()
+}
+
+async function maybePersistDefaultProjectRoot(dirPath: string) {
+    if (!showDefaultRootOption.value) return
+    if (!rememberProjectAsDefault.value) return
+    if (savingDefaultRoot.value) return
+    const normalized = ensureAbsDir(dirPath)
+    if (!normalized) return
+    savingDefaultRoot.value = true
+    try {
+        await apiFetch('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify({
+                projectRoot: normalized,
+                forceProjectRoot: true,
+            }),
+        })
+        configuredProjectRoot.value = normalized
+        forceProjectRoot.value = true
+        pushNotification(
+            new Notification(
+                'Default Share Root Saved',
+                `Using ${normalized} as the default share root. Update this in Settings -> Project Root (Share / Upload).`,
+                'success',
+                8000
+            )
+        )
+    } catch (e: any) {
+        pushNotification(
+            new Notification(
+                'Could Not Save Default Share Root',
+                e?.message || 'Project was selected, but the default share root could not be saved.',
+                'warning',
+                8000
+            )
+        )
+    } finally {
+        savingDefaultRoot.value = false
+    }
 }
 
 // Allow going back to re-pick a project
@@ -712,6 +821,13 @@ function toAbsUnder(base: string, p: string) {
         return '/' + clean;                                                // "/tank/..."
     }
     return '/' + bName + '/' + clean;                                    // "/tank/foo"
+}
+
+function ensureAbsDir(raw: string) {
+    let p = String(raw || '').trim().replace(/\\/g, '/')
+    if (!p) return ''
+    if (!p.startsWith('/')) p = `/${p}`
+    return p.replace(/\/+$/, '') || '/'
 }
 
 // When FileExplorer emits @add, normalize relative paths to live under the chosen project (if restricted)
@@ -788,7 +904,11 @@ watch(showEntireTree, (v) => {
         projectBase.value = '';
         resetPreflightState()
         invalidateLink();
-        loadProjectChoices();
+        loadProjectChoices().then(() => {
+            if (useConfiguredProjectRoot.value && currentRoot.value) {
+                chooseProject(currentRoot.value)
+            }
+        });
     }
 });
 
@@ -861,6 +981,8 @@ const proxyQualities = ref<string[]>([])
 const watermarkEnabled = ref(false)
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 const watermarkFile = ref<LocalFile | null>(null)
+const existingWatermarkFiles = ref<string[]>([])
+const selectedExistingWatermark = ref('')
 const overwriteExisting = ref(false)
 const preflightLoading = ref(false)
 const preflightProxyBlocked = ref(false)
@@ -889,17 +1011,17 @@ const hasVideoSelected = computed(() =>
 const proxyBlockReason = computed(() => {
     if (!preflightProxyBlocked.value) return ''
     if (preflightTranscodeInProgressCount.value > 0) {
-        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
+        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s). You can decide to overwrite or keep existing outputs when generating the link.`
     }
-    return 'Proxy generation is not available for this selection.'
+    return 'Proxy generation needs attention for this selection.'
 })
 
 const watermarkBlockReason = computed(() => {
     if (!preflightWatermarkBlocked.value) return ''
     if (preflightTranscodeInProgressCount.value > 0) {
-        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`
+        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s). You can decide to overwrite or keep existing outputs when generating the link.`
     }
-    return 'Watermark generation is not available for this selection.'
+    return 'Watermark generation needs attention for this selection.'
 })
 
 const allSelectedVideosHaveProxy = computed(() =>
@@ -919,7 +1041,7 @@ const usingExistingWatermark = computed(() =>
 )
 
 const transcodeSwitchDisabled = computed(() =>
-    !canTranscodeSelected.value || preflightLoading.value || preflightProxyBlocked.value
+    !canTranscodeSelected.value || preflightLoading.value
 )
 
 const transcodeSwitchTitle = computed(() => {
@@ -930,7 +1052,7 @@ const transcodeSwitchTitle = computed(() => {
 })
 
 const watermarkSwitchDisabled = computed(() =>
-    preflightLoading.value || preflightWatermarkBlocked.value
+    preflightLoading.value
 )
 
 const watermarkSwitchTitle = computed(() => {
@@ -999,11 +1121,12 @@ async function runPreflight() {
             const msgParts: string[] = []
             if (preflightTranscodeInProgressCount.value > 0) {
                 msgParts.push(`Transcode already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`)
+                msgParts.push('You can keep configuring proxy/watermark options and choose overwrite vs keep existing when generating the link.')
             }
             const message = msgParts.length
                 ? msgParts.join(' ')
-                : 'Some transcode options are unavailable for the selected files.'
-            pushNotification(new Notification('Transcode Options Unavailable', message, 'info', 7000))
+                : 'Transcode status changed for the selected files.'
+            pushNotification(new Notification('Transcode In Progress', message, 'info', 7000))
             lastPreflightNoticeKey.value = noticeKey
         } else if (!preflightProxyBlocked.value && !preflightWatermarkBlocked.value) {
             lastPreflightNoticeKey.value = ''
@@ -1036,20 +1159,38 @@ watch(files, () => {
     }
 }, { deep: true })
 
-watch(preflightProxyBlocked, (blocked) => {
-    if (blocked) transcodeProxy.value = false
+watch(selectedExistingWatermark, (v) => {
+    if (String(v || '').trim()) watermarkFile.value = null
 })
 
-watch(preflightWatermarkBlocked, (blocked) => {
-    if (blocked) watermarkEnabled.value = false
+watch(watermarkEnabled, (enabled) => {
+    if (enabled) void loadExistingWatermarkFiles()
+    if (!enabled) selectedExistingWatermark.value = ''
 })
 
 function pickWatermark() {
     window.electron.pickWatermark().then(f => {
-        if (f) watermarkFile.value = f
+        if (f) {
+            watermarkFile.value = f
+            selectedExistingWatermark.value = ''
+        }
     })
 }
 function clearWatermark() { watermarkFile.value = null }
+
+async function loadExistingWatermarkFiles() {
+    try {
+        const dirRel = resolveWatermarkDirRel()
+        const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`, { method: 'GET' })
+        const entries = Array.isArray(data?.entries) ? data.entries : []
+        existingWatermarkFiles.value = entries
+            .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
+            .map((e: any) => `${dirRel}/${String(e.name).trim()}`)
+            .sort((a: string, b: string) => a.localeCompare(b))
+    } catch {
+        existingWatermarkFiles.value = []
+    }
+}
 
 function dirOfServerPath(p: string) {
     const clean = String(p || '').replace(/\\/g, '/').replace(/\/+$/, '')
@@ -1077,23 +1218,25 @@ function resolveWatermarkStorageRoot() {
     return { abs, rel }
 }
 
+function resolveWatermarkDirRel() {
+    const { rel } = resolveWatermarkStorageRoot()
+    return rel ? `${rel}/.studio/watermarks` : '.studio/watermarks'
+}
+
 function resolveWatermarkUploadDir() {
-    const { abs } = resolveWatermarkStorageRoot()
-    const cleanRoot = abs === '/' ? '' : abs
-    return `${cleanRoot || ''}/45flow-watermarks` || '/45flow-watermarks'
+    return `/${resolveWatermarkDirRel()}`
 }
 
 function resolveWatermarkRelPath() {
     const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
     if (!name) return ''
-    const { rel } = resolveWatermarkStorageRoot()
-    return `${rel ? rel + '/' : ''}45flow-watermarks/${name}`
+    return `${resolveWatermarkDirRel()}/${name}`
 }
 
 function resolveWatermarkProjectRelPath() {
     const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
     if (!name) return ''
-    return `45flow-watermarks/${name}`
+    return `.studio/watermarks/${name}`
 }
 
 function splitRelPath(relPath: string) {
@@ -1146,7 +1289,7 @@ function buildWatermarkFileCandidates() {
     return Array.from(new Set([
         rooted,
         projectRel,
-        baseName ? `45flow-watermarks/${baseName}` : '',
+        baseName ? `.studio/watermarks/${baseName}` : '',
         baseName,
     ].filter(Boolean)))
 }
@@ -1237,17 +1380,28 @@ const canGenerate = computed(() =>
     (!protectWithPassword.value || !!password.value) &&
     accessSatisfied.value &&
     (!transcodeProxy.value || proxyQualities.value.length > 0) &&
-    (!watermarkEnabled.value || !!watermarkFile.value || usingExistingWatermark.value) &&
-    !hasActiveTranscodeForSelection.value &&
+    (!watermarkEnabled.value || !!watermarkFile.value || !!selectedExistingWatermark.value || usingExistingWatermark.value) &&
     !hasActiveUploadForSelection.value
 );
 
 function hasRequestedExistingOutputs() {
     if (!hasVideoSelected.value) return false
+    if ((transcodeProxy.value || watermarkEnabled.value) && preflightTranscodeInProgressCount.value > 0) return true
     if (transcodeProxy.value && preflightProxyExistingCount.value > 0) return true
     if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0) return true
     return false
 }
+
+const outputsConflictTitle = computed(() =>
+    preflightTranscodeInProgressCount.value > 0 ? 'Transcode In Progress' : 'Outputs Already Exist'
+)
+
+const outputsConflictMessage = computed(() => {
+    if (preflightTranscodeInProgressCount.value > 0) {
+        return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s). Overwrite to restart output generation, or Generate Link to keep existing/in-progress outputs.`
+    }
+    return 'Outputs already exist for one or more files. Overwrite them?'
+})
 
 function sameSelection(a: string[], b: string[]) {
     if (a.length !== b.length) return false
@@ -1580,7 +1734,7 @@ async function generateLink() {
     }
 
     if (watermarkEnabled.value) {
-        if (!watermarkFile.value && !usingExistingWatermark.value) {
+        if (!watermarkFile.value && !selectedExistingWatermark.value && !usingExistingWatermark.value) {
             pushNotification(
                 new Notification(
                     'Watermark Image Required',
@@ -1620,7 +1774,7 @@ async function generateLink() {
             return
         }
         if (action === 'overwrite') {
-            if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0 && !watermarkFile.value?.name) {
+            if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0 && !watermarkFile.value?.name && !selectedExistingWatermark.value) {
                 pushNotification(
                     new Notification(
                         'Watermark Image Required',
@@ -1655,7 +1809,7 @@ async function generateLink() {
     }
 
     body.access_mode = accessMode.value === 'restricted' ? 'restricted' : 'open'
-    body.auth_mode = accessMode.value === 'open' ? 'none' : 'password'
+    body.auth_mode = accessMode.value === 'open_password' ? 'password' : 'none'
     if (accessMode.value !== 'restricted') {
         body.allow_comments = !!allowOpenComments.value
     }
@@ -1683,14 +1837,15 @@ async function generateLink() {
     if (keepExistingOutputs) {
         body.keepExistingOutputs = true
     }
+    const selectedServerWatermark = String(selectedExistingWatermark.value || '').trim()
     const useExistingWatermarkOnly =
-        watermarkEnabled.value && !watermarkFile.value?.name && usingExistingWatermark.value
+        watermarkEnabled.value && !watermarkFile.value?.name && !selectedServerWatermark && usingExistingWatermark.value
 
     const keepExistingWatermark = keepExistingOutputs && watermarkEnabled.value && preflightWatermarkExistingCount.value > 0
 
-    if (watermarkEnabled.value && watermarkFile.value?.name && !keepExistingWatermark) {
+    if (watermarkEnabled.value && (watermarkFile.value?.name || selectedServerWatermark) && !keepExistingWatermark) {
         body.watermark = true
-        body.watermarkFile = resolveWatermarkRelPath() || watermarkFile.value.name
+        body.watermarkFile = selectedServerWatermark || resolveWatermarkRelPath() || watermarkFile.value!.name
         body.watermarkProxyQualities = proxyQualities.value.slice()
     } else if (useExistingWatermarkOnly || keepExistingWatermark) {
         body.watermark = true
@@ -1700,7 +1855,17 @@ async function generateLink() {
     }
 
     try {
-        if (watermarkEnabled.value && watermarkFile.value && !keepExistingWatermark) {
+        window.appLog?.info?.('share.create.request', {
+            files: files.value.length,
+            access_mode: body.access_mode,
+            auth_mode: body.auth_mode,
+            hasPassword: !!body.password,
+            generateReviewProxy: !!body.generateReviewProxy,
+            watermark: !!body.watermark,
+            overwrite: !!body.overwrite,
+            keepExistingOutputs: !!body.keepExistingOutputs,
+        })
+        if (watermarkEnabled.value && watermarkFile.value && !keepExistingWatermark && !selectedServerWatermark) {
             const up = await uploadWatermarkToProject()
             if (!up.ok) {
                 pushNotification(
@@ -1981,7 +2146,10 @@ async function generateLink() {
             /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
         window.appLog?.error('share.create.failed', {
             files: files.value.length,
-            error: msg
+            error: msg,
+            status: e?.status,
+            code: e?.code,
+            requestId: e?.requestId,
         })
         error.value = msg
 
@@ -2002,7 +2170,11 @@ async function generateLink() {
 
 onMounted(async () => {
     await loadLinkDefaults();
-    loadProjectChoices();
+    await loadProjectChoices();
+    await loadExistingWatermarkFiles();
+    if (useConfiguredProjectRoot.value && currentRoot.value) {
+        chooseProject(currentRoot.value)
+    }
 })
 
 async function copyLink() {

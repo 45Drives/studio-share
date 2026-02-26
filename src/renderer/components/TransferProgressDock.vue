@@ -3,7 +3,7 @@
     <div v-if="state.open" class="fixed bottom-4 right-4 z-50 w-1/3">
         <div class="rounded-md border border-default bg-default shadow-xl overflow-hidden">
             <!-- header -->
-            <div class="flex items-center justify-between bg-well px-3 py-2 border-b border-default">
+            <div class="flex items-center justify-between bg-primary px-3 py-2 border-b border-default">
                 <div class="min-w-0">
                     <div class="font-semibold text-sm">
                         Transfers

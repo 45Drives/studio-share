@@ -45,6 +45,7 @@ const themeToDivision: Record<Theme, Division> = {
 }
 
 const STORAGE_KEY = '45flow-theme-v1'
+const FORCED_THEME: Theme = 'theme-studio-grad-purple-pink-orange'
 
 function isTheme(value: string): value is Theme {
   return [
@@ -84,7 +85,8 @@ function saveStoredTheme(theme: Theme) {
   }
 }
 
-const currentTheme = ref<Theme>(loadStoredTheme() ?? 'theme-studio')
+// const currentTheme = ref<Theme>(loadStoredTheme() ?? 'theme-studio')
+const currentTheme = ref<Theme>(FORCED_THEME)
 const currentDivision = ref<Division>('studio')
 
 function setHtmlThemeClass(theme: Theme) {
@@ -111,6 +113,7 @@ function setHtmlThemeClass(theme: Theme) {
 }
 
 watchEffect(() => {
+  if (currentTheme.value !== FORCED_THEME) currentTheme.value = FORCED_THEME
   setHtmlThemeClass(currentTheme.value)
   currentDivision.value = themeToDivision[currentTheme.value]
   saveStoredTheme(currentTheme.value)
@@ -118,25 +121,30 @@ watchEffect(() => {
 
 /** Apply a theme using the 45Drives alias coming from the server (e.g. "homelab"|"professional") */
 function applyThemeFromAlias(aliasStyle?: string) {
-  const normalized = (aliasStyle || '').toLowerCase()
-  const mapped = aliasToTheme[normalized]
+  // const normalized = (aliasStyle || '').toLowerCase()
+  // const mapped = aliasToTheme[normalized]
 
-  if (mapped && mapped !== 'theme-studio') {
-    currentTheme.value = mapped
-    return
-  }
+  // if (mapped && mapped !== 'theme-studio') {
+  //   currentTheme.value = mapped
+  //   return
+  // }
 
-  // Keep selected studio variant when server reports "studio"
-  if (mapped === 'theme-studio' && themeToDivision[currentTheme.value] === 'studio') {
-    return
-  }
+  // // Keep selected studio variant when server reports "studio"
+  // if (mapped === 'theme-studio' && themeToDivision[currentTheme.value] === 'studio') {
+  //   return
+  // }
 
-  currentTheme.value = mapped ?? 'theme-studio'
+  // currentTheme.value = mapped ?? 'theme-studio'
+  
+  void aliasStyle
+  currentTheme.value = FORCED_THEME
 }
 
 /** Directly set a theme */
 function setTheme(theme: Theme) {
-  currentTheme.value = theme
+  //  currentTheme.value = theme
+  void theme
+  currentTheme.value = FORCED_THEME
 }
 
 export function useThemeFromAlias() {

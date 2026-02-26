@@ -1,7 +1,7 @@
 <template>
     <div class="bg-accent">
         <!-- Non-root row -->
-        <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default hover:bg-white/5 dark:hover:bg-white/5 cursor-pointer 
+        <div v-if="!isRoot" data-fp-item class="grid auto-rows-[28px] items-center border-b border-default ss-explorer-hover text-default cursor-pointer 
             [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px] focus:outline-none"
             @click="modeIsUpload ? selectFolder() : onRowClick()"
             @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
@@ -33,7 +33,7 @@
                     </button>
 
                     <!-- label (also stops bubbling; the row already handles click) -->
-                    <button class="underline truncate" :title="label + '/'"
+                    <button class="underline truncate font-semibold" :title="label + '/'"
                         @click.stop="modeIsUpload ? emit('select-folder', props.relPath || '') : toggleOpen()">
                         {{ label }}/
                     </button>
@@ -70,7 +70,7 @@
                     'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
                     (!modeIsUpload && selected.has(ch.path))
                         ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
-                        : ' hover:bg-white/5 dark:hover:bg-white/5',
+                        : 'ss-explorer-hover',
                     modeIsUpload ? 'opacity-90 pointer-events-none' : ''
                 ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
                     @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
@@ -89,13 +89,13 @@
                         <div class="flex items-center gap-2"
                             :style="{ '--tw-ps': `${(depth + 1) * 24}px`, paddingInlineStart: `var(--tw-ps)` }">
                             <span class="w-4 h-4 rounded border border-transparent shrink-0"></span>
-                            <span class="truncate" :title="ch.name">{{ ch.name }}</span>
+                            <span class="truncate font-medium text-default" :title="ch.name">{{ ch.name }}</span>
                         </div>
                     </div>
 
-                    <div class="px-2 py-1">File</div>
-                    <div class="px-2 py-1">{{ fmtBytes(ch.size) }}</div>
-                    <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums"
+                    <div class="px-2 py-1 text-default">File</div>
+                    <div class="px-2 py-1 text-default">{{ fmtBytes(ch.size) }}</div>
+                    <div class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis tabular-nums text-default"
                         :title="fmtDateFull(ch.mtime)">
                         {{ fmtDate(ch.mtime) }}
                     </div>

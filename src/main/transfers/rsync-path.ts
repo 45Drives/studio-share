@@ -11,9 +11,12 @@ function shellQuoteForRemoteSh(v: string): string {
   return `'${String(v || '').replace(/'/g, `'\"'\"'`)}'`;
 }
 
-function shouldEnsure45flowWatermarksDir(destDir: string): boolean {
+function shouldEnsureWatermarkDir(destDir: string): boolean {
   const clean = String(destDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-  return clean === '/45flow-watermarks' || clean.endsWith('/45flow-watermarks');
+  return (
+    clean === '/.studio/watermarks' ||
+    clean.endsWith('/.studio/watermarks')
+  );
 }
 
 export function findRsyncPath(): { cmd: string; useWSL: boolean } {
@@ -115,8 +118,8 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
     supportsP2 ? '--info=progress2' : '--progress',
   ];
   const hasRsyncPathArg = Array.isArray(o.extraArgs) && o.extraArgs.some((a) => String(a || '').startsWith('--rsync-path='));
-  if (!hasRsyncPathArg && shouldEnsure45flowWatermarksDir(o.destDir)) {
-    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/45flow-watermarks';
+  if (!hasRsyncPathArg && shouldEnsureWatermarkDir(o.destDir)) {
+    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/.studio/watermarks';
     baseArgs.push(`--rsync-path=mkdir -p ${shellQuoteForRemoteSh(destForMkdir)} && rsync`);
   }
   if (o.bwlimitKb && o.bwlimitKb > 0) baseArgs.push(`--bwlimit=${o.bwlimitKb}`);

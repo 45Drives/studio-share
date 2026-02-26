@@ -164,8 +164,15 @@ async function runCheck() {
             });
             json = (await res.json().catch(() => null)) as VerifyForwardingResponse | null;
             if (!res.ok) {
+                const requestId = String(
+                    res.headers.get('x-request-id') ||
+                    (typeof (json as any)?.requestId === 'string' ? (json as any).requestId : '')
+                ).trim();
+                const baseMsg = json?.error ? String(json.error) : `HTTP ${res.status}`;
                 status.value = "error";
-                message.value = json?.error ? String(json.error) : `HTTP ${res.status}`;
+                message.value = requestId && !baseMsg.includes(requestId)
+                    ? `${baseMsg} (request ${requestId})`
+                    : baseMsg;
                 emit("result", { ok: false, status: res.status, response: json ?? undefined });
                 return;
             }

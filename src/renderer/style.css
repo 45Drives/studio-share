@@ -36,6 +36,8 @@
   --row-hover-bg: rgba(0, 0, 0, 0.03);
   /* Derive a subtle selected color from the theme primary */
   --row-selected-bg: color-mix(in srgb, var(--btn-primary-bg) 12%, transparent);
+  --explorer-hover-bg: color-mix(in srgb, var(--btn-primary-bg) 16%, transparent);
+  --explorer-hover-border: color-mix(in srgb, var(--btn-primary-bg) 34%, #b7bfcd);
 
 
   --btn-success-bg: #22C55E;
@@ -395,6 +397,8 @@
 .dark {
   --outline-color: white;
   --row-hover-bg: rgba(255, 255, 255, 0.06);
+  --explorer-hover-bg: color-mix(in srgb, var(--btn-primary-bg) 24%, transparent);
+  --explorer-hover-border: color-mix(in srgb, var(--btn-primary-bg) 42%, #74809a);
   --ui-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
   --ui-panel-bg: color-mix(in srgb, #0f1014 86%, transparent);
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 40%, #4f5565);
@@ -622,6 +626,32 @@ textarea:focus-visible {
   border: 1px solid var(--ui-panel-border);
   border-radius: 0.9rem;
   box-shadow: var(--ui-shadow);
+}
+
+.ss-toned-panel {
+  border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 25%, #585867);
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--btn-primary-bg) 9%, transparent), transparent 58%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
+}
+
+.ss-explorer-hover {
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.ss-explorer-hover:hover {
+  background-color: var(--explorer-hover-bg);
+}
+
+.ss-explorer-tile-hover {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.ss-explorer-tile-hover:hover {
+  background-color: var(--explorer-hover-bg);
+  border-color: var(--explorer-hover-border);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--btn-primary-bg) 32%, transparent);
 }
 
 .ss-subtle {

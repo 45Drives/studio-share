@@ -3,7 +3,75 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_ENV_FILE="${ROOT_DIR}/scripts/release/.env.orchestrator"
-ENV_FILE="${1:-${ORCH_ENV_FILE:-$DEFAULT_ENV_FILE}}"
+
+ENV_FILE="${ORCH_ENV_FILE:-$DEFAULT_ENV_FILE}"
+CLI_GH_TAG_MESSAGE=""
+CLI_GH_NOTES=""
+CLI_GH_TITLE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env-file|-e)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for $1" >&2
+        exit 1
+      fi
+      ENV_FILE="$2"
+      shift 2
+      ;;
+    --git-tag-message|-m)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for $1" >&2
+        exit 1
+      fi
+      CLI_GH_TAG_MESSAGE="$2"
+      shift 2
+      ;;
+    --release-notes|-n)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for $1" >&2
+        exit 1
+      fi
+      CLI_GH_NOTES="$2"
+      shift 2
+      ;;
+    --release-title|-t)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for $1" >&2
+        exit 1
+      fi
+      CLI_GH_TITLE="$2"
+      shift 2
+      ;;
+    --help|-h)
+      cat <<'USAGE'
+Usage: bash scripts/release/orchestrate-release.sh [--env-file ENV_FILE] [--git-tag-message MESSAGE] [--release-notes NOTES] [--release-title TITLE]
+       bash scripts/release/orchestrate-release.sh [ENV_FILE]
+
+Options:
+  -e, --env-file          Path to orchestrator env file.
+  -m, --git-tag-message   Override GH_TAG_MESSAGE for this run only.
+  -n, --release-notes     Override GH_NOTES for this run only.
+  -t, --release-title     Override GH_TITLE for this run only.
+  -h, --help              Show this help.
+USAGE
+      exit 0
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [[ "$ENV_FILE" == "${ORCH_ENV_FILE:-$DEFAULT_ENV_FILE}" ]]; then
+        ENV_FILE="$1"
+      else
+        echo "Unexpected argument: $1" >&2
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing orchestrator env file: $ENV_FILE" >&2
@@ -25,6 +93,9 @@ RUNTIME_OVERRIDE_KEYS=(
   GH_CREATE_DRAFT
   GH_UPLOAD_RELEASE
   GH_PUBLISH_RELEASE
+  GH_TITLE
+  GH_TAG_MESSAGE
+  GH_NOTES
 )
 declare -A RUNTIME_OVERRIDES=()
 for _k in "${RUNTIME_OVERRIDE_KEYS[@]}"; do
@@ -32,6 +103,15 @@ for _k in "${RUNTIME_OVERRIDE_KEYS[@]}"; do
     RUNTIME_OVERRIDES["$_k"]="${!_k}"
   fi
 done
+if [[ -n "$CLI_GH_TAG_MESSAGE" ]]; then
+  RUNTIME_OVERRIDES["GH_TAG_MESSAGE"]="$CLI_GH_TAG_MESSAGE"
+fi
+if [[ -n "$CLI_GH_NOTES" ]]; then
+  RUNTIME_OVERRIDES["GH_NOTES"]="$CLI_GH_NOTES"
+fi
+if [[ -n "$CLI_GH_TITLE" ]]; then
+  RUNTIME_OVERRIDES["GH_TITLE"]="$CLI_GH_TITLE"
+fi
 
 set -a
 # shellcheck disable=SC1090
@@ -87,10 +167,20 @@ if [[ -n "${RELEASE_VERSION:-}" && "${RELEASE_VERSION}" != "$PACKAGE_VERSION" ]]
 fi
 RELEASE_TAG_RAW="${RELEASE_TAG:-v__VERSION__}"
 RELEASE_TAG="${RELEASE_TAG_RAW//__VERSION__/${VERSION}}"
+RELEASE_TAG="${RELEASE_TAG//$'\r'/}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 STAGING_DIR_RAW="${RELEASE_STAGING_DIR:-${ROOT_DIR}/builds/release/__VERSION__}"
 STAGING_DIR="${STAGING_DIR_RAW//__VERSION__/${VERSION}}"
-RELEASE_BUILDS_DIR="${RELEASE_BUILDS_DIR:-${ROOT_DIR}/builds/release}"
+RELEASE_BUILDS_DIR_RAW="${RELEASE_BUILDS_DIR:-}"
+if [[ -z "$RELEASE_BUILDS_DIR_RAW" ]]; then
+  RELEASE_BUILDS_DIR="$STAGING_DIR"
+else
+  RELEASE_BUILDS_DIR="${RELEASE_BUILDS_DIR_RAW//__VERSION__/${VERSION}}"
+  RELEASE_BUILDS_DIR_NORMALIZED="${RELEASE_BUILDS_DIR%/}"
+  if [[ "$RELEASE_BUILDS_DIR_NORMALIZED" == "./builds/release" || "$RELEASE_BUILDS_DIR_NORMALIZED" == "${ROOT_DIR}/builds/release" ]]; then
+    RELEASE_BUILDS_DIR="$STAGING_DIR"
+  fi
+fi
 
 mkdir -p "$STAGING_DIR"/{linux,windows,mac}
 mkdir -p "$RELEASE_BUILDS_DIR"
@@ -173,6 +263,9 @@ scp_from_file() {
 }
 
 copy_to_release_builds() {
+  if [[ "$RELEASE_BUILDS_DIR" == "$STAGING_DIR" ]]; then
+    return
+  fi
   local file
   for file in "$@"; do
     [[ -f "$file" ]] || continue
@@ -185,11 +278,11 @@ generate_update_metadata() {
 
   mkdir -p "$STAGING_DIR/windows" "$STAGING_DIR/mac" "$STAGING_DIR/linux"
 
-  mapfile -t win_exes < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*win*.exe" | sort)
+  mapfile -t win_exes < <(find "$STAGING_DIR/windows" -maxdepth 3 -type f -name "*${VERSION}*win*.exe" | sort)
   if [[ "${#win_exes[@]}" -eq 0 ]]; then
-    mapfile -t win_exes < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*win*.exe" | sort)
+    mapfile -t win_exes < <(find "$STAGING_DIR/windows" -maxdepth 3 -type f -name "*win*.exe" | sort)
   fi
-  mapfile -t win_blockmaps < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*.exe.blockmap" | sort)
+  mapfile -t win_blockmaps < <(find "$STAGING_DIR/windows" -maxdepth 3 -type f -name "*.exe.blockmap" | sort)
   if [[ "${#win_exes[@]}" -gt 0 ]]; then
     output="$STAGING_DIR/windows/latest.yml"
     win_gen=(node "$ROOT_DIR/scripts/release/generate-update-yml.mjs" --version "$VERSION" --output "$output")
@@ -200,15 +293,15 @@ generate_update_metadata() {
     copy_to_release_builds "$output"
   fi
 
-  mapfile -t mac_zips < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*mac*.zip" | sort)
+  mapfile -t mac_zips < <(find "$STAGING_DIR/mac" -maxdepth 4 -type f -name "*${VERSION}*mac*.zip" | sort)
   if [[ "${#mac_zips[@]}" -eq 0 ]]; then
-    mapfile -t mac_zips < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*mac*.zip" | sort)
+    mapfile -t mac_zips < <(find "$STAGING_DIR/mac" -maxdepth 4 -type f -name "*mac*.zip" | sort)
   fi
-  mapfile -t mac_dmgs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*mac*.dmg" | sort)
+  mapfile -t mac_dmgs < <(find "$STAGING_DIR/mac" -maxdepth 4 -type f -name "*${VERSION}*mac*.dmg" | sort)
   if [[ "${#mac_dmgs[@]}" -eq 0 ]]; then
-    mapfile -t mac_dmgs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*mac*.dmg" | sort)
+    mapfile -t mac_dmgs < <(find "$STAGING_DIR/mac" -maxdepth 4 -type f -name "*mac*.dmg" | sort)
   fi
-  mapfile -t mac_blockmaps < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f \( -name "*.zip.blockmap" -o -name "*.dmg.blockmap" \) | sort)
+  mapfile -t mac_blockmaps < <(find "$STAGING_DIR/mac" -maxdepth 4 -type f \( -name "*.zip.blockmap" -o -name "*.dmg.blockmap" \) | sort)
   if [[ "${#mac_zips[@]}" -gt 0 ]]; then
     output="$STAGING_DIR/mac/latest-mac.yml"
     mac_primary_zip="$(basename "${mac_zips[0]}")"
@@ -225,13 +318,13 @@ generate_update_metadata() {
     copy_to_release_builds "$output"
   fi
 
-  mapfile -t linux_debs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*linux*.deb" | sort)
+  mapfile -t linux_debs < <(find "$STAGING_DIR/linux" -maxdepth 2 -type f -name "*${VERSION}*linux*.deb" | sort)
   if [[ "${#linux_debs[@]}" -eq 0 ]]; then
-    mapfile -t linux_debs < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*linux*.deb" | sort)
+    mapfile -t linux_debs < <(find "$STAGING_DIR/linux" -maxdepth 2 -type f -name "*linux*.deb" | sort)
   fi
-  mapfile -t linux_rpms < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*${VERSION}*linux*.rpm" | sort)
+  mapfile -t linux_rpms < <(find "$STAGING_DIR/linux" -maxdepth 2 -type f -name "*${VERSION}*linux*.rpm" | sort)
   if [[ "${#linux_rpms[@]}" -eq 0 ]]; then
-    mapfile -t linux_rpms < <(find "$RELEASE_BUILDS_DIR" -maxdepth 1 -type f -name "*linux*.rpm" | sort)
+    mapfile -t linux_rpms < <(find "$STAGING_DIR/linux" -maxdepth 2 -type f -name "*linux*.rpm" | sort)
   fi
   if [[ "${#linux_debs[@]}" -gt 0 || "${#linux_rpms[@]}" -gt 0 ]]; then
     output="$STAGING_DIR/linux/latest-linux.yml"
@@ -251,27 +344,42 @@ echo "Release builds dir: $RELEASE_BUILDS_DIR"
 
 if truthy "${RUN_LINUX_BUILD:-1}"; then
   echo "== Linux build =="
+  LINUX_CLEAN_OUTPUTS="${LINUX_CLEAN_OUTPUTS:-1}"
+
+  if truthy "$LINUX_CLEAN_OUTPUTS"; then
+    shopt -s nullglob
+    stale_dist_linux=(dist/*-linux-*.deb dist/*-linux-*.rpm)
+    if [[ "${#stale_dist_linux[@]}" -gt 0 ]]; then
+      rm -f -- "${stale_dist_linux[@]}"
+    fi
+    shopt -u nullglob
+  fi
+
   LINUX_GIT_PULL_CMD="${LINUX_GIT_PULL_CMD:-git pull --ff-only}"
   bash -lc "$LINUX_GIT_PULL_CMD"
   LINUX_BUILD_CMD="${LINUX_BUILD_CMD:-yarn build:linux}"
   bash -lc "$LINUX_BUILD_CMD"
 
-  LINUX_CLEAN_OUTPUTS="${LINUX_CLEAN_OUTPUTS:-1}"
   if truthy "$LINUX_CLEAN_OUTPUTS"; then
     shopt -s nullglob
     stale_staging_linux=("$STAGING_DIR/linux/"*.deb "$STAGING_DIR/linux/"*.rpm)
     if [[ "${#stale_staging_linux[@]}" -gt 0 ]]; then
       rm -f -- "${stale_staging_linux[@]}"
     fi
-    stale_release_linux=("$RELEASE_BUILDS_DIR/"*-linux-*.deb "$RELEASE_BUILDS_DIR/"*-linux-*.rpm)
-    if [[ "${#stale_release_linux[@]}" -gt 0 ]]; then
-      rm -f -- "${stale_release_linux[@]}"
+    if [[ "$RELEASE_BUILDS_DIR" != "$STAGING_DIR" ]]; then
+      stale_release_linux=("$RELEASE_BUILDS_DIR/"*-linux-*.deb "$RELEASE_BUILDS_DIR/"*-linux-*.rpm)
+      if [[ "${#stale_release_linux[@]}" -gt 0 ]]; then
+        rm -f -- "${stale_release_linux[@]}"
+      fi
     fi
     shopt -u nullglob
   fi
 
   shopt -s nullglob
-  linux_artifacts=(dist/*-linux-*.deb dist/*-linux-*.rpm)
+  linux_artifacts=(dist/*"${VERSION}"*-linux-*.deb dist/*"${VERSION}"*-linux-*.rpm)
+  if [[ "${#linux_artifacts[@]}" -eq 0 ]]; then
+    linux_artifacts=(dist/*-linux-*.deb dist/*-linux-*.rpm)
+  fi
   if [[ "${#linux_artifacts[@]}" -eq 0 ]]; then
     echo "No Linux artifacts found in dist/" >&2
     exit 1
@@ -364,7 +472,7 @@ run_windows_flow() {
 
   if [[ "$WIN_PHASE" != "stage" ]]; then
     SIGN_FETCH_INFO="$(ssh_run "$WIN_BUILD_HOST" "$WIN_BUILD_USER" "${WIN_BUILD_PASSWORD:-}" "$WIN_BUILD_PORT" \
-      "powershell -NoProfile -Command \"\$sign='${WIN_SIGN_WIN_DIR}'; \$dist='${WIN_BUILD_DIST_DIR_WIN}'; \$f = Get-ChildItem -LiteralPath \$sign -Filter *.exe -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not \$f) { Write-Error 'No signed Windows EXE found'; exit 45 }; New-Item -ItemType Directory -Force -Path \$dist | Out-Null; \$safeExe = Join-Path \$dist '__orchestrator_signed.exe'; Copy-Item -LiteralPath \$f.FullName -Destination \$safeExe -Force; \$bmSrc = \"\$([string]\$f.FullName).blockmap\"; \$safeBm = \"\$safeExe.blockmap\"; if (Test-Path -LiteralPath \$bmSrc) { Copy-Item -LiteralPath \$bmSrc -Destination \$safeBm -Force; Write-Output \"BLOCKMAP=\$safeBm\" } else { Write-Output \"BLOCKMAP=\" }; Write-Output \"EXE=\$safeExe\"; Write-Output \"NAME=\$([string]\$f.Name)\"\"")"
+      "powershell -NoProfile -Command \"\$sign='${WIN_SIGN_WIN_DIR}'; \$dist='${WIN_BUILD_DIST_DIR_WIN}'; \$f = Get-ChildItem -LiteralPath \$sign -Filter *.exe -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not \$f) { Write-Error 'No signed Windows EXE found'; exit 45 }; New-Item -ItemType Directory -Force -Path \$dist | Out-Null; \$safeExe = Join-Path \$dist '__orchestrator_signed.exe'; Copy-Item -LiteralPath \$f.FullName -Destination \$safeExe -Force; \$bmSrc = \"\$([string]\$f.FullName).blockmap\"; \$safeBm = \"\$([string]\$safeExe).blockmap\"; if (\$bmSrc -and (Test-Path -LiteralPath \$bmSrc -ErrorAction SilentlyContinue)) { Copy-Item -LiteralPath \$bmSrc -Destination \$safeBm -Force; Write-Output \"BLOCKMAP=\$safeBm\" } else { Write-Output \"BLOCKMAP=\" }; Write-Output \"EXE=\$safeExe\"; Write-Output \"NAME=\$([string]\$f.Name)\"\"")"
     SIGN_FETCH_INFO="$(printf '%s' "$SIGN_FETCH_INFO" | tr -d '\r')"
     WIN_PRIMARY_EXE_REMOTE_WIN="$(printf '%s\n' "$SIGN_FETCH_INFO" | awk -F= '/^EXE=/{print $2}' | tail -n1)"
     WIN_PRIMARY_BLOCKMAP_REMOTE_WIN="$(printf '%s\n' "$SIGN_FETCH_INFO" | awk -F= '/^BLOCKMAP=/{print $2}' | tail -n1)"
@@ -464,14 +572,16 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
     if [[ "${#stale_staging_mac[@]}" -gt 0 ]]; then
       rm -rf -- "${stale_staging_mac[@]}"
     fi
-    stale_release_mac=(
-      "$RELEASE_BUILDS_DIR/"*-mac.zip
-      "$RELEASE_BUILDS_DIR/"*-mac.zip.blockmap
-      "$RELEASE_BUILDS_DIR/"*-mac.dmg
-      "$RELEASE_BUILDS_DIR/"*-mac.dmg.blockmap
-    )
-    if [[ "${#stale_release_mac[@]}" -gt 0 ]]; then
-      rm -f -- "${stale_release_mac[@]}"
+    if [[ "$RELEASE_BUILDS_DIR" != "$STAGING_DIR" ]]; then
+      stale_release_mac=(
+        "$RELEASE_BUILDS_DIR/"*-mac.zip
+        "$RELEASE_BUILDS_DIR/"*-mac.zip.blockmap
+        "$RELEASE_BUILDS_DIR/"*-mac.dmg
+        "$RELEASE_BUILDS_DIR/"*-mac.dmg.blockmap
+      )
+      if [[ "${#stale_release_mac[@]}" -gt 0 ]]; then
+        rm -f -- "${stale_release_mac[@]}"
+      fi
     fi
     shopt -u nullglob
   fi
@@ -495,7 +605,7 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
     else
       MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE//__BUNDLE_TAG__/${BUNDLE_TAG}}"
       MAC_REMOTE_CMD_EFFECTIVE="${MAC_REMOTE_CMD_EFFECTIVE//__ENV_FILE__/${MAC_RELEASE_ENV_REMOTE}}"
-      MAC_REMOTE_CMD_EFFECTIVE="MAC_BUILD_KIND_OVERRIDE='${MAC_KIND}' ${MAC_REMOTE_CMD_EFFECTIVE}"
+      MAC_REMOTE_CMD_EFFECTIVE="export MAC_BUILD_KIND_OVERRIDE='${MAC_KIND}'; ${MAC_REMOTE_CMD_EFFECTIVE}"
     fi
 
     if truthy "$MAC_FETCH_PRE_CLEAN"; then
@@ -560,8 +670,38 @@ generate_update_metadata
 if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || truthy "${GH_CREATE_DRAFT:-0}"; then
   require_cmd gh
   GH_REPO="${GH_REPO:-45Drives/studio-share}"
-  GH_TITLE="${GH_TITLE:-$RELEASE_TAG}"
-  GH_NOTES="${GH_NOTES:-}"
+  GH_REPO="${GH_REPO//$'\r'/}"
+  GH_TITLE_RAW="${GH_TITLE:-$RELEASE_TAG}"
+  GH_TITLE="${GH_TITLE_RAW//__VERSION__/${VERSION}}"
+  GH_TITLE="${GH_TITLE//$'\r'/}"
+  GH_NOTES_RAW="${GH_NOTES:-}"
+  GH_NOTES="${GH_NOTES_RAW//__VERSION__/${VERSION}}"
+  GH_NOTES="${GH_NOTES//$'\r'/}"
+  GH_ENSURE_TAG="${GH_ENSURE_TAG:-1}"
+  GH_TAG_REMOTE="${GH_TAG_REMOTE:-origin}"
+  GH_TAG_REF="${GH_TAG_REF:-HEAD}"
+  GH_TAG_MESSAGE_RAW="${GH_TAG_MESSAGE:-$RELEASE_TAG}"
+  GH_TAG_MESSAGE="${GH_TAG_MESSAGE_RAW//__VERSION__/${VERSION}}"
+  GH_TAG_MESSAGE="${GH_TAG_MESSAGE//$'\r'/}"
+
+  if [[ -z "${RELEASE_TAG//[[:space:]]/}" ]]; then
+    echo "RELEASE_TAG resolved to an empty value; refusing to create/upload release." >&2
+    exit 1
+  fi
+
+  if truthy "${GH_ENSURE_TAG}"; then
+    require_cmd git
+    GH_REMOTE_TAG_MATCH="$(git ls-remote --tags "$GH_TAG_REMOTE" "refs/tags/${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}^{}" || true)"
+    if [[ -z "$GH_REMOTE_TAG_MATCH" ]]; then
+      if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+        echo "Pushing existing local tag '${RELEASE_TAG}' to '${GH_TAG_REMOTE}'."
+      else
+        echo "Creating tag '${RELEASE_TAG}' at '${GH_TAG_REF}' for release."
+        git tag -a "$RELEASE_TAG" "$GH_TAG_REF" -m "$GH_TAG_MESSAGE"
+      fi
+      git push "$GH_TAG_REMOTE" "refs/tags/${RELEASE_TAG}"
+    fi
+  fi
 
   if truthy "${GH_CREATE_DRAFT:-0}"; then
     if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
@@ -569,18 +709,38 @@ if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || trut
     fi
   fi
 
+  GH_RELEASE_TAG_EFFECTIVE="$RELEASE_TAG"
+  GH_RELEASE_TAG_JSON="$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json tagName --jq '.tagName' 2>/dev/null || true)"
+  GH_RELEASE_TAG_JSON="${GH_RELEASE_TAG_JSON//$'\r'/}"
+  if [[ -n "${GH_RELEASE_TAG_JSON//[[:space:]]/}" ]]; then
+    GH_RELEASE_TAG_EFFECTIVE="$GH_RELEASE_TAG_JSON"
+  else
+    GH_RELEASE_VIEW_OUTPUT="$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" 2>/dev/null || true)"
+    GH_RELEASE_TAG_FROM_URL="$(printf '%s\n' "$GH_RELEASE_VIEW_OUTPUT" | sed -n 's#.*releases/tag/\([^[:space:]]\+\).*#\1#p' | tail -n1)"
+    GH_RELEASE_TAG_FROM_URL="${GH_RELEASE_TAG_FROM_URL//$'\r'/}"
+    if [[ -n "${GH_RELEASE_TAG_FROM_URL//[[:space:]]/}" ]]; then
+      GH_RELEASE_TAG_EFFECTIVE="$GH_RELEASE_TAG_FROM_URL"
+    else
+      echo "Unable to resolve release key from gh output; defaulting to '$RELEASE_TAG' for upload/publish." >&2
+    fi
+  fi
+  if [[ "$GH_RELEASE_TAG_EFFECTIVE" != "$RELEASE_TAG" ]]; then
+    echo "Release key mismatch: requested '$RELEASE_TAG', GitHub release key is '$GH_RELEASE_TAG_EFFECTIVE'." >&2
+    echo "Continuing using '$GH_RELEASE_TAG_EFFECTIVE' for upload/publish." >&2
+  fi
+
   if truthy "${GH_UPLOAD_RELEASE:-0}"; then
-    mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 2 -type f \
+    mapfile -t assets < <(find "$STAGING_DIR" -maxdepth 4 -type f \
       \( -name '*.yml' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) | sort)
     if [[ "${#assets[@]}" -eq 0 ]]; then
       echo "No assets found to upload from $STAGING_DIR" >&2
       exit 1
     fi
-    gh release upload "$RELEASE_TAG" --repo "$GH_REPO" --clobber "${assets[@]}"
+    gh release upload "$GH_RELEASE_TAG_EFFECTIVE" --repo "$GH_REPO" --clobber "${assets[@]}"
   fi
 
   if truthy "${GH_PUBLISH_RELEASE:-0}"; then
-    gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false
+    gh release edit "$GH_RELEASE_TAG_EFFECTIVE" --repo "$GH_REPO" --draft=false
   fi
 fi
 

@@ -86,6 +86,24 @@ function makeId(prefix: string) {
     return `${prefix}_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`
 }
 
+function extractTranscodeError(
+    items: Array<ProgressItem | VersionProgressItem>,
+    jobKind: 'proxy_mp4' | 'hls' | 'any' = 'any'
+) {
+    for (const it of items || []) {
+        for (const j of (it as any)?.jobs || []) {
+            if (!kindMatchesForSummary(j?.kind, jobKind)) continue
+            const st = String(j?.status || '').toLowerCase()
+            if (st !== 'failed' && st !== 'error' && st !== 'missing_output') continue
+            const msg = String(j?.error || '').trim()
+            if (msg) return msg
+            const kind = String(j?.kind || '').trim() || 'transcode'
+            return `${kind} failed`
+        }
+    }
+    return null
+}
+
 function qualityLabel(q: string) {
     const s = String(q || '').trim().toLowerCase()
     if (!s) return ''
@@ -143,6 +161,10 @@ function normalizeQualityList(list: unknown): string[] {
 function isProxyJobKind(kind: unknown) {
     const k = String(kind || '').toLowerCase()
     return k === 'proxy_mp4' || k.startsWith('proxy_mp4:')
+}
+
+function isTerminalTranscodeStatus(status: TranscodeStatus) {
+    return status === 'done' || status === 'failed'
 }
 
 function kindMatchesForSummary(kind: unknown, wanted: 'proxy_mp4' | 'hls' | 'any') {
@@ -373,8 +395,9 @@ export function useTransferProgress() {
                 // _state.minimized = false // open expanded
             }
             if (!active) {
+                // Keep the dock open if there are finished/failed tasks to review.
                 _state.minimized = true
-                _state.open = false
+                if (_state.tasks.length === 0) _state.open = false
             }
         }
     )
@@ -650,14 +673,35 @@ export function useTransferProgress() {
                 const castItems = (items || []) as TItem[]
                 cur.items = castItems as any
 
+                const hasAllTrackedItems = (() => {
+                    if (!idsToTrack.length) return false
+                    const seen = new Set<number>()
+                    for (const it of castItems) {
+                        const rawId = opts.mode === 'version'
+                            ? (it as any)?.assetVersionId
+                            : (it as any)?.fileId
+                        const id = Number(rawId)
+                        if (Number.isFinite(id) && id > 0) seen.add(id)
+                    }
+                    return idsToTrack.every(id => seen.has(id))
+                })()
+
                 const s = opts.summarizeItems(castItems, cur)
-                cur.status = s.status
-                cur.progress = s.progress
+                const nextStatus = (isTerminalTranscodeStatus(s.status) && !hasAllTrackedItems)
+                    ? 'running'
+                    : s.status
+                cur.status = nextStatus
+                cur.progress = (nextStatus === 'running' && s.progress >= 100) ? 99 : s.progress
+                if (nextStatus === 'failed') {
+                    cur.error = extractTranscodeError(castItems as Array<ProgressItem | VersionProgressItem>, cur.jobKind ?? 'any')
+                } else if (nextStatus === 'running' || nextStatus === 'done') {
+                    cur.error = null
+                }
                 if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
                     cur.detail = proxyDetailFromProgress(cur.progress, cur.context?.proxyQualities)
                 }
 
-                if (s.status === 'done' || s.status === 'failed') {
+                if (nextStatus === 'done' || nextStatus === 'failed') {
                     cur.completedAt = now()
                     try { cur.stop?.() } catch { }
                 }
@@ -754,6 +798,12 @@ export function useTransferProgress() {
                 cur.items = Array.isArray(snap.items) ? (snap.items as any) : cur.items
                 cur.status = normalizePlaybackStatus(snap.status)
                 cur.progress = normalizeProgressPercent(snap.progress)
+                if (cur.status === 'failed') {
+                    const snapError = String((snap as any)?.error || '').trim()
+                    cur.error = snapError || cur.error || 'transcode failed'
+                } else if (cur.status === 'running' || cur.status === 'done') {
+                    cur.error = null
+                }
                 if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
                     const perQ = snap.perQualityProgress
                     if (perQ && typeof perQ === 'object') {
