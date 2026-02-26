@@ -444,7 +444,7 @@ function resolveWatermarkStorageRoot() {
 
 function resolveWatermarkDirRel() {
 	const { rel } = resolveWatermarkStorageRoot()
-	return rel ? `${rel}/.studio/watermarks` : '.studio/watermarks'
+	return rel ? `${rel}/.45flow/watermarks` : '.45flow/watermarks'
 }
 
 function resolveWatermarkUploadDir() {
@@ -464,7 +464,7 @@ function resolveWatermarkProjectRoot() {
 function resolveLegacyWatermarkRelPath() {
 	const name = String(watermarkFile.value?.name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
 	if (!name) return ''
-	return `.studio/watermarks/${name}`
+	return `.45flow/watermarks/${name}`
 }
 
 function resolveCandidateServerWatermarkRelPath() {

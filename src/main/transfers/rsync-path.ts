@@ -14,8 +14,8 @@ function shellQuoteForRemoteSh(v: string): string {
 function shouldEnsureWatermarkDir(destDir: string): boolean {
   const clean = String(destDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
   return (
-    clean === '/.studio/watermarks' ||
-    clean.endsWith('/.studio/watermarks')
+    clean === '/.45flow/watermarks' ||
+    clean.endsWith('/.45flow/watermarks')
   );
 }
 
@@ -119,7 +119,7 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
   ];
   const hasRsyncPathArg = Array.isArray(o.extraArgs) && o.extraArgs.some((a) => String(a || '').startsWith('--rsync-path='));
   if (!hasRsyncPathArg && shouldEnsureWatermarkDir(o.destDir)) {
-    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/.studio/watermarks';
+    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/.45flow/watermarks';
     baseArgs.push(`--rsync-path=mkdir -p ${shellQuoteForRemoteSh(destForMkdir)} && rsync`);
   }
   if (o.bwlimitKb && o.bwlimitKb > 0) baseArgs.push(`--bwlimit=${o.bwlimitKb}`);

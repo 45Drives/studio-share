@@ -1103,11 +1103,11 @@ function clearLocalWatermark() {
 
 async function loadExistingWatermarkFilesForEdit() {
   try {
-    const data = await props.apiFetch('/api/files?dir=.studio/watermarks', { method: 'GET' })
+    const data = await props.apiFetch('/api/files?dir=.45flow/watermarks', { method: 'GET' })
     const entries = Array.isArray(data?.entries) ? data.entries : []
     existingWatermarkFilesForEdit.value = entries
       .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
-      .map((e: any) => `.studio/watermarks/${String(e.name).trim()}`)
+      .map((e: any) => `.45flow/watermarks/${String(e.name).trim()}`)
       .sort((a: string, b: string) => a.localeCompare(b))
   } catch {
     existingWatermarkFilesForEdit.value = []
@@ -1135,13 +1135,13 @@ function resolveWatermarkStorageRootForEdit() {
 }
 
 function resolveWatermarkUploadDirForEdit() {
-  return '/.studio/watermarks'
+  return '/.45flow/watermarks'
 }
 
 function resolveWatermarkRelPathForEdit(name: string) {
   const cleanName = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '').trim()
   if (!cleanName) return ''
-  return `.studio/watermarks/${cleanName}`
+  return `.45flow/watermarks/${cleanName}`
 }
 
 async function ensureServerDirExistsForEdit(dir: string) {
@@ -1317,8 +1317,8 @@ function transcodeDirRelPath(v: any) {
   const sourceDir = idx >= 0 ? fileRel.slice(0, idx) : ''
 
   return sourceDir
-    ? `${sourceDir}/.studio/transcodes/${assetVersionId}`
-    : `.studio/transcodes/${assetVersionId}`
+    ? `${sourceDir}/.45flow/transcodes/${assetVersionId}`
+    : `.45flow/transcodes/${assetVersionId}`
 }
 
 function proxyPatternRelPath(v: any) {
@@ -2331,7 +2331,7 @@ async function restoreVersion(v: any) {
   const fileId = selectedVersionFileId.value
   const f = versionFileById.value.get(fileId)
   const livePath = f?.relPath || f?.name || `file ${fileId}`
-  const backupDir = `.studio/backups/${fileId}/`
+  const backupDir = `.45flow/backups/${fileId}/`
   const confirmLines = [
     `Restore version v${v?.version_index}?`,
     '',
