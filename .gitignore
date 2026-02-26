@@ -15,3 +15,6 @@ scripts/test-pkg.sh
 .yarn/install-state.gz
 .DS_Store
 buildMac.sh
+
+scripts/release/RELEASE_RUNBOOK.md
+scripts/release/RELEASE_RUNBOOK.pdf
