@@ -15,6 +15,27 @@ export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
     // Optional: safer UX defaults
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.fullChangelog = false
+    autoUpdater.allowPrerelease = false
+
+    function normalizeUpdaterError(err: any): string {
+        const raw = String(err?.message || err || 'Unknown updater error')
+        const compact = raw.replace(/\s+/g, ' ').trim()
+
+        // electron-updater can surface entire GitHub Atom/XML payloads in error messages.
+        // Convert those into actionable, user-facing text.
+        if (/<(feed|entry|content|title|updated|link)\b/i.test(compact) || /&lt;[a-z!/]/i.test(compact)) {
+            return 'Updater could not parse GitHub release metadata. Ensure the release is published (not draft), has semver tag format (e.g. v0.5.0), and includes required update assets.'
+        }
+        if (/No published versions on GitHub/i.test(compact)) {
+            return 'No published versions were found on GitHub. Publish the release first.'
+        }
+        if (/Cannot find .*latest\.yml|404/i.test(compact)) {
+            return 'Update metadata was not found. Ensure latest.yml/latest-mac.yml is uploaded to the release.'
+        }
+
+        return compact
+    }
 
     autoUpdater.on('checking-for-update', () => {
         getMainWindow()?.webContents.send('update:checking')
@@ -51,7 +72,7 @@ export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
 
     autoUpdater.on('error', (err) => {
         getMainWindow()?.webContents.send('update:error', {
-            message: err?.message || String(err),
+            message: normalizeUpdaterError(err),
         })
     })
 
