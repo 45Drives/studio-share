@@ -537,7 +537,7 @@
                             <button class="btn btn-secondary" :disabled="loading" @click="resetAll">
                                 Reset
                             </button>
-                            <button class="btn btn-secondary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
+                            <button class="btn btn-primary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
                                 @click="generateLink" title="Create a Flow link with the selected options">
                                 <span v-if="loading" class="inline-flex items-center gap-2">
                                     <span

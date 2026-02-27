@@ -261,7 +261,7 @@
 									Reset
 								</button>
 								<button
-									class="btn btn-secondary flex-1 min-w-[14rem]"
+									class="btn btn-primary flex-1 min-w-[14rem]"
 									:disabled="!canGenerate || loading"
 									@click="generateLink"
 									title="Create a Flow link with the selected options"
