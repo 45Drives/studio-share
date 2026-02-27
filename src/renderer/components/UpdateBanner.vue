@@ -2,25 +2,25 @@
   <teleport to="body">
     <div
       v-if="isVisible"
-      class="fixed right-4 bottom-4 z-[1200] w-[380px] max-w-[calc(100vw-2rem)] rounded-lg border border-default bg-default shadow-2xl p-4 text-left"
+      class="fixed right-4 bottom-4 z-[1200] w-[560px] max-w-[calc(100vw-1.5rem)] rounded-xl border border-default bg-default shadow-2xl p-6 text-left"
     >
-      <div class="text-sm font-semibold text-default">{{ title }}</div>
-      <div class="text-xs text-muted mt-1 break-words">{{ message }}</div>
+      <div class="text-xl font-semibold text-default">{{ title }}</div>
+      <div class="text-base leading-relaxed text-default mt-2 break-words">{{ message }}</div>
 
-      <div v-if="state === 'downloading'" class="mt-3">
-        <div class="h-2 w-full bg-well rounded overflow-hidden">
+      <div v-if="state === 'downloading'" class="mt-4">
+        <div class="h-3 w-full bg-well rounded overflow-hidden">
           <div
             class="h-full bg-primary transition-all duration-300"
             :style="{ width: `${Math.max(0, Math.min(progressPercent, 100))}%` }"
           />
         </div>
-        <div class="text-xs text-muted mt-1">{{ progressPercent.toFixed(1) }}%</div>
+        <div class="text-sm text-default mt-1">{{ progressPercent.toFixed(1) }}%</div>
       </div>
 
-      <div class="flex flex-wrap gap-2 mt-3">
+      <div class="flex flex-wrap gap-3 mt-5">
         <button
           v-if="canCheckNow"
-          class="btn btn-secondary px-3 py-1 text-xs"
+          class="btn btn-secondary px-4 py-2 text-sm"
           :disabled="busy"
           @click="checkNow"
         >
@@ -28,14 +28,14 @@
         </button>
         <button
           v-if="state === 'downloaded'"
-          class="btn btn-success px-3 py-1 text-xs"
+          class="btn btn-success px-4 py-2 text-sm"
           :disabled="busy"
           @click="installNow"
         >
           Restart & Install
         </button>
         <button
-          class="btn btn-secondary px-3 py-1 text-xs"
+          class="btn btn-secondary px-4 py-2 text-sm"
           :disabled="busy"
           @click="dismiss"
         >
@@ -81,6 +81,21 @@ const message = computed(() => {
   return ''
 })
 
+function toUserFriendlyError(input: unknown): string {
+  const raw = String((input as any)?.message || input || '').replace(/\s+/g, ' ').trim()
+  if (!raw) return 'We could not check for updates right now. Please try again later.'
+  if (/<(feed|entry|content|title|updated|link)\b/i.test(raw) || /&lt;[a-z!/]/i.test(raw)) {
+    return 'We could not read update information right now. Please try again in a minute.'
+  }
+  if (/prerelease|pre-release/i.test(raw)) {
+    return 'No stable update is available yet. Pre-release versions may not appear in automatic update checks.'
+  }
+  if (/GitHubProvider|getLatestVersion|checkForUpdates|electron-updater|AppUpdater|XML:/i.test(raw)) {
+    return 'We could not check for updates right now. Please try again later.'
+  }
+  return raw
+}
+
 function clearHideTimer() {
   if (hideTimer) {
     clearTimeout(hideTimer)
@@ -107,7 +122,7 @@ async function checkNow() {
     setState('checking')
     await window.electron?.ipcRenderer.invoke('update:check')
   } catch (err: any) {
-    errorMessage.value = err?.message || String(err)
+    errorMessage.value = toUserFriendlyError(err)
     setState('error')
   } finally {
     busy.value = false
@@ -119,7 +134,7 @@ async function installNow() {
   try {
     await window.electron?.ipcRenderer.invoke('update:install')
   } catch (err: any) {
-    errorMessage.value = err?.message || String(err)
+    errorMessage.value = toUserFriendlyError(err)
     setState('error')
   } finally {
     busy.value = false
@@ -145,7 +160,7 @@ const onDownloaded = (_event: unknown, info: any) => {
   setState('downloaded')
 }
 const onError = (_event: unknown, payload: any) => {
-  errorMessage.value = payload?.message || 'Unknown updater error'
+  errorMessage.value = toUserFriendlyError(payload?.message)
   setState('error')
 }
 

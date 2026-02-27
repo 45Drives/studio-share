@@ -25,16 +25,23 @@ export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
         // electron-updater can surface entire GitHub Atom/XML payloads in error messages.
         // Convert those into actionable, user-facing text.
         if (/<(feed|entry|content|title|updated|link)\b/i.test(compact) || /&lt;[a-z!/]/i.test(compact)) {
-            return 'Updater could not parse GitHub release metadata. Ensure the release is published (not draft), has semver tag format (e.g. v0.5.0), and includes required update assets.'
+            return 'We could not read update information right now. Please try again in a minute. If this keeps happening, make sure the GitHub release is published and includes update files.'
+        }
+        if (/prerelease|pre-release/i.test(compact)) {
+            return 'No stable update is available yet. Pre-release versions may not appear in automatic update checks.'
         }
         if (/No published versions on GitHub/i.test(compact)) {
-            return 'No published versions were found on GitHub. Publish the release first.'
+            return 'No published update is available yet.'
         }
         if (/Cannot find .*latest\.yml|404/i.test(compact)) {
-            return 'Update metadata was not found. Ensure latest.yml/latest-mac.yml is uploaded to the release.'
+            return 'Update files are not available for this release yet. Please try again later.'
         }
 
-        return compact
+        if (/GitHubProvider|getLatestVersion|checkForUpdates|electron-updater|AppUpdater/i.test(compact)) {
+            return 'We could not check for updates right now. Please try again later.'
+        }
+
+        return 'We could not check for updates right now. Please try again later.'
     }
 
     autoUpdater.on('checking-for-update', () => {
@@ -77,7 +84,11 @@ export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
     })
 
     ipcMain.handle('update:check', async () => {
-        return await autoUpdater.checkForUpdates()
+        try {
+            return await autoUpdater.checkForUpdates()
+        } catch (err) {
+            throw new Error(normalizeUpdaterError(err))
+        }
     })
 
     ipcMain.handle('update:install', async () => {
