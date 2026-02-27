@@ -108,7 +108,7 @@ echo "Output: $OUT_DIR"
 APP_UPDATE_YML="${APP_BUNDLE}/Contents/Resources/app-update.yml"
 echo "Ensuring updater config exists in app bundle: $APP_UPDATE_YML"
 PUBLISH_FIELDS="$(
-  \"$NODE_BIN\" -e "
+  "$NODE_BIN" -e "
     const b=require('${SIGN_INBOX}/electron-builder.json');
     const p=Array.isArray(b.publish)?b.publish[0]:(b.publish||{});
     const product=(b.productName||'app').toString();
