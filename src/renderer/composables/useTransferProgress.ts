@@ -112,6 +112,15 @@ function formatSpeed(speedX: number | null) {
     return `${sx.toFixed(sx >= 10 ? 1 : 2)}x`
 }
 
+function estimateEtaFromProgress(progressPct: number, elapsedMs: number): number | null {
+    const p = Number(progressPct)
+    if (!Number.isFinite(p) || p <= 0 || p >= 100) return null
+    const elapsedSec = Math.max(0, Number(elapsedMs) / 1000)
+    if (!Number.isFinite(elapsedSec) || elapsedSec <= 0) return null
+    const remainSec = elapsedSec * ((100 - p) / p)
+    return Number.isFinite(remainSec) && remainSec >= 0 ? Math.round(remainSec) : null
+}
+
 function parseMs(v: any): number {
     if (v == null) return 0
     const t = Date.parse(String(v))
@@ -203,6 +212,26 @@ function collectMetricsFromJobs(
         : null
 
     return { etaSeconds, speedX }
+}
+
+function hasRunningJobForKind(jobs: any[], wantedKind: 'proxy_mp4' | 'hls' | 'any' = 'any') {
+    const relevant = latestJobsForSummary(jobs).filter((j) => kindMatchesForSummary(j?.kind, wantedKind))
+    return relevant.some((j) => normalizeJobStatus(j?.status) === 'running')
+}
+
+function pickMetricsFromItems(
+    items: Array<ProgressItem | VersionProgressItem>,
+    wantedKind: 'proxy_mp4' | 'hls' | 'any' = 'any'
+) {
+    let fallback: { etaSeconds: number | null; speedX: number | null } | null = null
+    for (const it of items || []) {
+        const jobs = (it as any)?.jobs || []
+        const m = collectMetricsFromJobs(jobs, wantedKind)
+        if (m.etaSeconds == null && m.speedX == null) continue
+        if (hasRunningJobForKind(jobs, wantedKind)) return m
+        if (!fallback) fallback = m
+    }
+    return fallback || { etaSeconds: null, speedX: null }
 }
 
 function makeId(prefix: string) {
@@ -623,8 +652,6 @@ export function useTransferProgress() {
 
         let sumPct = 0
         let pctCount = 0
-        const etaVals: number[] = []
-        const speedVals: number[] = []
 
         for (const it of items) {
             failed += it.summary.failed || 0
@@ -643,9 +670,6 @@ export function useTransferProgress() {
                 pctCount++
             }
 
-            const m = collectMetricsFromJobs((it as any)?.jobs || [], 'any')
-            if (m.etaSeconds != null) etaVals.push(m.etaSeconds)
-            if (m.speedX != null) speedVals.push(m.speedX)
         }
 
         const progress = pctCount ? clampPct(sumPct / pctCount) : (done > 0 && running === 0 && queued === 0 && failed === 0 ? 100 : 0)
@@ -655,8 +679,9 @@ export function useTransferProgress() {
         else if (running > 0 || queued > 0) status = 'running'
         else if (done > 0) status = 'done'
 
-        const etaSeconds = etaVals.length ? Math.max(...etaVals) : null
-        const speedX = speedVals.length ? (speedVals.reduce((a, b) => a + b, 0) / speedVals.length) : null
+        const m = pickMetricsFromItems(items as Array<ProgressItem | VersionProgressItem>, 'any')
+        const etaSeconds = m.etaSeconds
+        const speedX = m.speedX
 
         return { status, progress, etaSeconds, speedX, counts: { failed, running, queued, done } }
     }
@@ -673,8 +698,6 @@ export function useTransferProgress() {
 
         let sumPct = 0
         let pctCount = 0
-        const etaVals: number[] = []
-        const speedVals: number[] = []
 
         for (const it of items) {
             // status counts should also respect kind if you want the label to match
@@ -694,10 +717,6 @@ export function useTransferProgress() {
                     pctCount++
                 }
             }
-
-            const m = collectMetricsFromJobs(it.jobs || [], jobKind)
-            if (m.etaSeconds != null) etaVals.push(m.etaSeconds)
-            if (m.speedX != null) speedVals.push(m.speedX)
 
             if (jobKind === 'proxy_mp4') {
                 const cumulative = summarizeProxyCumulativeProgress(it.jobs || [], context?.proxyQualities)
@@ -748,8 +767,9 @@ export function useTransferProgress() {
             // })
         }
 
-        const etaSeconds = etaVals.length ? Math.max(...etaVals) : null
-        const speedX = speedVals.length ? (speedVals.reduce((a, b) => a + b, 0) / speedVals.length) : null
+        const m = pickMetricsFromItems(items as Array<ProgressItem | VersionProgressItem>, jobKind)
+        const etaSeconds = m.etaSeconds
+        const speedX = m.speedX
 
         return { status, progress, etaSeconds, speedX, counts: { failed, running, queued, done } }
     }
@@ -841,9 +861,22 @@ export function useTransferProgress() {
                     ? 'running'
                     : s.status
                 cur.status = nextStatus
-                cur.progress = (nextStatus === 'running' && s.progress >= 100) ? 99 : s.progress
+                const prevProgress = clampPct(cur.progress)
+                let nextProgress = clampPct(s.progress)
+                if (nextStatus === 'running') {
+                    if (nextProgress >= 100) {
+                        // Ignore stale "100 while still running" snapshots and keep prior progress.
+                        // If we have no prior progress yet, start from 0 instead of showing a fake near-complete state.
+                        nextProgress = (prevProgress > 0 && prevProgress < 100) ? prevProgress : 0
+                    }
+                }
+                if (nextStatus === 'done') nextProgress = 100
+                cur.progress = nextProgress
                 cur.speed = (nextStatus === 'running') ? formatSpeed(s.speedX ?? null) : null
-                cur.eta = (nextStatus === 'running') ? formatEta(s.etaSeconds ?? null) : null
+                const serverEta = formatEta(s.etaSeconds ?? null)
+                const elapsedMs = Math.max(0, now() - Number(cur.startedAt || now()))
+                const localEta = formatEta(estimateEtaFromProgress(cur.progress, elapsedMs))
+                cur.eta = (nextStatus === 'running') ? (serverEta || localEta) : null
                 if (nextStatus === 'failed') {
                     cur.error = extractTranscodeError(castItems as Array<ProgressItem | VersionProgressItem>, cur.jobKind ?? 'any')
                     cur.speed = null

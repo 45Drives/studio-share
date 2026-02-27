@@ -1889,15 +1889,17 @@ function startLinkTranscodeTracking(opts: {
         }
 
         if (fallbackIds.length) {
-          transfer.startAssetVersionTranscodeTask({
-            apiFetch: props.apiFetch,
-            assetVersionIds: fallbackIds,
-            title: 'Generating proxy files',
-            detail: `Tracking ${fallbackManyLabel(fallbackIds)}`,
-            intervalMs: 1500,
-            jobKind: 'proxy_mp4',
-            context,
-          })
+          for (const assetVersionId of fallbackIds) {
+            transfer.startAssetVersionTranscodeTask({
+              apiFetch: props.apiFetch,
+              assetVersionIds: [assetVersionId],
+              title: 'Generating proxy files',
+              detail: `Tracking ${fallbackFileLabel(assetVersionId)}`,
+              intervalMs: 1500,
+              jobKind: 'proxy_mp4',
+              context,
+            })
+          }
         }
       }
 
@@ -1961,15 +1963,17 @@ function startLinkTranscodeTracking(opts: {
         }
 
         if (fallbackIds.length) {
-          transfer.startAssetVersionTranscodeTask({
-            apiFetch: props.apiFetch,
-            assetVersionIds: fallbackIds,
-            title: 'Generating adaptive stream',
-            detail: `Tracking ${fallbackManyLabel(fallbackIds)}`,
-            intervalMs: 1500,
-            jobKind: 'hls',
-            context,
-          })
+          for (const assetVersionId of fallbackIds) {
+            transfer.startAssetVersionTranscodeTask({
+              apiFetch: props.apiFetch,
+              assetVersionIds: [assetVersionId],
+              title: 'Generating adaptive stream',
+              detail: `Tracking ${fallbackFileLabel(assetVersionId)}`,
+              intervalMs: 1500,
+              jobKind: 'hls',
+              context,
+            })
+          }
         }
       }
 

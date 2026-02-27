@@ -45,6 +45,7 @@ const themeToDivision: Record<Theme, Division> = {
 }
 
 const STORAGE_KEY = '45flow-theme-v1'
+const THEME_UNLOCK_KEY = '45flow-theme-unlock-v1'
 const FORCED_THEME: Theme = 'theme-studio-grad-purple-pink-orange'
 
 function isTheme(value: string): value is Theme {
@@ -85,8 +86,24 @@ function saveStoredTheme(theme: Theme) {
   }
 }
 
-// const currentTheme = ref<Theme>(loadStoredTheme() ?? 'theme-studio')
-const currentTheme = ref<Theme>(FORCED_THEME)
+function loadThemeUnlockState() {
+  try {
+    return window.sessionStorage.getItem(THEME_UNLOCK_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveThemeUnlockState(unlocked: boolean) {
+  try {
+    window.sessionStorage.setItem(THEME_UNLOCK_KEY, unlocked ? '1' : '0')
+  } catch {
+    // no-op
+  }
+}
+
+const themeControlsUnlocked = ref<boolean>(loadThemeUnlockState())
+const currentTheme = ref<Theme>(loadStoredTheme() ?? FORCED_THEME)
 const currentDivision = ref<Division>('studio')
 
 function setHtmlThemeClass(theme: Theme) {
@@ -113,7 +130,9 @@ function setHtmlThemeClass(theme: Theme) {
 }
 
 watchEffect(() => {
-  if (currentTheme.value !== FORCED_THEME) currentTheme.value = FORCED_THEME
+  if (!themeControlsUnlocked.value && currentTheme.value !== FORCED_THEME) {
+    currentTheme.value = FORCED_THEME
+  }
   setHtmlThemeClass(currentTheme.value)
   currentDivision.value = themeToDivision[currentTheme.value]
   saveStoredTheme(currentTheme.value)
@@ -121,6 +140,12 @@ watchEffect(() => {
 
 /** Apply a theme using the 45Drives alias coming from the server (e.g. "homelab"|"professional") */
 function applyThemeFromAlias(aliasStyle?: string) {
+  if (!themeControlsUnlocked.value) {
+    void aliasStyle
+    currentTheme.value = FORCED_THEME
+    return
+  }
+
   // const normalized = (aliasStyle || '').toLowerCase()
   // const mapped = aliasToTheme[normalized]
 
@@ -135,16 +160,33 @@ function applyThemeFromAlias(aliasStyle?: string) {
   // }
 
   // currentTheme.value = mapped ?? 'theme-studio'
-  
-  void aliasStyle
-  currentTheme.value = FORCED_THEME
+  const normalized = (aliasStyle || '').toLowerCase()
+  const mapped = aliasToTheme[normalized]
+
+  if (mapped && mapped !== 'theme-studio') {
+    currentTheme.value = mapped
+    return
+  }
+
+  // Keep selected studio variant when server reports "studio"
+  if (mapped === 'theme-studio' && themeToDivision[currentTheme.value] === 'studio') {
+    return
+  }
+
+  currentTheme.value = mapped ?? 'theme-studio'
 }
 
 /** Directly set a theme */
 function setTheme(theme: Theme) {
-  //  currentTheme.value = theme
-  void theme
-  currentTheme.value = FORCED_THEME
+  currentTheme.value = theme
+}
+
+function setThemeControlsUnlocked(unlocked: boolean) {
+  themeControlsUnlocked.value = unlocked
+  saveThemeUnlockState(unlocked)
+  if (!unlocked) {
+    currentTheme.value = FORCED_THEME
+  }
 }
 
 export function useThemeFromAlias() {
@@ -153,5 +195,7 @@ export function useThemeFromAlias() {
     currentDivision,      // reactive (homelab|studio|professional|default)
     applyThemeFromAlias,  // call with aliasStyle from server info
     setTheme,             // manual setter
+    themeControlsUnlocked,
+    setThemeControlsUnlocked,
   }
 }

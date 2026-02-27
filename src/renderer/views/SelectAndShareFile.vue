@@ -566,7 +566,7 @@
                                         <span>HLS</span>
                                         <span>{{ row.hlsProgress }}%</span>
                                     </div>
-                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden bg-default" :value="row.hlsProgress" max="100" />
+                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden" :value="row.hlsProgress" max="100" />
                                 </div>
 
                                 <div v-if="row.showProxy && row.proxyQualities.length" class="mt-2">
@@ -574,7 +574,7 @@
                                         <span>Proxy (cumulative)</span>
                                         <span>{{ row.proxyCumulativeProgress }}%</span>
                                     </div>
-                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden bg-default" :value="row.proxyCumulativeProgress" max="100" />
+                                    <progress class="mt-1 w-full h-2 rounded-lg overflow-hidden" :value="row.proxyCumulativeProgress" max="100" />
 
                                     <div class="mt-2 space-y-1">
                                         <div v-for="q in row.proxyQualities" :key="`${row.taskId}:${q.quality}`">
@@ -582,7 +582,7 @@
                                                 <span>{{ q.label }}</span>
                                                 <span>{{ q.progress }}%</span>
                                             </div>
-                                            <progress class="mt-1 w-full h-1.5 rounded-lg overflow-hidden bg-default" :value="q.progress" max="100" />
+                                            <progress class="mt-1 w-full h-1.5 rounded-lg overflow-hidden" :value="q.progress" max="100" />
                                         </div>
                                     </div>
                                 </div>
@@ -2076,22 +2076,24 @@ async function generateLink() {
                         ...hlsTrackSet,
                         ...proxyTrackSet,
                     ]))
-                    transfer.startAssetVersionTranscodeTask({
-                        apiFetch,
-                        assetVersionIds: trackableVersionIds,
-                        title: "Generating transcodes",
-                        detail: `Tracking ${trackableVersionIds.length} version(s)`,
-                        intervalMs: 1500,
-                        jobKind: 'any',
-                        context: {
-                            source: 'link',
-                            groupId: `link:${data.viewUrl}`,
-                            linkUrl: data.viewUrl,
-                            linkTitle: linkTitle.value || undefined,
-                            files: files.value.slice(),
-                            proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
-                        },
-                    });
+                    for (const assetVersionId of trackableVersionIds) {
+                        transfer.startAssetVersionTranscodeTask({
+                            apiFetch,
+                            assetVersionIds: [assetVersionId],
+                            title: "Generating transcodes",
+                            detail: `Tracking asset version ${assetVersionId}`,
+                            intervalMs: 1500,
+                            jobKind: 'any',
+                            context: {
+                                source: 'link',
+                                groupId: `link:${data.viewUrl}`,
+                                linkUrl: data.viewUrl,
+                                linkTitle: linkTitle.value || undefined,
+                                files: files.value.slice(),
+                                proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
+                            },
+                        });
+                    }
                 }
             } else {
                 // fallback (only if server didn't return transcodes for some reason)
@@ -2100,13 +2102,15 @@ async function generateLink() {
                 if (fileIds.length && hasVideoSelected.value && !body.keepExistingOutputs) {
                     // NOTE: fileId polling can't separate proxy vs hls unless you also add jobKind support to summarize()
                     // If you want two rows even in fallback mode, you need the deterministic taskId approach or extend startTranscodeTask similarly.
-                    transfer.startTranscodeTask({
-                        apiFetch,
-                        fileIds,
-                        title: "Generating transcodes",
-                        detail: `Tracking ${fileIds.length} file(s)`,
-                        intervalMs: 1500,
-                    });
+                    for (const fileId of fileIds) {
+                        transfer.startTranscodeTask({
+                            apiFetch,
+                            fileIds: [fileId],
+                            title: "Generating transcodes",
+                            detail: `Tracking file ${fileId}`,
+                            intervalMs: 1500,
+                        });
+                    }
 
                     pushNotification(
                         new Notification(

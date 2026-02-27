@@ -467,6 +467,36 @@
 }
 
 /* =====================
+   Progress bars
+   ===================== */
+progress {
+  appearance: none;
+  border: 0;
+  accent-color: var(--btn-primary-bg);
+  background: color-mix(in srgb, var(--btn-primary-bg) 16%, #d7dce4);
+}
+
+progress::-webkit-progress-bar {
+  background: color-mix(in srgb, var(--btn-primary-bg) 16%, #d7dce4);
+}
+
+progress::-webkit-progress-value {
+  background: var(--btn-primary-fill);
+}
+
+progress::-moz-progress-bar {
+  background: var(--btn-primary-fill);
+}
+
+.dark progress {
+  background: color-mix(in srgb, var(--btn-primary-bg) 16%, #11151d);
+}
+
+.dark progress::-webkit-progress-bar {
+  background: color-mix(in srgb, var(--btn-primary-bg) 16%, #11151d);
+}
+
+/* =====================
    Wizard highlights
    ===================== */
 .animate-glow {

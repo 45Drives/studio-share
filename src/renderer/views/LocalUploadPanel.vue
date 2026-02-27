@@ -188,7 +188,7 @@
 
 											<tr v-if="u.status === 'uploading'">
 												<td colspan="5" class="px-4 py-2 border border-default">
-													<progress class="wizard-progress" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
+													<progress class="w-full h-2 rounded-lg overflow-hidden" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
 													</progress>
 												</td>
 											</tr>
@@ -1432,35 +1432,6 @@ function goBack() {
 
 .wizard-td {
 	@apply px-4 py-2 border border-default;
-}
-
-.wizard-progress {
-	width: 100%;
-	height: 0.5rem;
-	border-radius: 0.5rem;
-	overflow: hidden;
-	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #d7dce4);
-	accent-color: var(--btn-success-bg, #22c55e);
-}
-
-.wizard-progress::-webkit-progress-bar {
-	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #d7dce4);
-}
-
-.wizard-progress::-webkit-progress-value {
-	background: var(--btn-success-bg, #22c55e);
-}
-
-.wizard-progress::-moz-progress-bar {
-	background: var(--btn-success-bg, #22c55e);
-}
-
-:global(.dark) .wizard-progress {
-	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #11151d);
-}
-
-:global(.dark) .wizard-progress::-webkit-progress-bar {
-	background: color-mix(in srgb, var(--btn-success-bg, #22c55e) 18%, #11151d);
 }
 
 :global(html.dark) .watermark-warning,

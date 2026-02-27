@@ -22,7 +22,8 @@
       </div>
 
       <!-- Right (menu) -->
-      <div class="justify-self-end text-right">
+      <div class="justify-self-end text-right flex items-center gap-2">
+        <GlobalMenu v-if="showGlobalMenu" />
         <button
           class="theme-icon-btn"
           :class="darkMode ? 'theme-icon-btn--sun' : 'theme-icon-btn--moon'"
@@ -58,6 +59,7 @@ import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
 import { registerIpcActionListener } from "../renderer/composables/registerIpcActionListener";
 import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
 import UpdateBanner from '../renderer/components/UpdateBanner.vue'
+import GlobalMenu from '../renderer/components/GlobalMenu.vue'
 import flowLogo from '../../assets/logos/45Flow-w.png'
 
 // provide shared refs
@@ -70,6 +72,8 @@ const hideHeader = computed(() => route.meta.hideHeader === true)
 const { headerTitle } = useHeaderTitle()
 const hideTransfers = computed(() => route.meta.hideTransfers === true)
 const darkMode = useDarkModeState()
+const GLOBAL_MENU_UNLOCK_KEY = '45flow-global-menu-unlock-v1'
+const showGlobalMenu = ref(false)
 
 const hasToken = computed(() => {
   if (connectionMeta.value?.token) return true
@@ -86,13 +90,48 @@ provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
 provide(connectionMetaInjectionKey, connectionMeta)
 
-const { currentDivision } = useThemeFromAlias()
+const { currentDivision, setThemeControlsUnlocked } = useThemeFromAlias()
 
 watch(currentDivision, (d) => { divisionCode.value = d as DivisionType }, { immediate: true })
 
 let unregisterIpcListener: (() => void) | null = null
+let unregisterSecretKeyListener: (() => void) | null = null
+
+function loadGlobalMenuUnlockState() {
+  try {
+    return window.sessionStorage.getItem(GLOBAL_MENU_UNLOCK_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveGlobalMenuUnlockState(unlocked: boolean) {
+  try {
+    window.sessionStorage.setItem(GLOBAL_MENU_UNLOCK_KEY, unlocked ? '1' : '0')
+  } catch {
+    // no-op
+  }
+}
 
 onMounted(() => {
+  const initialUnlockState = loadGlobalMenuUnlockState()
+  showGlobalMenu.value = initialUnlockState
+  setThemeControlsUnlocked(initialUnlockState)
+
+  const secretToggleHandler = (event: KeyboardEvent) => {
+    const key = event.key.toLowerCase()
+    const hasMainModifier = event.metaKey || event.ctrlKey
+    if (!hasMainModifier || !event.shiftKey || !event.altKey || key !== 'g') return
+    event.preventDefault()
+    const next = !showGlobalMenu.value
+    showGlobalMenu.value = next
+    saveGlobalMenuUnlockState(next)
+    setThemeControlsUnlocked(next)
+  }
+
+  window.addEventListener('keydown', secretToggleHandler)
+  unregisterSecretKeyListener = () => window.removeEventListener('keydown', secretToggleHandler)
+
   const isJson = (s: string) => { try { JSON.parse(s); return true } catch { return false } }
 
   const notificationHandler = (_e: any, message: string) => {
@@ -118,6 +157,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unregisterIpcListener?.()
+  unregisterSecretKeyListener?.()
 })
 </script>
 

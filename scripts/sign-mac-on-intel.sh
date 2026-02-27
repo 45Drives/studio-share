@@ -80,6 +80,38 @@ echo "Main entitlements: $MAIN_ENT"
 echo "Inherit entitlements: $INHERIT_ENT"
 echo "Output: $OUT_DIR"
 
+APP_UPDATE_YML="${APP_BUNDLE}/Contents/Resources/app-update.yml"
+echo "Ensuring updater config exists in app bundle: $APP_UPDATE_YML"
+PUBLISH_FIELDS="$(
+  /usr/bin/node -e "
+    const b=require('${SIGN_INBOX}/electron-builder.json');
+    const p=Array.isArray(b.publish)?b.publish[0]:(b.publish||{});
+    const product=(b.productName||'app').toString();
+    const cache=product.replace(/[^A-Za-z0-9._-]/g,'') + '-updater';
+    const provider=(p.provider||'github').toString();
+    const owner=(p.owner||'').toString();
+    const repo=(p.repo||'').toString();
+    const vPrefixed=(p.vPrefixedTagName===false?'false':'true');
+    const privateFlag=(p.private===true?'true':'');
+    console.log([provider, owner, repo, cache, vPrefixed, privateFlag].join('\t'));
+  "
+)"
+IFS=$'\t' read -r PUB_PROVIDER PUB_OWNER PUB_REPO PUB_CACHE PUB_VPREFIX PUB_PRIVATE <<< "$PUBLISH_FIELDS"
+if [[ -z "$PUB_OWNER" || -z "$PUB_REPO" ]]; then
+  echo "ERROR: Unable to resolve publish owner/repo from ${SIGN_INBOX}/electron-builder.json" >&2
+  exit 1
+fi
+{
+  echo "provider: ${PUB_PROVIDER}"
+  echo "owner: ${PUB_OWNER}"
+  echo "repo: ${PUB_REPO}"
+  echo "vPrefixedTagName: ${PUB_VPREFIX}"
+  echo "updaterCacheDirName: ${PUB_CACHE}"
+  if [[ -n "$PUB_PRIVATE" ]]; then
+    echo "private: true"
+  fi
+} > "$APP_UPDATE_YML"
+
 echo "Preparing keychain for non-interactive codesign..."
 echo "  SIGN_KEYCHAIN=$SIGN_KEYCHAIN"
 
@@ -188,4 +220,3 @@ echo "Artifacts complete:"
 /bin/ls -la "$OUT_DIR"
 echo "ZIP: $ZIP_PATH"
 echo "DMG: $DMG_PATH"
-
