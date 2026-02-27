@@ -678,6 +678,7 @@ if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || trut
   GH_NOTES="${GH_NOTES_RAW//__VERSION__/${VERSION}}"
   GH_NOTES="${GH_NOTES//$'\r'/}"
   GH_ENSURE_TAG="${GH_ENSURE_TAG:-1}"
+  GH_MARK_LATEST="${GH_MARK_LATEST:-1}"
   GH_TAG_REMOTE="${GH_TAG_REMOTE:-origin}"
   GH_TAG_REF="${GH_TAG_REF:-HEAD}"
   GH_TAG_MESSAGE_RAW="${GH_TAG_MESSAGE:-$RELEASE_TAG}"
@@ -740,7 +741,71 @@ if truthy "${GH_UPLOAD_RELEASE:-0}" || truthy "${GH_PUBLISH_RELEASE:-0}" || trut
   fi
 
   if truthy "${GH_PUBLISH_RELEASE:-0}"; then
-    gh release edit "$GH_RELEASE_TAG_EFFECTIVE" --repo "$GH_REPO" --draft=false
+    if gh release edit "$GH_RELEASE_TAG_EFFECTIVE" --repo "$GH_REPO" --draft=false >/dev/null 2>&1; then
+      :
+    else
+      echo "gh release edit unavailable; falling back to GitHub API publish flow." >&2
+      GH_RELEASE_ID="$(gh api "repos/${GH_REPO}/releases/tags/${GH_RELEASE_TAG_EFFECTIVE}" --jq '.id' 2>/dev/null || true)"
+      GH_RELEASE_ID="${GH_RELEASE_ID//$'\r'/}"
+      if [[ -z "${GH_RELEASE_ID//[[:space:]]/}" ]]; then
+        GH_RELEASE_ID="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" --jq '.id' 2>/dev/null || true)"
+        GH_RELEASE_ID="${GH_RELEASE_ID//$'\r'/}"
+      fi
+      if [[ -z "${GH_RELEASE_ID//[[:space:]]/}" ]]; then
+        mapfile -t GH_RELEASE_ROWS < <(
+          gh api "repos/${GH_REPO}/releases?per_page=100" \
+            --jq '.[] | [.id, (.tag_name // ""), (.name // ""), (if .draft then "true" else "false" end)] | @tsv' \
+            2>/dev/null || true
+        )
+        for row in "${GH_RELEASE_ROWS[@]}"; do
+          IFS=$'\t' read -r row_id row_tag row_name row_draft <<< "$row"
+          if [[ "$row_tag" == "$GH_RELEASE_TAG_EFFECTIVE" || "$row_tag" == "$RELEASE_TAG" ]]; then
+            GH_RELEASE_ID="$row_id"
+            break
+          fi
+        done
+        if [[ -z "${GH_RELEASE_ID//[[:space:]]/}" ]]; then
+          for row in "${GH_RELEASE_ROWS[@]}"; do
+            IFS=$'\t' read -r row_id row_tag row_name row_draft <<< "$row"
+            if [[ "$row_name" == "$GH_TITLE" ]]; then
+              GH_RELEASE_ID="$row_id"
+              break
+            fi
+          done
+        fi
+      fi
+      if [[ -z "${GH_RELEASE_ID//[[:space:]]/}" ]]; then
+        echo "Unable to resolve release id for publish in ${GH_REPO}." >&2
+        exit 1
+      fi
+      gh api -X PATCH "repos/${GH_REPO}/releases/${GH_RELEASE_ID}" -f draft=false >/dev/null
+    fi
+
+    if truthy "${GH_MARK_LATEST}"; then
+      GH_RELEASE_ID_LATEST="$(gh api "repos/${GH_REPO}/releases/tags/${GH_RELEASE_TAG_EFFECTIVE}" --jq '.id' 2>/dev/null || true)"
+      GH_RELEASE_ID_LATEST="${GH_RELEASE_ID_LATEST//$'\r'/}"
+      if [[ -z "${GH_RELEASE_ID_LATEST//[[:space:]]/}" ]]; then
+        GH_RELEASE_ID_LATEST="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" --jq '.id' 2>/dev/null || true)"
+        GH_RELEASE_ID_LATEST="${GH_RELEASE_ID_LATEST//$'\r'/}"
+      fi
+      if [[ -z "${GH_RELEASE_ID_LATEST//[[:space:]]/}" ]]; then
+        mapfile -t GH_RELEASE_ROWS_LATEST < <(
+          gh api "repos/${GH_REPO}/releases?per_page=100" \
+            --jq '.[] | [.id, (.tag_name // ""), (.name // "")] | @tsv' \
+            2>/dev/null || true
+        )
+        for row in "${GH_RELEASE_ROWS_LATEST[@]}"; do
+          IFS=$'\t' read -r row_id row_tag row_name <<< "$row"
+          if [[ "$row_tag" == "$GH_RELEASE_TAG_EFFECTIVE" || "$row_tag" == "$RELEASE_TAG" || "$row_name" == "$GH_TITLE" ]]; then
+            GH_RELEASE_ID_LATEST="$row_id"
+            break
+          fi
+        done
+      fi
+      if [[ -n "${GH_RELEASE_ID_LATEST//[[:space:]]/}" ]]; then
+        gh api -X PATCH "repos/${GH_REPO}/releases/${GH_RELEASE_ID_LATEST}" -f make_latest=true >/dev/null || true
+      fi
+    fi
   fi
 fi
 
