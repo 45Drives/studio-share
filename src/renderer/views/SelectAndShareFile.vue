@@ -317,7 +317,7 @@
                                                                 @click="openUserModal()">
                                                                 {{ accessCount ? 'Manage invited users' : 'Invite users…' }}
                                                                 <span v-if="accessCount"
-                                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default">
+                                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default text-default">
                                                                     {{ accessCount }}
                                                                 </span>
                                                             </button>
