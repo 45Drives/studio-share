@@ -28,6 +28,31 @@ fi
 : "${SIGN_KEYCHAIN:=$HOME/Library/Keychains/login.keychain-db}"
 : "${SIGN_KEYCHAIN_PASSWORD:?SIGN_KEYCHAIN_PASSWORD is required for non-interactive signing}"
 
+NODE_BIN=""
+if command -v node >/dev/null 2>&1; then
+  NODE_BIN="$(command -v node)"
+fi
+if [[ -z "$NODE_BIN" && -s "$HOME/.nvm/nvm.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$HOME/.nvm/nvm.sh"
+  nvm use --silent >/dev/null 2>&1 || true
+  if command -v node >/dev/null 2>&1; then
+    NODE_BIN="$(command -v node)"
+  fi
+fi
+if [[ -z "$NODE_BIN" ]]; then
+  for p in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    if [[ -x "$p" ]]; then
+      NODE_BIN="$p"
+      break
+    fi
+  done
+fi
+if [[ -z "$NODE_BIN" ]]; then
+  echo "node: command not found on Intel signing host" >&2
+  exit 1
+fi
+
 IN_DIR="${SIGN_INBOX}/${BUNDLE_TAG}"
 APP_BUNDLE="${IN_DIR}/${APP_PRODUCT_FILENAME}.app"
 
@@ -83,7 +108,7 @@ echo "Output: $OUT_DIR"
 APP_UPDATE_YML="${APP_BUNDLE}/Contents/Resources/app-update.yml"
 echo "Ensuring updater config exists in app bundle: $APP_UPDATE_YML"
 PUBLISH_FIELDS="$(
-  /usr/bin/node -e "
+  \"$NODE_BIN\" -e "
     const b=require('${SIGN_INBOX}/electron-builder.json');
     const p=Array.isArray(b.publish)?b.publish[0]:(b.publish||{});
     const product=(b.productName||'app').toString();
