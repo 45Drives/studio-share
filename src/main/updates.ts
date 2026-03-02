@@ -66,15 +66,7 @@ export function initAutoUpdates(getMainWindow: () => BrowserWindow | null) {
     })
 
     autoUpdater.on('update-downloaded', (info) => {
-        // At this point you can either:
-        // - let it install on quit (autoInstallOnAppQuit=true)
-        // - or prompt and call quitAndInstall
         getMainWindow()?.webContents.send('update:downloaded', info)
-
-        // getMainWindow()?.webContents.send('update:downloaded', {
-        //     ...info,
-        //     willInstallOnQuit: true,
-        // })
     })
 
     autoUpdater.on('error', (err) => {

@@ -123,9 +123,7 @@ const dual = (lvl: 'info' | 'warn' | 'error' | 'debug') =>
     const msgRaw = args.map(String).join(' ');
     const msg = scrubSecrets(msgRaw);
     (jsonLogger as any)[lvl]({ message: msg });
-    if (process.env.NODE_ENV === 'development') {
-      (originalConsole as any)[lvl](msg);
-    }
+    (originalConsole as any)[lvl](msg);
   };
 
   console.log = dual('info');
@@ -1777,6 +1775,8 @@ function createWindow() {
     }
     setupStreams.clear();
 
+    jl('info', 'app.window-all-closed', { platform: process.platform });
+
     if (process.platform !== 'darwin') {
       app.quit();
     }
@@ -2157,7 +2157,9 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         const ext = path.extname(fileName || '').toLowerCase().replace('.', '');
         const videoExts = new Set([
           'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
-          'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+          'mpg', 'mpeg', 'm2v', '3gp', '3g2', 'mxf', 'ts', 'm2ts', 'mts',
+          'ogv', 'vob', 'divx', 'f4v', 'asf', 'rm', 'rmvb', 'm4s',
+          'r3d', 'braw', 'ari', 'cine', 'dav',
         ]);
         return videoExts.has(ext);
       })();
@@ -2311,16 +2313,3 @@ ipcMain.on('upload:cancel', (_event, { id }) => {
     jl('info', 'upload.cancel.queued', { id })
   }
 })
-
-app.on('window-all-closed', () => {
-  for (const es of setupStreams.values()) {
-    try { es.close(); } catch { }
-  }
-  setupStreams.clear();
-  //  This ensures the app fully quits on Windows
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-  jl('info', 'app.window-all-closed', { platform: process.platform });
-
-});

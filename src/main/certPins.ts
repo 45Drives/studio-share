@@ -24,21 +24,10 @@ export function getPin(host: string): Pin | undefined {
     return pins[host];
 }
 
-export function isHostPinned(host: string, fp: string): boolean {
-    const p = getPin(host);
-    return !!p && p.fingerprint === fp;
-}
-
 export function rememberPin(host: string, fp: string) {
     const pins = readPins();
     pins[host] = { host, fingerprint: fp, addedAt: Date.now() };
     writePins(pins);
 }
 
-export function forgetPin(host: string) {
-    const pins = readPins();
-    if (pins[host]) {
-        delete pins[host];
-        writePins(pins);
-    }
-}
+

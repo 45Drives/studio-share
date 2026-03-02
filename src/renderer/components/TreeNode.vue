@@ -7,7 +7,7 @@
             @keydown.enter.prevent="modeIsUpload ? selectFolder() : onRowClick()"
             @keydown.space.prevent="modeIsUpload ? selectFolder() : onRowClick()" role="button" tabindex="0"
             :aria-expanded="open">
-            <!-- checkbox col: keep spacing, no checkbox for folders -->
+            <!-- checkbox col -->
             <div class="px-2 py-1 flex justify-center">
                 <template v-if="modeIsUpload">
                     <button type="button"
@@ -17,7 +17,12 @@
                     </button>
                 </template>
                 <template v-else>
-                    <span class="inline-block w-4 h-4"></span>
+                    <input class="input-checkbox h-4 w-4 m-0" type="checkbox"
+                        :checked="folderFullySelected"
+                        :indeterminate="folderPartiallySelected"
+                        @click.stop="toggleFolder"
+                        :aria-checked="folderFullySelected ? 'true' : folderPartiallySelected ? 'mixed' : 'false'"
+                        title="Select all files in this folder" />
                 </template>
             </div>
 
@@ -65,21 +70,22 @@
                 <TreeNode v-if="ch.isDir" :label="ch.name" :relPath="ch.path" :apiFetch="apiFetch" :useCase="useCase"
                     :selectedFolder="selectedFolder" :selected="selected" :selectedVersion="selectedVersion"
                     :getFilesFor="getFilesFor" :depth="depth + 1" @select-folder="$emit('select-folder', $event)"
-                    @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)" />
+                    @toggle="$emit('toggle', $event)" @navigate="$emit('navigate', $event)"
+                    @select-range="$emit('select-range', $event)" />
                 <div v-else :class="[
                     'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
                     (!modeIsUpload && selected.has(ch.path))
                         ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
                         : 'ss-explorer-hover',
                     modeIsUpload ? 'opacity-90 pointer-events-none' : ''
-                ]" @click="onFileToggle(ch.path)" @keydown.enter.prevent="onFileToggle(ch.path)"
+                ]" @click="($event) => onFileToggle(ch.path, $event)" @keydown.enter.prevent="onFileToggle(ch.path)"
                     @keydown.space.prevent="onFileToggle(ch.path)" role="button" tabindex="0"
                     :aria-pressed="!modeIsUpload && selected.has(ch.path)" class="focus:outline-none">
                     <!-- checkbox -->
                     <div class="px-2 py-1 flex justify-center">
                         <template v-if="!modeIsUpload">
                             <input class="input-checkbox h-4 w-4 m-0" type="checkbox" :checked="selected.has(ch.path)"
-                                @click.stop @change="onFileToggle(ch.path)"
+                                @click.stop @change="() => onFileToggle(ch.path)"
                                 :aria-checked="selected.has(ch.path)" />
                         </template>
                     </div>
@@ -128,12 +134,32 @@ const emit = defineEmits<{
     (e: 'toggle', payload: TogglePayload): void
     (e: 'navigate', rel: string): void
     (e: 'select-folder', folderRel: string): void
-
+    (e: 'select-range', paths: string[]): void
 }>()
 
 const modeIsUpload = computed(() => (props.useCase ?? 'share') === 'upload')
 const isFolderSelected = computed(() =>
  modeIsUpload.value && !isRoot && props.selectedFolder === props.relPath)
+
+// --- Folder selection state (share mode) ---
+function isFileInSelected(f: string) {
+    const stripped = f.replace(/^\/+/, '')
+    return props.selected.has(f) || props.selected.has('/' + stripped) || props.selected.has(stripped)
+}
+const folderFileCount = computed(() => allFiles.value?.length ?? 0)
+const folderSelectedCount = computed(() => {
+    if (!allFiles.value) return 0
+    return allFiles.value.filter(isFileInSelected).length
+})
+const folderFullySelected = computed(() =>
+    folderFileCount.value > 0 && folderSelectedCount.value >= folderFileCount.value
+)
+const folderPartiallySelected = computed(() =>
+    folderSelectedCount.value > 0 && folderSelectedCount.value < folderFileCount.value
+)
+function toggleFolder() {
+    emit('toggle', { path: props.relPath || '', isDir: true })
+}
 
 const depth = props.depth ?? 0
 const isRoot = props.isRoot ?? false
@@ -221,9 +247,29 @@ function fmtDateFull(ms?: number) {
     return d.toLocaleString() 
 }
 
-function onFileToggle(path: string) {
-  if (modeIsUpload.value) return;
+// --- Shift-click range selection ---
+const lastClickedFilePath = ref<string | null>(null)
+
+function onFileToggle(path: string, event?: MouseEvent) {
+  if (modeIsUpload.value) return
+
+  const fileEntries = children.value.filter(ch => !ch.isDir)
+  const currentIdx = fileEntries.findIndex(ch => ch.path === path)
+
+  if (event?.shiftKey && lastClickedFilePath.value != null) {
+    const lastIdx = fileEntries.findIndex(ch => ch.path === lastClickedFilePath.value)
+    if (lastIdx >= 0 && currentIdx >= 0 && lastIdx !== currentIdx) {
+      const start = Math.min(lastIdx, currentIdx)
+      const end = Math.max(lastIdx, currentIdx)
+      const rangePaths = fileEntries.slice(start, end + 1).map(ch => ch.path)
+      emit('select-range', rangePaths)
+      lastClickedFilePath.value = path
+      return
+    }
+  }
+
   emit('toggle', { path, isDir: false })
+  lastClickedFilePath.value = path
 }
 
 function selectFolder() {

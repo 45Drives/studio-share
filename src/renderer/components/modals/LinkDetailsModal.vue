@@ -951,12 +951,20 @@ function assignMediaSettingsFromSource(src: any) {
   if (wmFile != null) target.watermarkFile = String(wmFile || '')
 }
 
+const _videoExts = new Set([
+  'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
+  'mpg', 'mpeg', 'm2v', '3gp', '3g2', 'mxf', 'ts', 'm2ts', 'mts',
+  'ogv', 'vob', 'divx', 'f4v', 'asf', 'rm', 'rmvb', 'm4s',
+  'r3d', 'braw', 'ari', 'cine', 'dav',
+])
 function isVideoishFile(f: any) {
   const mime = String(f?.mime || '').toLowerCase()
   if (mime.startsWith('video/')) return true
+  // MXF and other cinema formats use application/* mimes
+  if (['application/mxf', 'application/x-mxf', 'application/x-smpte-mxf'].includes(mime)) return true
   const name = String(f?.name || f?.relPath || '').toLowerCase()
   const ext = name.includes('.') ? name.split('.').pop() || '' : ''
-  return ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', '3g2'].includes(ext)
+  return _videoExts.has(ext)
 }
 
 function isJobActiveish(status: any) {

@@ -123,7 +123,6 @@ const api: ElectronApi = {
 }
 
 contextBridge.exposeInMainWorld('electron', api)
-contextBridge.exposeInMainWorld('electronAPI', api)
 
 contextBridge.exposeInMainWorld('appLog', {
   info: (event: string, data?: any) => ipcRenderer.send('log:info', { event, data }),

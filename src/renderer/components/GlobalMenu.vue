@@ -18,7 +18,6 @@
                         {{ isLoggedIn ? 'Dashboard' : 'Home' }}
                     </button>
                 </div>
-
                 <!-- <div v-if="canCheckUpdates" class="mb-2 text-center items-center">
                     <p class="text-xs text-default mb-1">Application</p>
                     <button class="btn btn-secondary wizard-btn w-full mb-1" :disabled="updateBusy"

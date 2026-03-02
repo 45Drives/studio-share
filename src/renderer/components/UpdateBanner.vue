@@ -81,19 +81,11 @@ const message = computed(() => {
   return ''
 })
 
+/** Extract a display-ready error string. The main process already normalises
+ *  updater errors via normalizeUpdaterError(), so this is just a safe extractor. */
 function toUserFriendlyError(input: unknown): string {
-  const raw = String((input as any)?.message || input || '').replace(/\s+/g, ' ').trim()
-  if (!raw) return 'We could not check for updates right now. Please try again later.'
-  if (/<(feed|entry|content|title|updated|link)\b/i.test(raw) || /&lt;[a-z!/]/i.test(raw)) {
-    return 'We could not read update information right now. Please try again in a minute.'
-  }
-  if (/prerelease|pre-release/i.test(raw)) {
-    return 'No stable update is available yet. Pre-release versions may not appear in automatic update checks.'
-  }
-  if (/GitHubProvider|getLatestVersion|checkForUpdates|electron-updater|AppUpdater|XML:/i.test(raw)) {
-    return 'We could not check for updates right now. Please try again later.'
-  }
-  return raw
+  const raw = String((input as any)?.message || input || '').trim()
+  return raw || 'We could not check for updates right now. Please try again later.'
 }
 
 function clearHideTimer() {

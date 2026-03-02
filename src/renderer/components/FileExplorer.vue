@@ -2,8 +2,7 @@
   <div class="flex flex-col gap-3 max-h-[500px] mt-2 rounded-md">
     <!-- Top controls + PathInput -->
     <div class="flex flex-col gap-2 text-sm">
-      <div class="text-muted">Click on files to select or deselect them. <span v-if="viewMode === 'grid'">Double-click
-          on folders to enter.</span></div>
+      <div class="text-muted">Click on files to select or deselect them. Shift-click to select a range. <span v-if="viewMode === 'grid'">Click on folders to enter. Use folder checkboxes to select all contents.</span><span v-else>Use folder checkboxes to select all contents.</span></div>
 
       <div class="flex flex-row gap-2 items-center">
         <span class="whitespace-nowrap ">Enter root path to use.</span>
@@ -20,6 +19,17 @@
         </button>
 
         <div class="text-xs opacity-75 truncate" :title="cwd">Showing: {{ cwd || '/' }}</div>
+
+        <!-- Select All checkbox -->
+        <label class="flex items-center gap-1.5 cursor-pointer text-xs select-none ml-2 whitespace-nowrap" title="Select or deselect all files in this directory">
+            <input type="checkbox" class="input-checkbox h-3.5 w-3.5 m-0"
+                :checked="selectAllChecked"
+                :indeterminate="selectAllIndeterminate"
+                @change="toggleSelectAll" />
+            <span>Select All</span>
+            <span v-if="allCwdFiles.length" class="text-muted">({{ allCwdFiles.length }})</span>
+        </label>
+
         <div class="ml-auto flex items-center">
           <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5 rounded-l-md"
             :class="viewMode === 'list' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'list'" aria-label="List view"
@@ -44,14 +54,14 @@
         <template v-if="viewMode === 'list'">
           <TreeNode :key="'list-'+cwd" :apiFetch="apiFetch" :selected="selectedSet"
             :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0" :isRoot="true" useCase="share"
-            @toggle="togglePath" @navigate="navigateTo" />
+            @toggle="togglePath" @navigate="navigateTo" @select-range="onSelectRange" />
         </template>
 
         <!-- Grid view -->
         <template v-else>
           <IconMode :key="'grid-'+cwd" :apiFetch="apiFetch" :selected="selectedSet"
             :getFilesFor="getFilesForFolder" :relPath="rootRel" :depth="0" :isRoot="true" useCase="share"
-            @toggle="togglePath" @navigate="navigateTo" />
+            @toggle="togglePath" @navigate="navigateTo" @select-range="onSelectRange" />
         </template>
       </div>
     </div>
@@ -213,6 +223,48 @@ async function togglePath({ path, isDir }: TogglePayload) {
     const parent = parentPath(cwd.value || '/')
     const base = baseDir.value
     cwd.value = parent.startsWith(base) ? parent : base
+  }
+
+  // ---------- Select All ----------
+  const allCwdFiles = ref<string[]>([])
+
+  async function loadAllCwdFiles() {
+    try {
+      allCwdFiles.value = await getFilesForFolder(rootRel.value || '/')
+    } catch {
+      allCwdFiles.value = []
+    }
+  }
+
+  watch(cwd, () => { void loadAllCwdFiles() })
+  onMounted(() => { void loadAllCwdFiles() })
+
+  const selectAllChecked = computed(() => {
+    if (!allCwdFiles.value.length) return false
+    return allCwdFiles.value.every(f => isSelected(f))
+  })
+
+  const selectAllIndeterminate = computed(() => {
+    if (!allCwdFiles.value.length) return false
+    const someSelected = allCwdFiles.value.some(f => isSelected(f))
+    const allSelected = allCwdFiles.value.every(f => isSelected(f))
+    return someSelected && !allSelected
+  })
+
+  function toggleSelectAll() {
+    if (selectAllChecked.value) {
+      const normalized = allCwdFiles.value.map(normalizePath)
+      emit('remove', normalized)
+    } else {
+      const toAdd = allCwdFiles.value.filter(f => !isSelected(f)).map(normalizePath)
+      if (toAdd.length) emit('add', toAdd)
+    }
+  }
+
+  // ---------- Select Range ----------
+  function onSelectRange(paths: string[]) {
+    const toAdd = paths.map(normalizePath).filter(p => !isSelected(p))
+    if (toAdd.length) emit('add', toAdd)
   }
   
   </script>

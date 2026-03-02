@@ -36,21 +36,10 @@ export function getAgentSocket(): string | undefined {
     // Standard Un*x → honour whatever the shell exported
     if (process.env.SSH_AUTH_SOCK) return process.env.SSH_AUTH_SOCK;
 
-    // Windows: ssh2 understands the literal string "pageant"                     :contentReference[oaicite:0]{index=0}
+    // Windows: ssh2 understands the literal string "pageant"
     if (process.platform === "win32") return "pageant";
     
     return undefined;                 // fall back to password / key upload
-}
-
-export function pickLocalKey():
-    | { priv: string; pub: string; type: 'ed25519' | 'rsa' }
-    | undefined {
-    const dir = getKeyDir();
-    const ed = path.join(dir, 'id_ed25519');
-    const rs = path.join(dir, 'id_rsa');
-    if (fs.existsSync(ed) && fs.existsSync(ed + '.pub')) return { priv: ed, pub: ed + '.pub', type: 'ed25519' };
-    if (fs.existsSync(rs) && fs.existsSync(rs + '.pub')) return { priv: rs, pub: rs + '.pub', type: 'rsa' };
-    return undefined;
 }
 
 /* ---------- ssh-keygen (ed25519 by default) ---------- */

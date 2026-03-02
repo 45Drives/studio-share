@@ -40,7 +40,6 @@ app.use(router)
 app.directive('enter-next', enterNextDirective);
 app.use(pinia);
 app.mount('#app');
-// document.documentElement.classList.add('theme-studio');
 document.documentElement.classList.add('theme-studio-grad-purple-pink-orange');
 window.electron?.ipcRenderer.send('renderer-ready');
 

@@ -25,13 +25,6 @@ export function findRsyncPath(): { cmd: string; useWSL: boolean } {
     '/usr/local/bin/rsync',
     '/usr/bin/rsync',
   ];
-  // const winCandidates = [
-  //   'C:\\Program Files\\Git\\usr\\bin\\rsync.exe',
-  //   'C:\\Program Files\\Git\\mingw64\\bin\\rsync.exe',
-  //   'C:\\Program Files\\cwRsync\\rsync.exe',
-  //   'C:\\cygwin64\\bin\\rsync.exe',
-  //   'C:\\cygwin\\bin\\rsync.exe',
-  // ];
   const which = (bin: string) => {
     const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8' });
     return r.status === 0 ? r.stdout.split(/\r?\n/).find(s => s.trim())?.trim() : '';

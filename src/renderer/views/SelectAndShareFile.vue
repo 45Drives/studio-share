@@ -999,7 +999,9 @@ let preflightReqSeq = 0
 
 const videoExts = new Set([
     'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
-    'mpg', 'mpeg', 'm2v', '3gp', '3g2',
+    'mpg', 'mpeg', 'm2v', '3gp', '3g2', 'mxf', 'ts', 'm2ts', 'mts',
+    'ogv', 'vob', 'divx', 'f4v', 'asf', 'rm', 'rmvb', 'm4s',
+    'r3d', 'braw', 'ari', 'cine', 'dav',
 ])
 const hasVideoSelected = computed(() =>
     files.value.some(f => {

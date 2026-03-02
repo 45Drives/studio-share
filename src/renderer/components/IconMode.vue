@@ -23,9 +23,9 @@
         ]" role="button" tabindex="0" :aria-disabled="foldersOnly && !ent.isDir ? 'true' : 'false'"
                 :aria-selected="modeIsUpload && ent.isDir && localSelectedFolder === ent.path ? 'true' : 'false'"
                 :aria-label="ent.name + (ent.isDir ? ' folder' : ' file')"
-                @click="ent.isDir ? selectFolderOnly(ent) : onFileClick(ent)"
+                @click="ent.isDir ? onFolderClick(ent) : onFileClick(ent, $event)"
                 @dblclick.prevent="ent.isDir ? openFolder(ent) : onFileKey(ent)"
-                @keydown.space.prevent="ent.isDir ? selectFolderOnly(ent) : onFileKey(ent)"
+                @keydown.space.prevent="ent.isDir ? onFolderClick(ent) : onFileKey(ent)"
                 @keydown.enter.prevent="ent.isDir ? openFolder(ent) : onFileKey(ent)">
                 <!-- icon -->
                 <div class="flex justify-center">
@@ -60,6 +60,16 @@
                             :aria-checked="selected.has(ent.path)" @click.stop @change="onFileToggle(ent.path)" />
                     </template>
 
+                    <!-- share mode: folder checkbox -->
+                    <template v-else-if="!modeIsUpload && ent.isDir">
+                        <input type="checkbox" class="input-checkbox h-4 w-4 m-0"
+                            :checked="isFolderFullySelected(ent.path)"
+                            :indeterminate="isFolderPartiallySelected(ent.path)"
+                            @click.stop="onFolderToggle(ent.path)"
+                            :aria-checked="isFolderFullySelected(ent.path) ? 'true' : isFolderPartiallySelected(ent.path) ? 'mixed' : 'false'"
+                            title="Select all files in this folder" />
+                    </template>
+
                     <!-- upload mode: folder radio -->
                     <template v-else-if="modeIsUpload && ent.isDir">
                         <button type="button"
@@ -89,13 +99,15 @@ const props = defineProps<{
     selected: Set<string>
     useCase?: 'upload' | 'share'
     selectedFolder?: string | null
+    getFilesFor?: (folder: string) => Promise<string[]>
 }>()
 
 const emit = defineEmits<{
     (e: 'toggle', payload: { path: string; isDir: boolean }): void
     (e: 'navigate', rel: string): void
     (e: 'select-folder', folderRel: string): void
-    (e: 'update:selectedFolder', value: string | null): void 
+    (e: 'update:selectedFolder', value: string | null): void
+    (e: 'select-range', paths: string[]): void
 }>()
 
 const modeIsUpload = computed(() => (props.useCase ?? 'share') === 'upload')
@@ -119,18 +131,58 @@ async function loadDir() {
     } finally {
         loading.value = false
     }
+    void preloadFolderFiles()
 }
 
+// --- Folder file pre-loading for selection state ---
+const folderFilesMap = ref<Record<string, string[]>>({})
 
-function goUp() {
-    if (!cwd.value) return
-    const parts = cwd.value.split('/').filter(Boolean)
-    parts.pop()
-    const up = parts.join('/')
-    cwd.value = up
-    emit('navigate', up)
-    loadDir()
+async function preloadFolderFiles() {
+    if (!props.getFilesFor) return
+    const folders = entries.value.filter(e => e.isDir)
+    if (!folders.length) return
+    const results: Record<string, string[]> = {}
+    await Promise.all(folders.map(async (ent) => {
+        try {
+            results[ent.path] = await props.getFilesFor!(ent.path)
+        } catch {
+            results[ent.path] = []
+        }
+    }))
+    folderFilesMap.value = { ...folderFilesMap.value, ...results }
 }
+
+function isFileInSelected(f: string) {
+    const stripped = f.replace(/^\/+/, '')
+    return props.selected.has(f) || props.selected.has('/' + stripped) || props.selected.has(stripped)
+}
+
+function isFolderFullySelected(folderPath: string) {
+    const files = folderFilesMap.value[folderPath]
+    if (!files || !files.length) return false
+    return files.every(isFileInSelected)
+}
+
+function isFolderPartiallySelected(folderPath: string) {
+    const files = folderFilesMap.value[folderPath]
+    if (!files || !files.length) return false
+    const some = files.some(isFileInSelected)
+    const all = files.every(isFileInSelected)
+    return some && !all
+}
+
+function onFolderToggle(path: string) {
+    emit('toggle', { path, isDir: true })
+}
+
+function onFolderClick(ent: Entry) {
+    if (modeIsUpload.value) {
+        selectFolderOnly(ent)
+    } else {
+        openFolder(ent)
+    }
+}
+
 
 watch(() => props.relPath, (r) => {
     cwd.value = r || ''
@@ -173,9 +225,9 @@ function openFolder(ent: Entry) {
     loadDir()
 }
 
-function onFileClick(ent: Entry) {
+function onFileClick(ent: Entry, event?: MouseEvent) {
     if (foldersOnly.value) return
-    onFileToggle(ent.path)
+    onFileToggle(ent.path, event)
 }
 
 
@@ -184,20 +236,40 @@ function onFileClick(ent: Entry) {
 // keyboard fallback for files
 function onFileKey(ent: Entry) {
     if (foldersOnly.value) return
-    onFileClick(ent)
+    onFileToggle(ent.path)
 }
 
-function onFileToggle(path: string) {
+// --- Shift-click range selection ---
+const lastClickedFilePath = ref<string | null>(null)
+
+function onFileToggle(path: string, event?: MouseEvent) {
     if (foldersOnly.value) return
+
+    const fileEntries = entries.value.filter(e => !e.isDir)
+    const currentIdx = fileEntries.findIndex(e => e.path === path)
+
+    if (event?.shiftKey && lastClickedFilePath.value != null) {
+        const lastIdx = fileEntries.findIndex(e => e.path === lastClickedFilePath.value)
+        if (lastIdx >= 0 && currentIdx >= 0 && lastIdx !== currentIdx) {
+            const start = Math.min(lastIdx, currentIdx)
+            const end = Math.max(lastIdx, currentIdx)
+            const rangePaths = fileEntries.slice(start, end + 1).map(e => e.path)
+            emit('select-range', rangePaths)
+            lastClickedFilePath.value = path
+            return
+        }
+    }
+
     emit('toggle', { path, isDir: false })
+    lastClickedFilePath.value = path
 }
 
 /** Decide which media icon to use */
 function kindFor(ent: Entry): 'image' | 'video' | 'audio' | 'other' {
     const s = (ent.mime || ent.name || '').toLowerCase()
-    if (/(^image\/)|\.(png|jpe?g|gif|webp|bmp|tiff|svg)$/.test(s)) return 'image'
-    if (/(^video\/)|\.(mp4|mkv|mov|avi|webm|m4v|wmv)$/.test(s)) return 'video'
-    if (/(^audio\/)|\.(mp3|wav|flac|aac|ogg|m4a)$/.test(s)) return 'audio'
+    if (/(^image\/)|\.(png|jpe?g|gif|webp|bmp|tiff|tif|svg|avif|heic|heif|psd|exr|dpx|dng|cr2|cr3|nef|arw|raw)$/.test(s)) return 'image'
+    if (/(^video\/)|(application\/(x-)?mxf)|\.(mp4|mkv|mov|avi|webm|m4v|wmv|flv|mpg|mpeg|mxf|ts|m2ts|mts|3gp|3g2|ogv|vob|r3d|braw|ari)$/.test(s)) return 'video'
+    if (/(^audio\/)|\.(mp3|wav|flac|aac|ogg|m4a|opus|aif|aiff|wma|ac3|dts)$/.test(s)) return 'audio'
     return 'other'
 }
 </script>
