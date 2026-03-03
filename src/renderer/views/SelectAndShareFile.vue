@@ -1128,7 +1128,7 @@ async function runPreflight() {
             const message = msgParts.length
                 ? msgParts.join(' ')
                 : 'Transcode status changed for the selected files.'
-            pushNotification(new Notification('Transcode In Progress', message, 'info', 7000, 'transcode-preflight'))
+            if (!transfer.state.open) pushNotification(new Notification('Transcode In Progress', message, 'info', 7000, 'transcode-preflight'))
             lastPreflightNoticeKey.value = noticeKey
         } else if (!preflightProxyBlocked.value && !preflightWatermarkBlocked.value) {
             lastPreflightNoticeKey.value = ''
@@ -1617,7 +1617,7 @@ const selectionProgressRows = computed(() => {
 })
 
 watch(hasActiveUploadForSelection, (active, wasActive) => {
-    if (active && !wasActive) {
+    if (active && !wasActive && !transfer.state.open) {
         pushNotification(
             new Notification(
                 'Upload In Progress',

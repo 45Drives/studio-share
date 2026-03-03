@@ -1106,6 +1106,78 @@ export function useTransferProgress() {
         })
     }
 
+    /**
+     * Restore active transcodes from the server after reconnect / app restart.
+     * Calls GET /api/progress/active to discover any queued or running jobs,
+     * then creates transfer-dock tasks + polling for each (grouped by kind).
+     */
+    async function restoreActiveTranscodes(
+        apiFetch: (path: string, init?: any) => Promise<any>
+    ) {
+        try {
+            const json = await apiFetch('/api/progress/active', {
+                parse: 'json',
+                suppressAuthRedirect: true,
+            })
+            if (!json?.ok || !Array.isArray(json.items)) return
+
+            for (const item of json.items as any[]) {
+                const assetVersionId = Number(item.assetVersionId)
+                const fileId = Number(item.fileId)
+                if (!Number.isFinite(assetVersionId) || assetVersionId <= 0) continue
+
+                const relDir = String(item.relDir || '').trim()
+                const filename = String(item.filename || '').trim()
+                const absPath = String(item.absPath || '').trim()
+                const filePath = absPath || (relDir ? `${relDir}/${filename}` : filename)
+
+                const jobs: any[] = Array.isArray(item.jobs) ? item.jobs : []
+
+                // Determine which job kinds are active for this version
+                const activeKinds = new Set<string>()
+                for (const j of jobs) {
+                    const kind = String(j.kind || '').toLowerCase()
+                    if (kind.startsWith('proxy_mp4')) activeKinds.add('proxy_mp4')
+                    else if (kind === 'hls') activeKinds.add('hls')
+                    else activeKinds.add(kind)
+                }
+
+                for (const kind of activeKinds) {
+                    const jobKind = (kind === 'proxy_mp4' || kind === 'hls') ? kind : 'any' as const
+
+                    // Skip if we already have an active task for this version+kind
+                    if (hasActiveTranscode({ assetVersionIds: [assetVersionId], jobKind })) continue
+
+                    const label = kind === 'hls' ? 'Generating adaptive stream'
+                        : kind === 'proxy_mp4' ? 'Generating proxy files'
+                        : 'Generating transcodes'
+
+                    startAssetVersionTranscodeTask({
+                        apiFetch,
+                        assetVersionIds: [assetVersionId],
+                        title: `${label}: ${filename}`,
+                        detail: filePath,
+                        intervalMs: 1500,
+                        jobKind,
+                        context: {
+                            source: 'upload' as const,
+                            destDir: relDir,
+                            file: filePath,
+                        },
+                    })
+                }
+            }
+
+            // If we restored tasks, open the dock
+            if (_state.tasks.some(isActiveTask)) {
+                _state.open = true
+            }
+        } catch (e: any) {
+            // Non-fatal: server might not have the endpoint yet
+            window.appLog?.warn?.('transfer.restore.error', { error: e?.message || String(e) })
+        }
+    }
+
     return {
         state: _state,
         hasActive,
@@ -1127,5 +1199,6 @@ export function useTransferProgress() {
         startTranscodeTask,
         startAssetVersionTranscodeTask,
         startPlaybackTranscodeTask,
+        restoreActiveTranscodes,
     }
 }

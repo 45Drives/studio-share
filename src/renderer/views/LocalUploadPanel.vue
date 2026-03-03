@@ -1044,6 +1044,8 @@ function scheduleBatchNotification() {
 	if (batchNotifyTimer) return
 	batchNotifyTimer = setTimeout(() => {
 		batchNotifyTimer = null
+		// Skip notifications when the transfer dock is open — the user can already see progress there
+		if (transfer.state.open) return
 		const done = completedSinceStart
 		const failed = failedSinceStart
 		if (done > 0 && allTerminal.value) {

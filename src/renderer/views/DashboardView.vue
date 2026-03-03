@@ -57,12 +57,19 @@ import SettingsModal from '../components/modals/SettingsModal.vue'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import LogViewModal from '../components/modals/LogViewModal.vue'
 // import { Cog6ToothIcon } from '@heroicons/vue/24/solid'
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
+import { useTransferProgress } from '../composables/useTransferProgress'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()
 const { apiFetch } = useApi()
+const transfer = useTransferProgress()
+
+// Restore any active transcodes from the server (survives logout/app restart)
+onMounted(() => {
+	transfer.restoreActiveTranscodes(apiFetch)
+})
 
 const leaveServer = () => {
 	// router.push({ name: 'server-selection'});
