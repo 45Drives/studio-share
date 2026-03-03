@@ -541,20 +541,16 @@ export function useTransferProgress() {
         _state.tasks.filter(t => isActiveTask(t)).length
     )
 
-    // Auto-open dock when transfers start
+    // Auto-open drawer when transfers start
     watch(
         () => hasActive.value,
         (active, wasActive) => {
             // rising edge: inactive -> active
             if (active && !wasActive) {
                 _state.open = true
-                // choose one behavior:
-                _state.minimized = true  // open but minimized
-                // _state.minimized = false // open expanded
             }
             if (!active) {
-                // Keep the dock open if there are finished/failed tasks to review.
-                _state.minimized = true
+                // Keep the drawer open if there are finished/failed tasks to review.
                 if (_state.tasks.length === 0) _state.open = false
             }
         }
@@ -857,9 +853,20 @@ export function useTransferProgress() {
                 })()
 
                 const s = opts.summarizeItems(castItems, cur)
-                const nextStatus = (isTerminalTranscodeStatus(s.status) && !hasAllTrackedItems)
+                const rawNextStatus = (isTerminalTranscodeStatus(s.status) && !hasAllTrackedItems)
                     ? 'running'
                     : s.status
+
+                // When no matching jobs exist yet (server hasn't processed the ingest),
+                // show 'queued' instead of 'unknown' — the task is waiting for work, not broken.
+                const noMatchingJobs = !castItems.length || castItems.every(it => {
+                    const jobs = latestJobsForSummary((it as any)?.jobs || [])
+                    return !jobs.some(j => kindMatchesForSummary(j?.kind, cur.jobKind ?? 'any'))
+                })
+                const nextStatus = (rawNextStatus === 'unknown' && noMatchingJobs)
+                    ? 'queued' as TranscodeStatus
+                    : rawNextStatus
+
                 cur.status = nextStatus
                 const prevProgress = clampPct(cur.progress)
                 let nextProgress = clampPct(s.progress)

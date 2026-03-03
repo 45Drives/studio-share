@@ -1,128 +1,119 @@
 <!-- src/renderer/components/TransferProgressDock.vue -->
 <template>
-    <div v-if="state.open" class="fixed bottom-4 right-4 z-50 w-1/3">
-        <div class="rounded-md border border-default bg-default shadow-xl overflow-hidden">
-            <!-- header -->
-            <div class="flex items-center justify-between bg-primary px-3 py-2 border-b border-default">
+    <!-- Single wrapper: tab + panel slide together -->
+    <div class="drawer-wrapper" :class="{ 'drawer-wrapper--open': state.open }">
+
+        <!-- Tab (absolutely positioned on the left edge of the wrapper) -->
+        <button
+            class="drawer-tab"
+            @click="setOpen(!state.open)"
+            :title="state.open ? 'Close transfers panel' : 'Open transfers panel'"
+        >
+            <svg class="drawer-tab-chevron" :class="{ 'drawer-tab-chevron--open': state.open }"
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd"
+                    d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+                    clip-rule="evenodd" />
+            </svg>
+            <span class="drawer-tab-text">Transfers</span>
+            <span v-if="activeCount" class="drawer-tab-badge">{{ activeCount }}</span>
+        </button>
+
+        <!-- Panel -->
+        <div class="drawer-panel">
+            <div class="drawer-inner">
+
+            <!-- Drawer header -->
+            <div class="drawer-header">
                 <div class="min-w-0">
                     <div class="font-semibold text-sm">
                         Transfers
-                        <span v-if="activeCount" class="opacity-70">({{ activeCount }})</span>
+                        <span v-if="activeCount" class="opacity-70">({{ activeCount }} active)</span>
                     </div>
                     <div class="text-xs opacity-70 truncate" v-if="hasActive">In progress…</div>
                     <div class="text-xs opacity-70" v-else>Idle</div>
                 </div>
-
                 <div class="flex items-center gap-2">
                     <button class="btn btn-secondary px-2 py-1 text-xs" @click="clearFinished">Clear finished</button>
-                    <button v-if="activeCount > 0" class="btn btn-secondary px-2 py-1 text-xs" @click="toggleMinimize">
-                        {{ state.minimized ? 'Expand' : 'Minimize' }}
-                    </button>
-                    <button class="btn btn-secondary px-2 py-1 text-xs" @click="setOpen(false)"
-                        title="Hide">Hide</button>
+                    <button class="btn btn-secondary px-2 py-1 text-xs" @click="setOpen(false)">Close</button>
                 </div>
             </div>
 
-            <!-- body -->
-            <div v-show="!state.minimized" class="max-h-[22rem] overflow-auto">
-                <div v-if="!state.tasks.length" class="px-3 py-3 text-sm opacity-70">
-                    No active transfers.
+            <!-- Drawer body (scrollable) -->
+            <div class="drawer-body">
+                <div v-if="!state.tasks.length" class="px-4 py-6 text-sm opacity-70 text-center">
+                    No transfers.
                 </div>
 
-                <!-- OUTER GROUPS (Link / Upload batches) -->
-                <div v-for="g in groups" :key="g.key" class="border-t border-default">
+                <!-- OUTER GROUPS -->
+                <div v-for="g in groups" :key="g.key" class="drawer-group">
                     <!-- group header -->
-                    <div class="px-3 py-2 bg-accent">
-                        <div class="flex justify-between gap-2 items-start">
-                            <div class="min-w-0">
-                                <div class="text-sm font-semibold truncate" :title="g.title">
-                                    {{ g.title }}
-                                </div>
-                                <div v-if="g.subtitle" class="text-xs opacity-70 truncate" :title="g.subtitle">
-                                    {{ g.subtitle }}
-                                </div>
-                            </div>
-
-                            <button class="btn btn-secondary px-2 py-1 text-xs flex-shrink-0"
-                                @click="dismissGroup(g.key)">
-                                Dismiss all
-                            </button>
+                    <div class="drawer-group-header">
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold truncate" :title="g.title">{{ g.title }}</div>
+                            <div v-if="g.subtitle" class="text-xs opacity-70 truncate" :title="g.subtitle">{{ g.subtitle }}</div>
                         </div>
+                        <button class="btn btn-secondary px-2 py-1 text-xs flex-shrink-0" @click="dismissGroup(g.key)">
+                            Dismiss all
+                        </button>
                     </div>
 
-                    <!-- FILE GROUPS inside the batch -->
-                    <div v-for="fg in g.files" :key="fg.key" class="border-t border-default">
-                        <!-- file header -->
-                        <div class="px-3 py-2">
+                    <!-- FILE GROUPS -->
+                    <div v-for="fg in g.files" :key="fg.key" class="drawer-file-group">
+                        <div class="drawer-file-header">
                             <div class="text-sm font-semibold truncate" :title="fg.fileTitle">{{ fg.fileTitle }}</div>
-                            <div v-if="fg.fileSubtitle" class="text-xs opacity-70 truncate" :title="fg.fileSubtitle">
-                                {{ fg.fileSubtitle }}
-                            </div>
+                            <div v-if="fg.fileSubtitle" class="text-xs opacity-70 truncate" :title="fg.fileSubtitle">{{ fg.fileSubtitle }}</div>
                         </div>
 
-                        <!-- TASKS under this file -->
-                        <div v-for="t in fg.tasks" :key="t.taskId" class="px-3 pb-3">
+                        <!-- TASKS -->
+                        <div v-for="t in fg.tasks" :key="t.taskId" class="drawer-task">
                             <div class="flex items-start justify-between gap-2">
                                 <div class="min-w-0 text-left">
                                     <div class="text-xs font-semibold truncate" :title="taskLabel(t)">
                                         {{ taskLabel(t) }}
                                     </div>
-
-                                    <div class="text-xs opacity-70 truncate" v-if="t.detail"
-                                        :title="String(t.detail).trim()">
+                                    <div class="text-xs opacity-70 truncate" v-if="t.detail" :title="String(t.detail).trim()">
                                         {{ String(t.detail).trim() }}
                                     </div>
-
                                 </div>
 
-                                <div class="flex items-center gap-2 flex-shrink-0">
+                                <div class="flex items-center gap-1 flex-shrink-0">
                                     <button
                                         v-if="t.kind === 'upload' && (t.status === 'uploading' || t.status === 'queued')"
                                         class="btn btn-secondary px-2 py-1 text-xs" @click="cancelUpload(t.taskId)">
                                         Cancel
                                     </button>
-
                                     <button class="btn btn-secondary px-2 py-1 text-xs" @click="removeTask(t.taskId)">
                                         Dismiss
                                     </button>
                                 </div>
                             </div>
 
-                            <progress class="mt-2 w-full h-2 rounded-lg overflow-hidden"
-                                :value="t.progress || 0"
-                                max="100" />
+                            <progress class="mt-2 w-full h-1.5 rounded-lg overflow-hidden"
+                                :value="t.progress || 0" max="100" />
 
-                            <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-1">
-                                <span><b>Status:</b> {{ t.status }}</span>
-
-                                <span v-if="t.speed"><b>Est. Speed:</b> {{ t.speed }}</span>
-                                <span v-if="t.eta"><b>Est. ETA:</b> {{ t.eta }}</span>
-
+                            <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-0.5">
+                                <span class="drawer-status-badge" :class="statusClass(t)">
+                                    {{ statusLabel(t) }}
+                                </span>
+                                <span v-if="t.speed"><b>Speed:</b> {{ t.speed }}</span>
+                                <span v-if="t.eta"><b>ETA:</b> {{ t.eta }}</span>
                                 <span><b>Progress:</b> {{ Math.round(t.progress || 0) }}%</span>
                             </div>
 
                             <div v-if="t.error" class="mt-1 text-xs text-red-400">
-                                {{ t.error }}
+                                <details class="cursor-pointer">
+                                    <summary class="select-none">{{ errorSummary(t.error) }}</summary>
+                                    <pre class="mt-1 whitespace-pre-wrap break-all opacity-80 max-h-32 overflow-y-auto text-[11px] leading-tight">{{ t.error }}</pre>
+                                </details>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- minimized -->
-            <div v-show="state.minimized" class="px-3 py-2 text-xs opacity-80">
-                <span v-if="activeCount">{{ activeCount }} active transfer(s)</span>
-                <span v-else>No active transfers</span>
-            </div>
         </div>
-    </div>
-
-    <!-- reopen button -->
-    <button v-else class="fixed bottom-4 right-4 z-50 btn btn-secondary px-3 py-2 text-xs shadow-xl"
-        @click="setOpen(true)">
-        Transfers
-        <span v-if="activeCount" class="ml-1 opacity-70">({{ activeCount }})</span>
-    </button>
+    </div>  <!-- /drawer-panel -->
+    </div>  <!-- /drawer-wrapper -->
 </template>
 
 <script setup lang="ts">
@@ -133,7 +124,6 @@ const {
     state,
     hasActive,
     activeCount,
-    toggleMinimize,
     setOpen,
     removeTask,
     clearFinished,
@@ -154,6 +144,43 @@ function isActiveTask(t: any) {
     )
 }
 
+/** Status priority for sorting: lower = more urgent */
+function statusPriority(t: any): number {
+    const s = String(t?.status || '').toLowerCase()
+    if (s === 'uploading' || s === 'running') return 0
+    if (s === 'queued') return 1
+    if (s === 'unknown') return 2
+    if (s === 'error' || s === 'failed') return 3
+    if (s === 'done') return 4
+    if (s === 'canceled') return 5
+    return 6
+}
+
+/** Human-readable status labels */
+function statusLabel(t: any): string {
+    const s = String(t?.status || '').toLowerCase()
+    if (s === 'uploading') return 'Uploading'
+    if (s === 'running') return 'Running'
+    if (s === 'queued') return 'Queued'
+    if (s === 'unknown') return 'Checking…'
+    if (s === 'done') return 'Complete'
+    if (s === 'failed' || s === 'error') return 'Failed'
+    if (s === 'canceled') return 'Canceled'
+    return s || 'Unknown'
+}
+
+/** CSS class for status badge */
+function statusClass(t: any): string {
+    const s = String(t?.status || '').toLowerCase()
+    if (s === 'uploading' || s === 'running') return 'drawer-status--active'
+    if (s === 'queued') return 'drawer-status--queued'
+    if (s === 'unknown') return 'drawer-status--queued'
+    if (s === 'done') return 'drawer-status--done'
+    if (s === 'failed' || s === 'error') return 'drawer-status--error'
+    if (s === 'canceled') return 'drawer-status--canceled'
+    return ''
+}
+
 function taskLabel(t: any) {
     if (t?.kind === 'upload') return 'Uploading'
     if (t?.kind === 'transcode') {
@@ -163,6 +190,29 @@ function taskLabel(t: any) {
         return 'Generating transcodes'
     }
     return t?.title || 'Task'
+}
+
+/** Extract a short human-readable summary from a (potentially long) error string */
+function errorSummary(raw: any): string {
+    const s = String(raw || '').trim()
+    if (!s) return 'Unknown error'
+    // Look for the last meaningful ffmpeg error line
+    const patterns = [
+        /Conversion failed!?/,
+        /Error initializing output stream.*/,
+        /Could not write header.*/,
+        /Unable to map stream.*/,
+        /No such file or directory/,
+        /Invalid argument/,
+    ]
+    for (const re of patterns) {
+        const m = re.exec(s)
+        if (m) return m[0].slice(0, 120)
+    }
+    // Fallback: last line that isn't blank
+    const lines = s.split('\n').map(l => l.trim()).filter(Boolean)
+    const last = lines[lines.length - 1] || s
+    return last.length > 120 ? last.slice(0, 117) + '…' : last
 }
 
 type FileGroup = {
@@ -182,50 +232,34 @@ type OuterGroup = {
 
 function outerKeyForTask(t: any) {
     const c = t?.context || {}
-    // best: explicit stable id shared by upload+transcode
     if (c.groupId) return String(c.groupId)
-    // next best: link url
     if (c.linkUrl) return `link:${c.linkUrl}`
-    // uploads: bucket by destDir if provided
     if (c.source === 'upload' && c.destDir) return `upload:${c.destDir}`
-    // fallback: single file
     if (c.file) return `file:${c.file}`
-    // last resort
     return `task:${t.taskId}`
 }
 
 function outerTitleForBucket(bucketCtx: any, tasks: any[]) {
     const c = bucketCtx || {}
 
-    // STRONG signal: uploads always win
     if (c.source === 'upload') {
         const dest = (c.destDir && String(c.destDir).trim()) || ''
-        return {
-            title: 'Upload',
-            subtitle: dest || undefined,
-        }
+        return { title: 'Upload', subtitle: dest || undefined }
     }
 
-    // STRONG signal: explicit link
     if (c.source === 'link') {
         const title = (c.linkTitle && String(c.linkTitle).trim()) || ''
         const url = (c.linkUrl && String(c.linkUrl).trim()) || ''
         return {
-            title: title ? title : (url ? 'Link' : 'Link'),
+            title: title ? title : 'Link',
             subtitle: title && url ? url : url || undefined,
         }
     }
 
-    // WEAK inference (only if no upload context exists anywhere)
     const anyUpload = tasks.some(t => t?.context?.source === 'upload')
     if (!anyUpload) {
         const anyLink = tasks.find(t => t?.context?.linkUrl)?.context?.linkUrl
-        if (anyLink) {
-            return {
-                title: 'Link',
-                subtitle: String(anyLink),
-            }
-        }
+        if (anyLink) return { title: 'Link', subtitle: String(anyLink) }
     }
 
     return { title: 'Transfers' }
@@ -234,7 +268,6 @@ function outerTitleForBucket(bucketCtx: any, tasks: any[]) {
 function fileKeyForTask(t: any) {
     const c = t?.context || {}
     if (c.file) return `file:${c.file}`
-    // if a task still only has files[], only split when exactly 1
     const files = Array.isArray(c.files) ? c.files : []
     if (files.length === 1) return `file:${files[0]}`
     return 'file:__multi__'
@@ -248,13 +281,11 @@ function fileHeaderForKey(fileKey: string, bucketCtx: any) {
             subtitle: files.length > 1 ? `${files.length} files` : undefined,
         }
     }
-
     const file = fileKey.startsWith('file:') ? fileKey.slice(5) : fileKey
     return { title: basename(file), subtitle: file }
 }
 
 const groups = computed<OuterGroup[]>(() => {
-    // 1) bucket tasks by outer group
     const buckets = new Map<string, { ctx: any; tasks: any[] }>()
 
     for (const t of state.tasks as any[]) {
@@ -263,11 +294,9 @@ const groups = computed<OuterGroup[]>(() => {
         buckets.get(k)!.tasks.push(t)
     }
 
-    // 2) build per-file groups inside each bucket
     const out: OuterGroup[] = []
 
     for (const [key, bucket] of buckets.entries()) {
-        // pick a representative ctx (prefer one that has source/linkUrl/destDir)
         const rep =
             bucket.tasks.find(t => t?.context?.source)?.context ||
             bucket.tasks.find(t => t?.context?.linkUrl)?.context ||
@@ -276,18 +305,12 @@ const groups = computed<OuterGroup[]>(() => {
             {}
 
         const hdr = outerTitleForBucket(rep, bucket.tasks)
-
         const fileGroups = new Map<string, FileGroup>()
 
         function ensureFileGroup(fk: string) {
             if (!fileGroups.has(fk)) {
                 const fh = fileHeaderForKey(fk, rep)
-                fileGroups.set(fk, {
-                    key: fk,
-                    fileTitle: fh.title,
-                    fileSubtitle: fh.subtitle,
-                    tasks: [],
-                })
+                fileGroups.set(fk, { key: fk, fileTitle: fh.title, fileSubtitle: fh.subtitle, tasks: [] })
             }
             return fileGroups.get(fk)!
         }
@@ -296,7 +319,7 @@ const groups = computed<OuterGroup[]>(() => {
             ensureFileGroup(fileKeyForTask(t)).tasks.push(t)
         }
 
-        // sort tasks per file: transcode first, then upload; within transcode prefer proxy then hls (or vice versa)
+        // Sort tasks within each file group by status priority, then kind, then start time
         const taskOrder = (t: any) => {
             if (t.kind === 'transcode') {
                 const jk = String(t?.jobKind || '').toLowerCase()
@@ -310,6 +333,10 @@ const groups = computed<OuterGroup[]>(() => {
 
         const filesArr = Array.from(fileGroups.values()).map(fg => {
             fg.tasks.sort((a, b) => {
+                // Primary: status priority (active first, then queued, then done)
+                const sp = statusPriority(a) - statusPriority(b)
+                if (sp !== 0) return sp
+                // Secondary: kind order
                 const d = taskOrder(a) - taskOrder(b)
                 if (d !== 0) return d
                 return Number(a?.startedAt || 0) - Number(b?.startedAt || 0)
@@ -317,11 +344,14 @@ const groups = computed<OuterGroup[]>(() => {
             return fg
         })
 
-        // active file groups first
+        // Sort file groups: active first, then by best task status
         filesArr.sort((a, b) => {
             const aAct = a.tasks.some(isActiveTask)
             const bAct = b.tasks.some(isActiveTask)
             if (aAct !== bAct) return aAct ? -1 : 1
+            const aBest = Math.min(...a.tasks.map(statusPriority))
+            const bBest = Math.min(...b.tasks.map(statusPriority))
+            if (aBest !== bBest) return aBest - bBest
             return String(a.fileTitle).localeCompare(String(b.fileTitle))
         })
 
@@ -334,11 +364,14 @@ const groups = computed<OuterGroup[]>(() => {
         })
     }
 
-    // active outer groups first, newest first
+    // Sort outer groups: active first, then by best task status, then newest
     out.sort((a, b) => {
         const aAct = a.tasksFlat.some(isActiveTask)
         const bAct = b.tasksFlat.some(isActiveTask)
         if (aAct !== bAct) return aAct ? -1 : 1
+        const aBest = Math.min(...a.tasksFlat.map(statusPriority))
+        const bBest = Math.min(...b.tasksFlat.map(statusPriority))
+        if (aBest !== bBest) return aBest - bBest
         const aNew = Math.max(...a.tasksFlat.map(t => Number(t?.startedAt || 0)), 0)
         const bNew = Math.max(...b.tasksFlat.map(t => Number(t?.startedAt || 0)), 0)
         return bNew - aNew
@@ -353,3 +386,248 @@ function dismissGroup(groupKey: string) {
     for (const t of g.tasksFlat) removeTask(t.taskId)
 }
 </script>
+
+<style lang="css" scoped>
+/* ── Wrapper (slides tab + panel as one unit) ──────────── */
+.drawer-wrapper {
+    position: fixed;
+    top: 4rem;   /* below app header */
+    right: 0;
+    bottom: 0;
+    width: 26rem;
+    z-index: 50;
+    overflow: visible;          /* let tab overflow to the left */
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.drawer-wrapper--open {
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* ── Drawer Tab ────────────────────────────────────────── */
+.drawer-tab {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 0.75rem);   /* offset from scrollbar when closed */
+    transform: translateY(-50%);
+    z-index: 2;
+    pointer-events: auto;
+
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 0.85rem 0.45rem;
+    background: var(--btn-primary-fill);
+    color: white;
+    border: none;
+    border-radius: 0.5rem 0 0 0.5rem;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.18);
+    user-select: none;
+
+    transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.drawer-wrapper--open .drawer-tab {
+    right: 100%;   /* flush with panel edge when open */
+}
+
+.drawer-tab:hover {
+    background: var(--btn-primary-hover-fill);
+}
+
+.drawer-tab-chevron {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+    /* Default: pointing left (toward drawer open direction) */
+    transform: rotate(90deg);
+}
+
+.drawer-tab-chevron--open {
+    /* Flip to point right (toward close) */
+    transform: rotate(-90deg);
+}
+
+.drawer-tab-text {
+    white-space: nowrap;
+}
+
+.drawer-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.25);
+    font-size: 0.65rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+/* ── Drawer Panel ──────────────────────────────────────── */
+.drawer-panel {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.drawer-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--ui-panel-bg);
+    border-left: 1px solid var(--ui-panel-border);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+    color: #111827;
+}
+
+:is(.dark *) .drawer-inner,
+.drawer-inner:is(.dark *) {
+    color: #f3f4f6;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    background: var(--btn-primary-fill);
+    color: white;
+    border-bottom: 1px solid var(--ui-panel-border);
+    flex-shrink: 0;
+}
+
+/* ── Body ──────────────────────────────────────────────── */
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* ── Group ─────────────────────────────────────────────── */
+.drawer-group {
+    border-bottom: 1px solid var(--ui-panel-border);
+}
+
+.drawer-group-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.85rem;
+    background: color-mix(in srgb, var(--btn-primary-bg) 8%, var(--ui-panel-bg));
+}
+
+/* ── File Group ────────────────────────────────────────── */
+.drawer-file-group {
+    border-top: 1px solid color-mix(in srgb, var(--ui-panel-border) 50%, transparent);
+}
+
+.drawer-file-header {
+    padding: 0.4rem 0.85rem;
+}
+
+/* ── Task ──────────────────────────────────────────────── */
+.drawer-task {
+    padding: 0.35rem 0.85rem 0.65rem;
+}
+
+/* ── Progress bar ──────────────────────────────────────── */
+progress {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 0.375rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--btn-primary-bg) 18%, transparent);
+}
+
+progress::-webkit-progress-bar {
+    background: color-mix(in srgb, var(--btn-primary-bg) 18%, transparent);
+    border-radius: 999px;
+}
+
+progress::-webkit-progress-value {
+    background: var(--btn-primary-fill);
+    border-radius: 999px;
+}
+
+/* ── Status badges ─────────────────────────────────────── */
+.drawer-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+/* Dark-mode badge colors */
+.drawer-status--active {
+    background: color-mix(in srgb, #3b82f6 25%, transparent);
+    color: #1d4ed8;
+}
+
+.drawer-status--active:is(.dark *) {
+    color: #93c5fd;
+}
+
+.drawer-status--queued {
+    background: color-mix(in srgb, #a78bfa 20%, transparent);
+    color: #6d28d9;
+}
+
+.drawer-status--queued:is(.dark *) {
+    color: #c4b5fd;
+}
+
+.drawer-status--done {
+    background: color-mix(in srgb, #22c55e 20%, transparent);
+    color: #15803d;
+}
+
+.drawer-status--done:is(.dark *) {
+    color: #86efac;
+}
+
+.drawer-status--error {
+    background: color-mix(in srgb, #ef4444 20%, transparent);
+    color: #dc2626;
+}
+
+.drawer-status--error:is(.dark *) {
+    color: #fca5a5;
+}
+
+.drawer-status--canceled {
+    background: color-mix(in srgb, #f59e0b 18%, transparent);
+    color: #b45309;
+}
+
+.drawer-status--canceled:is(.dark *) {
+    color: #fcd34d;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .drawer-wrapper {
+        width: 100vw;
+    }
+}
+</style>

@@ -58,10 +58,30 @@ export async function fetchProgressForVersion(apiFetch: ApiFetch, assetVersionId
     }
 }
 
-// Fetch versions in parallel (simple + fine unless you have hundreds)
+// Fetch versions in a single batch request (avoids N individual HTTP calls)
 export async function fetchProgressVersionsBatch(apiFetch: ApiFetch, assetVersionIds: number[]): Promise<VersionProgressItem[]> {
     const ids = Array.from(new Set(assetVersionIds.map(Number).filter(n => Number.isFinite(n) && n > 0)))
     if (!ids.length) return []
+
+    // Try the batch endpoint first; fall back to individual fetches if it 404s
+    try {
+        const json = await apiFetch('/api/progress/versions/batch', {
+            method: 'POST',
+            body: JSON.stringify({ assetVersionIds: ids }),
+            parse: 'json',
+            suppressAuthRedirect: true,
+        })
+        if (json?.ok && Array.isArray(json.items)) {
+            return (json.items as any[]).map(it => ({
+                assetVersionId: Number(it.assetVersionId),
+                jobs: (it.jobs || []) as ProgressJob[],
+                summary: it.summary ?? summarizeJobs(it.jobs || []),
+            }))
+        }
+    } catch {
+        // Fallback: server may not have the batch route yet
+    }
+
     return Promise.all(ids.map(vId => fetchProgressForVersion(apiFetch, vId)))
 }
 

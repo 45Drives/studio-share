@@ -895,6 +895,10 @@ async function connectToServer() {
         });
 
         window.appLog?.info('login.success', { ip });
+
+        // Fire-and-forget: check for broadcaster package updates via API (runs in background)
+        checkBroadcasterUpdateInBackground(apiBase, token);
+
         to('dashboard');
     } catch (e: any) {
         window.appLog?.error('login.error', { error: e?.message });
@@ -911,6 +915,70 @@ onUnmounted(() => {
     licensePromptResolver?.(null)
     licensePromptResolver = null
 })
+
+/**
+ * Background check for houston-broadcaster package updates via the server API.
+ * Fires after login — never blocks the user. Shows a persistent notification
+ * with an "Install Update" action if a newer version is available.
+ */
+async function checkBroadcasterUpdateInBackground(apiBase: string, token: string) {
+    try {
+        const hdrs = { 'Authorization': `Bearer ${token}` };
+
+        const res = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, { headers: hdrs });
+        if (!res.ok) {
+            window.appLog?.warn('broadcaster-update-check.http-error', { status: res.status });
+            return;
+        }
+
+        const data = await res.json();
+        window.appLog?.info('broadcaster-update-check.result', data);
+
+        if (!data.updateAvailable) return;
+
+        // Show a persistent notification with an install button
+        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}`;
+        const notif = new Notification('Server Update Available', msg, 'warning', 'never');
+
+        notif.addAction('Install Update', async () => {
+            pushNotification(new Notification('Updating…', 'Installing broadcaster update on the server…', 'info', 4000));
+            try {
+                const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
+                    method: 'POST',
+                    headers: hdrs,
+                });
+                if (!installRes.ok) {
+                    const errBody = await installRes.json().catch(() => ({}));
+                    throw new Error((errBody as any)?.error || `HTTP ${installRes.status}`);
+                }
+                const installData = await installRes.json();
+                if (installData.updated) {
+                    pushNotification(new Notification(
+                        'Broadcaster Updated',
+                        `Updated from ${installData.oldVersion ?? '?'} to ${installData.newVersion ?? '?'}. The server will reconnect shortly.`,
+                        'success',
+                        8000
+                    ));
+                } else {
+                    pushNotification(new Notification(
+                        'No Update',
+                        installData.error || 'Already up to date.',
+                        'info',
+                        5000
+                    ));
+                }
+            } catch (err: any) {
+                window.appLog?.error('broadcaster-update-install.error', { error: err?.message });
+                pushNotification(new Notification('Update Failed', err?.message || 'Could not install update.', 'error', 8000));
+            }
+        }, true);
+
+        pushNotification(notif);
+    } catch (err: any) {
+        // Completely non-blocking — just log and move on
+        window.appLog?.warn('broadcaster-update-check.error', { error: err?.message });
+    }
+}
 </script>
 
 <style scoped>

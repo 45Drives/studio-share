@@ -502,7 +502,7 @@ function resetAll() {
 async function copyLink() {
 	if (!result.value) return
 	await navigator.clipboard.writeText(result.value.url)
-	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
+	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 
 function openInBrowser() {

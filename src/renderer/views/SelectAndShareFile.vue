@@ -1128,7 +1128,7 @@ async function runPreflight() {
             const message = msgParts.length
                 ? msgParts.join(' ')
                 : 'Transcode status changed for the selected files.'
-            pushNotification(new Notification('Transcode In Progress', message, 'info', 7000))
+            pushNotification(new Notification('Transcode In Progress', message, 'info', 7000, 'transcode-preflight'))
             lastPreflightNoticeKey.value = noticeKey
         } else if (!preflightProxyBlocked.value && !preflightWatermarkBlocked.value) {
             lastPreflightNoticeKey.value = ''
@@ -2186,7 +2186,7 @@ onMounted(async () => {
 async function copyLink() {
     if (!viewUrl.value) return
     await navigator.clipboard.writeText(viewUrl.value)
-    pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
+    pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 
 function openInBrowser() {

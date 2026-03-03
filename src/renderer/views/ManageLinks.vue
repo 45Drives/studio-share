@@ -492,7 +492,7 @@ function expiresClass(it: LinkItem) {
 async function copy(txt?: string | null) {
 	if (!txt) return
 	await navigator.clipboard.writeText(txt)
-	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000))
+	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 
 /* ------------------- table actions ------------------- */

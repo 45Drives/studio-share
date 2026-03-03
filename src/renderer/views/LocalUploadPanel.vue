@@ -109,6 +109,20 @@
 					<section v-show="step === 3" class="wizard-pane wizard-pane--fill">
 						<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
 
+						<!-- Overall progress summary -->
+						<div v-if="uploads.length" class="wizard-overall-progress">
+							<div class="flex items-center justify-between text-sm mb-1">
+								<span>
+									{{ uploadSummary.done }}/{{ uploadSummary.total }} completed
+									<template v-if="uploadSummary.active"> · {{ uploadSummary.active }} active</template>
+									<template v-if="uploadSummary.queued"> · {{ uploadSummary.queued }} queued</template>
+									<template v-if="uploadSummary.errors"> · {{ uploadSummary.errors }} failed</template>
+								</span>
+								<span class="text-muted">{{ uploadSummary.overallPct.toFixed(0) }}%</span>
+							</div>
+							<progress class="w-full h-2.5 rounded-lg overflow-hidden" :value="uploadSummary.overallPct" max="100"></progress>
+						</div>
+
 						<div class="wizard-step3-body">
 							<div class="wizard-table-shell wizard-table-shell--uploads">
 								<table class="min-w-full text-sm border border-default border-collapse text-left">
@@ -710,7 +724,8 @@ function waitForIngestAndStartTranscode(opts: {
 							'Ingest Failed',
 							`${payload?.error || 'Ingest failed.'}${requestSuffix}`,
 							'error',
-							8000
+							8000,
+							'ingest-error'
 						)
 					);
 				}
@@ -946,6 +961,10 @@ const hasRunOnce = computed(() =>
 function resetUploadState() {
 	uploads.value = []
 	isUploading.value = false
+	activeUploads.value = 0
+	completedSinceStart = 0
+	failedSinceStart = 0
+	if (batchNotifyTimer) { clearTimeout(batchNotifyTimer); batchNotifyTimer = null }
 	rafState.clear()
 }
 
@@ -1013,9 +1032,218 @@ const rafState = new Map<
 	{ p?: number; speed?: string | null; eta?: string | null; scheduled?: number }
 >()
 
+/** ── Concurrency-limited upload engine ─────────────────── */
+const MAX_CONCURRENT_UPLOADS = 3
+const activeUploads = ref(0)
+// Tracks cumulative completed count for batched notifications
+let completedSinceStart = 0
+let failedSinceStart = 0
+let batchNotifyTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleBatchNotification() {
+	if (batchNotifyTimer) return
+	batchNotifyTimer = setTimeout(() => {
+		batchNotifyTimer = null
+		const done = completedSinceStart
+		const failed = failedSinceStart
+		if (done > 0 && allTerminal.value) {
+			// Final summary notification
+			const parts: string[] = []
+			if (done > 0) parts.push(`${done} file${done === 1 ? '' : 's'} uploaded successfully`)
+			if (failed > 0) parts.push(`${failed} failed`)
+			pushNotification(
+				new Notification(
+					'Upload Batch Complete',
+					parts.join(', ') + '.',
+					failed > 0 ? 'warning' : 'success',
+					10000,
+					'upload-batch'
+				)
+			)
+		} else if (done > 0) {
+			// Intermediate batch notification (some still in progress)
+			pushNotification(
+				new Notification(
+					'Uploads Progressing',
+					`${done} file${done === 1 ? '' : 's'} uploaded so far${failed > 0 ? `, ${failed} failed` : ''}.`,
+					'info',
+					5000,
+					'upload-batch'
+				)
+			)
+		}
+	}, 1500) // Debounce: wait 1.5s to batch notifications together
+}
+
+function uploadOneFile(
+	row: UploadRow,
+	watermarkRelPathForIngest: string,
+	onDone: () => void
+) {
+	row.status = 'uploading'
+	row.startedAt = row.startedAt ?? Date.now()
+	activeUploads.value++
+
+	const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
+	const destDirAbs = row.dest
+	const destFileAbs = joinPath(destDirAbs, row.name)
+
+	// Reuse pre-created dock task, or create one if missing
+	let taskId = row.dockTaskId || ''
+	if (taskId) {
+		// Update existing queued task to show it's now uploading
+		transfer.updateUpload(taskId, {
+			status: 'uploading',
+			progress: 0,
+		})
+		// Update the context with the groupId now that we have it
+		const existing = (transfer.state.tasks as any[]).find((t: any) => t.taskId === taskId)
+		if (existing?.context) {
+			existing.context.groupId = groupId
+		}
+	} else {
+		taskId = transfer.createUploadTask({
+			title: `Uploading: ${row.name}`,
+			detail: destDirAbs,
+			cancel: () => {
+				row.status = 'canceled'
+				try { row.ingestUnsub?.(); } catch { }
+				row.ingestUnsub = null
+				if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
+			},
+			context: {
+				source: 'upload',
+				groupId,
+				destDir: destDirAbs,
+				file: destFileAbs,
+			},
+		})
+		row.dockTaskId = taskId
+	}
+
+	const enableWatermark = watermarkAfterUpload.value && !!watermarkRelPathForIngest
+
+	window.electron.rsyncStart(
+		{
+			host: ssh?.server,
+			user: ssh?.username,
+			src: row.path,
+			destDir: row.dest,
+			port: serverPort,
+			keyPath: privateKeyPath,
+			transcodeProxy: transcodeProxyAfterUpload.value,
+			proxyQualities: proxyQualities.value.slice(),
+			watermark: enableWatermark,
+			watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
+			watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
+		},
+		p => {
+			if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
+
+			let pct: number | undefined =
+				typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
+
+			if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
+				pct = (p.bytesTransferred / row.size) * 100;
+			}
+
+			if (pct === undefined && typeof p.raw === 'string') {
+				const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
+				if (m) pct = parseFloat(m[1]);
+			}
+
+			updateRowProgress(row, pct, p.rate, p.eta);
+
+			transfer.updateUpload(taskId, {
+				status: 'uploading',
+				progress: typeof pct === 'number' ? pct : row.progress,
+				speed: p.rate ?? null,
+				eta: p.eta ?? null,
+			});
+		}
+	).then(({ id, done }) => {
+		row.rsyncId = id;
+		if (row.status === 'canceled') {
+			window.electron.rsyncCancel(id)
+		}
+
+		// Start listening for ingest -> fileId (so we can track transcode progress)
+		const stopIngestListener = waitForIngestAndStartTranscode({
+			uploadId: id,
+			rowName: row.name,
+			isVideo: videoExts.has(String(row.name || '').toLowerCase().split('.').pop() || ''),
+			wantProxy: transcodeProxyAfterUpload.value,
+			groupId,
+			destDir: destDirAbs,
+			destFileAbs,
+			watermarkRelPath: watermarkRelPathForIngest,
+		})
+		row.ingestUnsub = stopIngestListener
+
+		const cleanup = () => {
+			try { stopIngestListener?.(); } catch { }
+		};
+
+		done.then((res: any) => {
+			cleanup();
+			activeUploads.value = Math.max(0, activeUploads.value - 1)
+
+			if (res.ok) {
+				if (row.status === 'canceled') {
+					transfer.updateUpload(taskId, { status: 'canceled', completedAt: Date.now() })
+				} else {
+					row.status = 'done';
+					row.progress = 100;
+					transfer.finishUpload(taskId, true);
+				}
+
+				if (row.status === 'done') {
+					markUploaded(row.path, row.dest);
+					const end = Date.now();
+					const start = row.startedAt ?? end;
+					row.completedAt = end;
+					row.completedIn = formatDuration(end - start);
+					completedSinceStart++;
+					scheduleBatchNotification();
+				}
+			} else if (row.status !== 'canceled') {
+				row.status = 'error';
+				row.error = res.error || 'rsync failed';
+				transfer.finishUpload(taskId, false, res.error || 'rsync failed');
+				failedSinceStart++;
+				scheduleBatchNotification();
+			}
+
+			onDone();
+		}).catch((err: any) => {
+			cleanup();
+			activeUploads.value = Math.max(0, activeUploads.value - 1)
+
+			if (row.status !== 'canceled') {
+				row.status = 'error';
+				row.error = err?.message || String(err);
+				transfer.finishUpload(taskId, false, err?.message || 'rsync failed');
+				failedSinceStart++;
+				scheduleBatchNotification();
+			}
+
+			onDone();
+		});
+	}).catch((err: any) => {
+		// rsyncStart itself failed (couldn't even start the process)
+		activeUploads.value = Math.max(0, activeUploads.value - 1)
+		row.status = 'error';
+		row.error = err?.message || 'Failed to start upload';
+		failedSinceStart++;
+		scheduleBatchNotification();
+		onDone();
+	});
+}
+
 async function startUploads() {
 	if (!uploads.value.length) uploads.value = prepareRows();
-	let startedAny = false
+	completedSinceStart = 0
+	failedSinceStart = 0
 	let watermarkRelPathForIngest = ''
 
 	if (watermarkAfterUpload.value) {
@@ -1082,154 +1310,56 @@ async function startUploads() {
 		}
 	}
 
-	for (const row of uploads.value) {
-		// Ignore rows that are not queued or already uploaded
-		if (row.status !== 'queued' || row.alreadyUploaded) continue;
-
-		row.status = 'uploading';
-		row.startedAt = row.startedAt ?? Date.now();
-		isUploading.value = true
-		startedAny = true
-
-		const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
-
-		// Build a stable per-row absolute destination path for grouping + display
-		const destDirAbs = row.dest // already normalizedDest like "/tank/Local Uploads"
-		const destFileAbs = joinPath(destDirAbs, row.name)
-
-		const taskId = transfer.createUploadTask({
-			title: `Uploading: ${row.name}`,
-			detail: destDirAbs,
-			cancel: () => {
-				row.status = 'canceled'
-				try { row.ingestUnsub?.(); } catch { }
-				row.ingestUnsub = null
-				if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
-			},
-			context: {
-				source: 'upload',
-				groupId,
-				destDir: destDirAbs,
-				file: destFileAbs,
-			},
-		})
-		row.dockTaskId = taskId
-
-		const enableWatermark = watermarkAfterUpload.value && !!watermarkRelPathForIngest
-		const { id, done } = await window.electron.rsyncStart(
-			{
-				host: ssh?.server,
-				user: ssh?.username,
-				src: row.path,
-				destDir: row.dest,
-				port: serverPort,
-				keyPath: privateKeyPath,
-				transcodeProxy: transcodeProxyAfterUpload.value,
-				proxyQualities: proxyQualities.value.slice(),
-				watermark: enableWatermark,
-				watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
-				watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
-			},
-			p => {
-				if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
-
-				let pct: number | undefined =
-					typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
-
-				if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
-					pct = (p.bytesTransferred / row.size) * 100;
-				}
-
-				if (pct === undefined && typeof p.raw === 'string') {
-					const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
-					if (m) pct = parseFloat(m[1]);
-				}
-
-				updateRowProgress(row, pct, p.rate, p.eta);
-
-				transfer.updateUpload(taskId, {
-					status: 'uploading',
-					progress: typeof pct === 'number' ? pct : row.progress,
-					speed: p.rate ?? null,
-					eta: p.eta ?? null,
-				});
-			}
-		);
-
-		row.rsyncId = id;
-		if (row.status === 'canceled') {
-			window.electron.rsyncCancel(id)
-		}
-
-		// Start listening for ingest -> fileId (so we can track transcode progress)
-		const stopIngestListener = waitForIngestAndStartTranscode({
-			uploadId: id,
-			rowName: row.name,
-			isVideo: videoExts.has(String(row.name || '').toLowerCase().split('.').pop() || ''),
-			wantProxy: transcodeProxyAfterUpload.value,
-			groupId,
-			destDir: destDirAbs,
-			destFileAbs,
-			watermarkRelPath: watermarkRelPathForIngest,
-		})
-		row.ingestUnsub = stopIngestListener
-
-		// Ensure we clean up no matter what
-		const cleanup = () => {
-			try { stopIngestListener?.(); } catch { }
-		};
-
-		done.then((res: any) => {
-			cleanup();
-
-			if (res.ok) {
-				if (row.status === 'canceled') {
-					transfer.updateUpload(taskId, { status: 'canceled', completedAt: Date.now() })
-				} else {
-					row.status = 'done';
-					row.progress = 100;
-					transfer.finishUpload(taskId, true);
-				}
-
-				if (row.status === 'done') {
-					markUploaded(row.path, row.dest);
-					const end = Date.now();
-					const start = row.startedAt ?? end;
-					row.completedAt = end;
-					row.completedIn = formatDuration(end - start);
-
-					pushNotification(
-						new Notification('Upload Completed', `File was uploaded successfully: ${row.name}.`, 'success', 8000)
-					);
-				}
-			} else if (row.status !== 'canceled') {
-				row.status = 'error';
-				row.error = res.error || 'rsync failed';
-				transfer.finishUpload(taskId, false, res.error || 'rsync failed');
-
-				pushNotification(
-					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
-				);
-			}
-		}).catch((err: any) => {
-			cleanup();
-			isUploading.value = false;
-
-			if (row.status !== 'canceled') {
-				row.status = 'error';
-				row.error = err?.message || String(err);
-				transfer.finishUpload(taskId, false, err?.message || 'rsync failed');
-
-				pushNotification(
-					new Notification('Upload Failed', `File upload failed: ${row.name}.`, 'error', 8000)
-				);
-			}
-		});
-	}
-
-	if (!startedAny) {
+	// Build the queue of rows that need uploading
+	const queue = uploads.value.filter(r => r.status === 'queued' && !r.alreadyUploaded)
+	if (!queue.length) {
 		isUploading.value = false
+		return
 	}
+
+	// Pre-create dock tasks for ALL queued items so they're visible immediately
+	for (const row of queue) {
+		if (!row.dockTaskId) {
+			const destDirAbs = row.dest
+			const destFileAbs = joinPath(destDirAbs, row.name)
+			const taskId = transfer.createUploadTask({
+				title: `Queued: ${row.name}`,
+				detail: destDirAbs,
+				cancel: () => {
+					row.status = 'canceled'
+					try { row.ingestUnsub?.(); } catch { }
+					row.ingestUnsub = null
+					if (row.rsyncId) window.electron.rsyncCancel(row.rsyncId)
+				},
+				context: {
+					source: 'upload',
+					destDir: destDirAbs,
+					file: destFileAbs,
+				},
+			})
+			row.dockTaskId = taskId
+		}
+	}
+
+	isUploading.value = true
+	let queueIdx = 0
+
+	function drainQueue() {
+		while (activeUploads.value < MAX_CONCURRENT_UPLOADS && queueIdx < queue.length) {
+			const row = queue[queueIdx++]
+			if (row.status !== 'queued') continue // may have been canceled while waiting
+			uploadOneFile(row, watermarkRelPathForIngest, () => {
+				// When a file finishes, try to start the next queued one
+				drainQueue()
+				// Check if everything is finished
+				if (activeUploads.value === 0 && queueIdx >= queue.length) {
+					isUploading.value = false
+				}
+			})
+		}
+	}
+
+	drainQueue()
 }
 
 
@@ -1248,6 +1378,28 @@ const allDone = computed(() =>
 	uploads.value.length > 0 &&
 	uploads.value.every(u => u.status === 'done' || u.status === 'canceled')
 )
+
+/** ── Overall progress summary ──────────────────────────── */
+const uploadSummary = computed(() => {
+	const rows = uploads.value
+	const total = rows.length
+	const done = rows.filter(u => u.status === 'done').length
+	const active = rows.filter(u => u.status === 'uploading').length
+	const queued = rows.filter(u => u.status === 'queued').length
+	const errors = rows.filter(u => u.status === 'error').length
+	const canceled = rows.filter(u => u.status === 'canceled').length
+
+	// Weighted overall progress: done files count as 100%
+	let weightedPct = 0
+	for (const u of rows) {
+		if (u.status === 'done' || u.status === 'canceled') weightedPct += 100
+		else if (u.status === 'uploading') weightedPct += (u.progress || 0)
+		// queued/error = 0
+	}
+	const overallPct = total > 0 ? weightedPct / total : 0
+
+	return { total, done, active, queued, errors, canceled, overallPct }
+})
 
 function goBack() {
 	// router.push({ name: 'dashboard' })
@@ -1377,6 +1529,33 @@ function goBack() {
 
 .wizard-step3-body {
 	@apply flex flex-col flex-1 min-h-0 gap-3 overflow-y-auto pr-1;
+}
+
+.wizard-overall-progress {
+	@apply shrink-0 px-3 py-2 rounded-md border;
+	border-color: color-mix(in srgb, var(--btn-primary-bg) 28%, #4f5160);
+	background: color-mix(in srgb, var(--btn-primary-bg) 6%, transparent);
+}
+
+.wizard-overall-progress progress {
+	appearance: none;
+	border: none;
+}
+
+.wizard-overall-progress progress::-webkit-progress-bar {
+	background: color-mix(in srgb, var(--btn-primary-bg) 10%, #e4e7ec);
+	border-radius: 0.5rem;
+}
+
+.dark .wizard-overall-progress progress::-webkit-progress-bar {
+	background: color-mix(in srgb, var(--btn-primary-bg) 14%, #2c2f3a);
+	border-radius: 0.5rem;
+}
+
+.wizard-overall-progress progress::-webkit-progress-value {
+	background: var(--btn-primary-fill);
+	border-radius: 0.5rem;
+	transition: width 0.3s ease;
 }
 
 .advanced-video-card {
