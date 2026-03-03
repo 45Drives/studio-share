@@ -90,6 +90,7 @@
                             </div>
 
                             <progress class="mt-2 w-full h-1.5 rounded-lg overflow-hidden"
+                                :class="t.status === 'done' ? 'progress-done' : 'progress-active'"
                                 :value="t.progress || 0" max="100" />
 
                             <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-0.5">
@@ -547,23 +548,42 @@ function dismissGroup(groupKey: string) {
     padding: 0.35rem 0.85rem 0.65rem;
 }
 
-/* ── Progress bar ──────────────────────────────────────── */
+/* ── Progress bar (static colors — avoids repaints on theme change) ── */
 progress {
     appearance: none;
     -webkit-appearance: none;
     height: 0.375rem;
     border-radius: 999px;
     overflow: hidden;
-    background: color-mix(in srgb, var(--btn-primary-bg) 18%, transparent);
 }
 
-progress::-webkit-progress-bar {
-    background: color-mix(in srgb, var(--btn-primary-bg) 18%, transparent);
+/* In-progress: static blue */
+progress.progress-active {
+    background: rgba(59, 130, 246, 0.18);
+}
+
+progress.progress-active::-webkit-progress-bar {
+    background: rgba(59, 130, 246, 0.18);
     border-radius: 999px;
 }
 
-progress::-webkit-progress-value {
-    background: var(--btn-primary-fill);
+progress.progress-active::-webkit-progress-value {
+    background: #3b82f6;
+    border-radius: 999px;
+}
+
+/* Complete: static green */
+progress.progress-done {
+    background: rgba(34, 197, 94, 0.18);
+}
+
+progress.progress-done::-webkit-progress-bar {
+    background: rgba(34, 197, 94, 0.18);
+    border-radius: 999px;
+}
+
+progress.progress-done::-webkit-progress-value {
+    background: #22c55e;
     border-radius: 999px;
 }
 

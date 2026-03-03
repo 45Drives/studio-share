@@ -1346,6 +1346,28 @@ async function startUploads() {
 	isUploading.value = true
 	let queueIdx = 0
 
+	// Persist queued items so they survive app restart
+	const enableWm = watermarkAfterUpload.value && !!watermarkRelPathForIngest
+	try {
+		window.electron.persistUploadQueue?.(
+			queue.map(row => ({
+				src: row.path,
+				fileName: row.name,
+				fileSize: row.size,
+				host: ssh?.server,
+				user: ssh?.username,
+				destDir: row.dest,
+				port: serverPort,
+				keyPath: privateKeyPath,
+				transcodeProxy: transcodeProxyAfterUpload.value,
+				proxyQualities: proxyQualities.value.slice(),
+				watermark: enableWm,
+				watermarkFileName: enableWm ? watermarkRelPathForIngest : undefined,
+				watermarkProxyQualities: enableWm ? proxyQualities.value.slice() : undefined,
+			}))
+		)
+	} catch { /* best-effort */ }
+
 	function drainQueue() {
 		while (activeUploads.value < MAX_CONCURRENT_UPLOADS && queueIdx < queue.length) {
 			const row = queue[queueIdx++]

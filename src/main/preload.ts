@@ -72,6 +72,40 @@ export type ElectronApi = {
   ) => Promise<{ id: string; done: Promise<RsyncResult> }>
 
   rsyncCancel: (id: string) => void
+
+  // Persisted uploads (detached rsync)
+  listPersistedUploads: () => Promise<Array<{
+    id: string
+    fileName: string
+    fileSize?: number
+    host: string
+    destDir: string
+    startedAt: number
+    status: string
+  }>>
+
+  /** Subscribe to progress for an already-running detached rsync */
+  listenUploadProgress: (id: string, onProgress: (p: RsyncProgress) => void) => () => void
+
+  /** Persist queued upload items so they survive app restart */
+  persistUploadQueue: (items: Array<{
+    src: string
+    fileName: string
+    fileSize?: number
+    host: string
+    user: string
+    destDir: string
+    port?: number
+    keyPath?: string
+    shareRoot?: string
+    knownHostsPath?: string
+    transcodeProxy?: boolean
+    proxyQualities?: string[]
+    watermark?: boolean
+    watermarkFileName?: string
+    watermarkProxyQualities?: string[]
+    noIngest?: boolean
+  }>) => Promise<void>
 }
 
 /** ===== Implementation ===== */
@@ -120,6 +154,19 @@ const api: ElectronApi = {
   },
 
   rsyncCancel: (id) => ipcRenderer.send('upload:cancel', { id }),
+
+  listPersistedUploads: () => ipcRenderer.invoke('upload:list-persisted'),
+
+  persistUploadQueue: (items) => ipcRenderer.invoke('upload:persist-queue', items),
+
+  listenUploadProgress: (id: string, onProgress: (p: RsyncProgress) => void) => {
+    const ch = `upload:progress:${id}`
+    const handler = (_: IpcRendererEvent, payload: RsyncProgress) => {
+      try { onProgress(payload) } catch {}
+    }
+    ipcRenderer.on(ch, handler)
+    return () => ipcRenderer.removeListener(ch, handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('electron', api)

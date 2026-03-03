@@ -1107,6 +1107,93 @@ export function useTransferProgress() {
     }
 
     /**
+     * Restore persisted (detached-rsync) uploads from the main process.
+     * These are uploads that were started in a previous session and may
+     * still be running in the background even though the renderer was closed.
+     */
+    async function restorePersistedUploads() {
+        try {
+            if (!window.electron?.listPersistedUploads) return
+            const list = await window.electron.listPersistedUploads()
+            if (!Array.isArray(list) || !list.length) return
+
+            for (const t of list) {
+                // Skip if we already have a task for this id
+                if (_state.tasks.some(x => x.taskId === t.id)) continue
+
+                // Also skip if we already have a task with the same file + destDir
+                // (prevents duplicates when renderer's own queue is still active)
+                if (_state.tasks.some(x =>
+                    x.kind === 'upload' &&
+                    x.context?.file === t.fileName &&
+                    x.context?.destDir === t.destDir
+                )) continue
+
+                const isQueued = t.status === 'queued'
+                const taskId = t.id
+                const task: TransferTask = {
+                    taskId,
+                    kind: 'upload',
+                    title: isQueued ? `Queued: ${t.fileName}` : `Uploading: ${t.fileName}`,
+                    detail: t.destDir,
+                    status: isQueued ? 'queued' : 'uploading',
+                    progress: 0,
+                    speed: null,
+                    eta: null,
+                    error: null,
+                    startedAt: t.startedAt || now(),
+                    cancel: () => {
+                        window.electron?.rsyncCancel?.(taskId)
+                    },
+                    context: {
+                        source: 'upload' as const,
+                        destDir: t.destDir,
+                        file: t.fileName,
+                    },
+                }
+                upsertTask(task)
+
+                // Subscribe to progress updates from the log-file tailer
+                // (for queued items, main will start sending progress once they begin)
+                if (window.electron?.listenUploadProgress) {
+                    const unsub = window.electron.listenUploadProgress(taskId, (p) => {
+                        let pct: number | undefined = typeof p.percent === 'number' ? p.percent : undefined
+                        if (pct === undefined && typeof p.bytesTransferred === 'number' && t.fileSize && t.fileSize > 0) {
+                            pct = (p.bytesTransferred / t.fileSize) * 100
+                        }
+                        updateUpload(taskId, {
+                            status: 'uploading',
+                            progress: typeof pct === 'number' ? pct : undefined,
+                            speed: p.rate ?? null,
+                            eta: p.eta ?? null,
+                        })
+                    })
+
+                    // Also listen for completion
+                    const dch = `upload:done:${taskId}`
+                    const doneHandler = (_ev: any, res: any) => {
+                        unsub()
+                        window.electron?.ipcRenderer?.removeListener?.(dch, doneHandler)
+                        if (res?.ok) {
+                            finishUpload(taskId, true)
+                        } else {
+                            finishUpload(taskId, false, res?.error || 'rsync failed')
+                        }
+                    }
+                    window.electron?.ipcRenderer?.on?.(dch, doneHandler)
+                }
+            }
+
+            // If we restored tasks, open the dock
+            if (_state.tasks.some(isActiveTask)) {
+                _state.open = true
+            }
+        } catch (e: any) {
+            window.appLog?.warn?.('transfer.restore.persisted.error', { error: e?.message || String(e) })
+        }
+    }
+
+    /**
      * Restore active transcodes from the server after reconnect / app restart.
      * Calls GET /api/progress/active to discover any queued or running jobs,
      * then creates transfer-dock tasks + polling for each (grouped by kind).
@@ -1200,5 +1287,6 @@ export function useTransferProgress() {
         startAssetVersionTranscodeTask,
         startPlaybackTranscodeTask,
         restoreActiveTranscodes,
+        restorePersistedUploads,
     }
 }

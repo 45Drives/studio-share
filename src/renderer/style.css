@@ -379,6 +379,297 @@
   --studio-logo-filter: saturate(1.25) hue-rotate(-2deg) brightness(1.04);
 }
 
+.theme-studio-grad-pink-orange {
+  --btn-primary-bg: #E84393;
+  --btn-primary-border: #E84393;
+  --btn-primary-hover-bg: #C7347D;
+  --btn-primary-hover-border: #C7347D;
+  --btn-primary-fill: linear-gradient(135deg, #E84393 0%, #F39C12 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #C7347D 0%, #D4880E 100%);
+
+  --btn-secondary-bg: #D0378A;
+  --btn-secondary-border: #D0378A;
+  --btn-secondary-hover-bg: #B02E74;
+  --btn-secondary-hover-border: #B02E74;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #d4a8b8);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #E84393 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #F39C12 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #ffe8f3 0%, #fff3e0 100%);
+  --studio-logo-filter: saturate(1.18) hue-rotate(-12deg) brightness(1.03);
+}
+
+.theme-studio-grad-red-blue-green {
+  --btn-primary-bg: #EF4444;
+  --btn-primary-border: #EF4444;
+  --btn-primary-hover-bg: #DC2626;
+  --btn-primary-hover-border: #DC2626;
+  --btn-primary-fill: linear-gradient(135deg, #EF4444 0%, #3B82F6 50%, #22C55E 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #DC2626 0%, #2563EB 50%, #16A34A 100%);
+
+  --btn-secondary-bg: #3B82F6;
+  --btn-secondary-border: #3B82F6;
+  --btn-secondary-hover-bg: #2563EB;
+  --btn-secondary-hover-border: #2563EB;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #b0c0d4);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #EF4444 16%, transparent), transparent 54%),
+    radial-gradient(68rem 30rem at 50% -14%, color-mix(in srgb, #3B82F6 12%, transparent), transparent 52%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #22C55E 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #ffecec 0%, #e8f0ff 50%, #e6fbe9 100%);
+  --studio-logo-filter: saturate(1.2) brightness(1.02);
+}
+
+.theme-studio-grad-red-orange-yellow {
+  --btn-primary-bg: #EF4444;
+  --btn-primary-border: #EF4444;
+  --btn-primary-hover-bg: #DC2626;
+  --btn-primary-hover-border: #DC2626;
+  --btn-primary-fill: linear-gradient(135deg, #EF4444 0%, #F97316 50%, #EAB308 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #DC2626 0%, #EA580C 50%, #CA8A04 100%);
+
+  --btn-secondary-bg: #F97316;
+  --btn-secondary-border: #F97316;
+  --btn-secondary-hover-bg: #EA580C;
+  --btn-secondary-hover-border: #EA580C;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #d4b8a0);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #EF4444 16%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #EAB308 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #ffecec 0%, #fff3e0 50%, #fffbe6 100%);
+  --studio-logo-filter: saturate(1.22) hue-rotate(-6deg) brightness(1.04);
+}
+
+.theme-studio-grad-yellow-orange-red {
+  --btn-primary-bg: #F59E0B;
+  --btn-primary-border: #F59E0B;
+  --btn-primary-hover-bg: #D97706;
+  --btn-primary-hover-border: #D97706;
+  --btn-primary-fill: linear-gradient(135deg, #EAB308 0%, #F97316 50%, #EF4444 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #CA8A04 0%, #EA580C 50%, #DC2626 100%);
+
+  --btn-secondary-bg: #EA580C;
+  --btn-secondary-border: #EA580C;
+  --btn-secondary-hover-bg: #C2410C;
+  --btn-secondary-hover-border: #C2410C;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #d4c0a0);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #EAB308 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #EF4444 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #fffbe6 0%, #fff3e0 50%, #ffecec 100%);
+  --studio-logo-filter: saturate(1.2) hue-rotate(-8deg) brightness(1.04);
+}
+
+.theme-studio-grad-orange-pink {
+  --btn-primary-bg: #F97316;
+  --btn-primary-border: #F97316;
+  --btn-primary-hover-bg: #EA580C;
+  --btn-primary-hover-border: #EA580C;
+  --btn-primary-fill: linear-gradient(135deg, #F97316 0%, #EC4899 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #EA580C 0%, #DB2777 100%);
+
+  --btn-secondary-bg: #DB2777;
+  --btn-secondary-border: #DB2777;
+  --btn-secondary-hover-bg: #BE185D;
+  --btn-secondary-hover-border: #BE185D;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #d4a8b8);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #F97316 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #EC4899 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #fff3e0 0%, #ffe8f3 100%);
+  --studio-logo-filter: saturate(1.18) hue-rotate(-10deg) brightness(1.03);
+}
+
+.theme-studio-grad-electric-violet {
+  --btn-primary-bg: #7C3AED;
+  --btn-primary-border: #7C3AED;
+  --btn-primary-hover-bg: #6D28D9;
+  --btn-primary-hover-border: #6D28D9;
+  --btn-primary-fill: linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #6D28D9 0%, #0891B2 100%);
+
+  --btn-secondary-bg: #0EA5E9;
+  --btn-secondary-border: #0EA5E9;
+  --btn-secondary-hover-bg: #0284C7;
+  --btn-secondary-hover-border: #0284C7;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #a0b8d4);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #7C3AED 20%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #06B6D4 18%, transparent), transparent 58%),
+    linear-gradient(145deg, #f0e8ff 0%, #e0f7fa 100%);
+  --studio-logo-filter: saturate(1.22) hue-rotate(4deg) brightness(1.03);
+}
+
+.theme-studio-grad-cinematic-gold {
+  --btn-primary-bg: #B45309;
+  --btn-primary-border: #B45309;
+  --btn-primary-hover-bg: #92400E;
+  --btn-primary-hover-border: #92400E;
+  --btn-primary-fill: linear-gradient(135deg, #92400E 0%, #D97706 45%, #F59E0B 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #78350F 0%, #B45309 45%, #D97706 100%);
+
+  --btn-secondary-bg: #A16207;
+  --btn-secondary-border: #A16207;
+  --btn-secondary-hover-bg: #854D0E;
+  --btn-secondary-hover-border: #854D0E;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 28%, #c8b898);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #92400E 16%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #F59E0B 18%, transparent), transparent 58%),
+    linear-gradient(145deg, #f5ece0 0%, #fff8e8 50%, #faebd0 100%);
+  --studio-logo-filter: saturate(1.15) hue-rotate(-14deg) brightness(1.02);
+}
+
+.theme-studio-grad-infrared {
+  --btn-primary-bg: #E11D48;
+  --btn-primary-border: #E11D48;
+  --btn-primary-hover-bg: #BE123C;
+  --btn-primary-hover-border: #BE123C;
+  --btn-primary-fill: linear-gradient(135deg, #F43F7F 0%, #E11D48 50%, #9F1239 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #D8326D 0%, #BE123C 50%, #881337 100%);
+
+  --btn-secondary-bg: #BE123C;
+  --btn-secondary-border: #BE123C;
+  --btn-secondary-hover-bg: #9F1239;
+  --btn-secondary-hover-border: #9F1239;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #d4a0b0);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #F43F7F 16%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #9F1239 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #ffe0ea 0%, #ffeaf0 50%, #f5dde4 100%);
+  --studio-logo-filter: saturate(1.2) hue-rotate(-8deg) brightness(1.02);
+}
+
+.theme-studio-grad-chrome {
+  --btn-primary-bg: #475569;
+  --btn-primary-border: #475569;
+  --btn-primary-hover-bg: #334155;
+  --btn-primary-hover-border: #334155;
+  --btn-primary-fill: linear-gradient(135deg, #64748B 0%, #94A3B8 50%, #475569 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #475569 0%, #78899E 50%, #334155 100%);
+
+  --btn-secondary-bg: #64748B;
+  --btn-secondary-border: #64748B;
+  --btn-secondary-hover-bg: #475569;
+  --btn-secondary-hover-border: #475569;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #a0acbc);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #64748B 14%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #94A3B8 12%, transparent), transparent 58%),
+    linear-gradient(145deg, #edf0f4 0%, #f0f3f8 50%, #e6eaf0 100%);
+}
+
+.theme-studio-grad-aurora {
+  --btn-primary-bg: #059669;
+  --btn-primary-border: #059669;
+  --btn-primary-hover-bg: #047857;
+  --btn-primary-hover-border: #047857;
+  --btn-primary-fill: linear-gradient(135deg, #10B981 0%, #0891B2 50%, #7C3AED 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #059669 0%, #0E7490 50%, #6D28D9 100%);
+
+  --btn-secondary-bg: #0D9488;
+  --btn-secondary-border: #0D9488;
+  --btn-secondary-hover-bg: #0F766E;
+  --btn-secondary-hover-border: #0F766E;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #90c4b8);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #10B981 18%, transparent), transparent 54%),
+    radial-gradient(68rem 30rem at 50% -14%, color-mix(in srgb, #0891B2 12%, transparent), transparent 52%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #7C3AED 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #e0faf0 0%, #e0f4f8 50%, #f0e8ff 100%);
+  --studio-logo-filter: saturate(1.18) hue-rotate(6deg) brightness(1.03);
+}
+
+.theme-studio-grad-coral-reef {
+  --btn-primary-bg: #F97068;
+  --btn-primary-border: #F97068;
+  --btn-primary-hover-bg: #E05650;
+  --btn-primary-hover-border: #E05650;
+  --btn-primary-fill: linear-gradient(135deg, #F97068 0%, #2DD4BF 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #E05650 0%, #14B8A6 100%);
+
+  --btn-secondary-bg: #14B8A6;
+  --btn-secondary-border: #14B8A6;
+  --btn-secondary-hover-bg: #0D9488;
+  --btn-secondary-hover-border: #0D9488;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #b8d0cc);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #F97068 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #2DD4BF 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #ffefed 0%, #e0faf6 100%);
+  --studio-logo-filter: saturate(1.16) hue-rotate(-4deg) brightness(1.03);
+}
+
+.theme-studio-grad-plasma {
+  --btn-primary-bg: #D946EF;
+  --btn-primary-border: #D946EF;
+  --btn-primary-hover-bg: #C026D3;
+  --btn-primary-hover-border: #C026D3;
+  --btn-primary-fill: linear-gradient(135deg, #D946EF 0%, #2563EB 34%, #84CC16 68%, #F59E0B 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #C026D3 0%, #1D4ED8 34%, #65A30D 68%, #D97706 100%);
+
+  --btn-secondary-bg: #7C3AED;
+  --btn-secondary-border: #7C3AED;
+  --btn-secondary-hover-bg: #6D28D9;
+  --btn-secondary-hover-border: #6D28D9;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #c0a8d4);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(68rem 32rem at -6% -10%, color-mix(in srgb, #D946EF 18%, transparent), transparent 52%),
+    radial-gradient(64rem 28rem at 40% -16%, color-mix(in srgb, #2563EB 12%, transparent), transparent 50%),
+    radial-gradient(64rem 28rem at 80% -14%, color-mix(in srgb, #84CC16 10%, transparent), transparent 50%),
+    radial-gradient(68rem 32rem at 110% -10%, color-mix(in srgb, #F59E0B 16%, transparent), transparent 56%),
+    linear-gradient(145deg, #fce8ff 0%, #e8f0ff 30%, #f0ffe8 65%, #fff8e0 100%);
+  --studio-logo-filter: saturate(1.3) hue-rotate(6deg) brightness(1.04);
+}
+
 /* In gradient themes, keep utility/small actions solid; gradients remain for primary CTAs. */
 .theme-studio-grad-purple-orange,
 .theme-studio-grad-purple-pink-orange,
@@ -387,7 +678,19 @@
 .theme-studio-grad-red-purple-blue,
 .theme-studio-grad-sunset-laser,
 .theme-studio-grad-neon-studio,
-.theme-studio-grad-moon-mist {
+.theme-studio-grad-moon-mist,
+.theme-studio-grad-pink-orange,
+.theme-studio-grad-red-blue-green,
+.theme-studio-grad-red-orange-yellow,
+.theme-studio-grad-yellow-orange-red,
+.theme-studio-grad-orange-pink,
+.theme-studio-grad-electric-violet,
+.theme-studio-grad-cinematic-gold,
+.theme-studio-grad-infrared,
+.theme-studio-grad-chrome,
+.theme-studio-grad-aurora,
+.theme-studio-grad-coral-reef,
+.theme-studio-grad-plasma {
   --btn-success-bg: #22C55E;
   --btn-success-border: #22C55E;
   --btn-success-hover-bg: #16A34A;
@@ -781,6 +1084,18 @@ textarea:focus-visible {
 .theme-studio-slate,
 .theme-studio-ocean,
 .theme-studio-grad-moon-mist,
+.theme-studio-grad-pink-orange,
+.theme-studio-grad-red-blue-green,
+.theme-studio-grad-red-orange-yellow,
+.theme-studio-grad-yellow-orange-red,
+.theme-studio-grad-orange-pink,
+.theme-studio-grad-electric-violet,
+.theme-studio-grad-cinematic-gold,
+.theme-studio-grad-infrared,
+.theme-studio-grad-chrome,
+.theme-studio-grad-aurora,
+.theme-studio-grad-coral-reef,
+.theme-studio-grad-plasma,
 .dark {
   --text-primary: var(--btn-primary-bg);
   --text-primary-hover: var(--btn-primary-hover-bg);

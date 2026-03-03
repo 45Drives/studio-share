@@ -17,6 +17,18 @@ export type Theme =
   | 'theme-studio-slate'
   | 'theme-studio-ocean'
   | 'theme-studio-grad-moon-mist'
+  | 'theme-studio-grad-pink-orange'
+  | 'theme-studio-grad-red-blue-green'
+  | 'theme-studio-grad-red-orange-yellow'
+  | 'theme-studio-grad-yellow-orange-red'
+  | 'theme-studio-grad-orange-pink'
+  | 'theme-studio-grad-electric-violet'
+  | 'theme-studio-grad-cinematic-gold'
+  | 'theme-studio-grad-infrared'
+  | 'theme-studio-grad-chrome'
+  | 'theme-studio-grad-aurora'
+  | 'theme-studio-grad-coral-reef'
+  | 'theme-studio-grad-plasma'
 type Division = 'studio' | 'homelab' | 'professional' | 'default'
 
 const aliasToTheme: Record<string, Theme> = {
@@ -41,6 +53,18 @@ const themeToDivision: Record<Theme, Division> = {
   'theme-studio-slate': 'studio',
   'theme-studio-ocean': 'studio',
   'theme-studio-grad-moon-mist': 'studio',
+  'theme-studio-grad-pink-orange': 'studio',
+  'theme-studio-grad-red-blue-green': 'studio',
+  'theme-studio-grad-red-orange-yellow': 'studio',
+  'theme-studio-grad-yellow-orange-red': 'studio',
+  'theme-studio-grad-orange-pink': 'studio',
+  'theme-studio-grad-electric-violet': 'studio',
+  'theme-studio-grad-cinematic-gold': 'studio',
+  'theme-studio-grad-infrared': 'studio',
+  'theme-studio-grad-chrome': 'studio',
+  'theme-studio-grad-aurora': 'studio',
+  'theme-studio-grad-coral-reef': 'studio',
+  'theme-studio-grad-plasma': 'studio',
   'theme-default': 'default'
 }
 
@@ -65,6 +89,18 @@ function isTheme(value: string): value is Theme {
     'theme-studio-slate',
     'theme-studio-ocean',
     'theme-studio-grad-moon-mist',
+    'theme-studio-grad-pink-orange',
+    'theme-studio-grad-red-blue-green',
+    'theme-studio-grad-red-orange-yellow',
+    'theme-studio-grad-yellow-orange-red',
+    'theme-studio-grad-orange-pink',
+    'theme-studio-grad-electric-violet',
+    'theme-studio-grad-cinematic-gold',
+    'theme-studio-grad-infrared',
+    'theme-studio-grad-chrome',
+    'theme-studio-grad-aurora',
+    'theme-studio-grad-coral-reef',
+    'theme-studio-grad-plasma',
   ].includes(value)
 }
 
@@ -124,6 +160,18 @@ function setHtmlThemeClass(theme: Theme) {
     'theme-studio-slate',
     'theme-studio-ocean',
     'theme-studio-grad-moon-mist',
+    'theme-studio-grad-pink-orange',
+    'theme-studio-grad-red-blue-green',
+    'theme-studio-grad-red-orange-yellow',
+    'theme-studio-grad-yellow-orange-red',
+    'theme-studio-grad-orange-pink',
+    'theme-studio-grad-electric-violet',
+    'theme-studio-grad-cinematic-gold',
+    'theme-studio-grad-infrared',
+    'theme-studio-grad-chrome',
+    'theme-studio-grad-aurora',
+    'theme-studio-grad-coral-reef',
+    'theme-studio-grad-plasma',
     'theme-studio-carbon'
   )
   root.classList.add(theme)

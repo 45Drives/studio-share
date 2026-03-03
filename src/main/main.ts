@@ -386,8 +386,14 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
 import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
-import { runRsync } from './transfers/rsync-runner';
+import { runRsync, runRsyncDetached, reattachTailer, type LogTailer } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
+import {
+  upsertTransfer, getRunningTransfers, getQueuedTransfers,
+  markTransfer, markTransferRunning, removeTransfer, removeQueuedMatch,
+  pruneOldTransfers, isPidAlive, removeLogFile, makeLogPath, getAllTransfers,
+  type PersistedTransfer,
+} from './transfers/transfer-store';
 import { initAutoUpdates } from './updates'
 
 let discoveredServers: Server[] = [];
@@ -1879,6 +1885,10 @@ app.whenReady().then(() => {
   jl('info', 'window.created');
 
   initAutoUpdates(() => (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : null)
+
+  // ── Resume detached transfers from previous session ──────────────────────
+  pruneOldTransfers()       // remove old completed/failed entries (>7 days)
+  resumeDetachedTransfers() // reattach to any still-running rsync processes
 });
 
 ipcMain.handle('dialog:pickFiles', async () => {
@@ -2032,7 +2042,345 @@ export type RsyncStartOpts = {
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
+const inflightTailers = new Map<string, LogTailer>()
+const inflightPids = new Map<string, number>()
 const pendingRsyncCancel = new Set<string>()
+const MAX_CONCURRENT_MAIN = 3
+
+// ── Resume detached transfers from a previous session ─────────────────────────
+
+/**
+ * On app start, inspect the persisted transfer store.
+ * For each "running" entry:
+ *   • PID still alive → reattach a log tailer so the renderer gets progress.
+ *   • PID dead → check if rsync finished (100% in log).
+ *     – If yes → run ingest and mark completed.
+ *     – If no  → re-spawn rsync (--partial makes it a fast delta) and track.
+ */
+function resumeDetachedTransfers() {
+  const running = getRunningTransfers()
+  if (running.length) {
+    jl('info', 'resume.detached.found', { count: running.length })
+  }
+
+  for (const t of running) {
+    if (t.pid && isPidAlive(t.pid)) {
+      // Still going — just reattach tailer for live progress
+      jl('info', 'resume.detached.reattach', { id: t.id, pid: t.pid })
+      const win = BrowserWindow.getAllWindows()[0] ?? undefined
+      const tailer = reattachTailer({ id: t.id, logFile: t.logFile!, pid: t.pid, win })
+      inflightPids.set(t.id, t.pid)
+      inflightTailers.set(t.id, tailer)
+
+      // When tailer resolves (PID dies), handle completion
+      tailer.done.then(ok => handleDetachedCompletion(t, ok))
+    } else {
+      // PID is gone. Check log to see if it completed successfully.
+      jl('info', 'resume.detached.pid_dead', { id: t.id, pid: t.pid })
+      const ok = t.logFile ? lastLogReached100(t.logFile) : false
+
+      if (ok) {
+        jl('info', 'resume.detached.completed', { id: t.id })
+        handleDetachedCompletion(t, true)
+      } else {
+        // Transfer was interrupted — re-spawn rsync (--partial resumes)
+        jl('info', 'resume.detached.respawn', { id: t.id, src: t.src })
+        respawnTransfer(t)
+      }
+    }
+  }
+
+  // Also start any queued items (from a previous session)
+  drainPersistedQueue()
+}
+
+/** Read the last chunk of a log file and check if rsync reached 100% */
+function lastLogReached100(logFile: string): boolean {
+  try {
+    const tail = fs.readFileSync(logFile, 'utf-8').slice(-4096)
+    const matches = [...tail.matchAll(/(\d+(?:\.\d+)?)%/g)]
+    if (!matches.length) return false
+    return Number(matches[matches.length - 1][1]) >= 100
+  } catch { return false }
+}
+
+/** Handle a detached transfer that has finished (PID died) */
+async function handleDetachedCompletion(t: PersistedTransfer, ok: boolean) {
+  inflightPids.delete(t.id)
+  inflightTailers.delete(t.id)
+
+  const win = BrowserWindow.getAllWindows()[0]
+
+  if (!ok) {
+    markTransfer(t.id, 'failed')
+    win?.webContents?.send(`upload:done:${t.id}`, { error: 'rsync failed (detached)' })
+    jl('info', 'resume.detached.failed', { id: t.id })
+    return
+  }
+
+  markTransfer(t.id, 'completed')
+  win?.webContents?.send(`upload:done:${t.id}`, { ok: true })
+
+  // Run ingest if applicable
+  let isDir = false
+  try { isDir = fs.statSync(t.src).isDirectory() } catch { /* src may be gone after restart */ }
+
+  if (!isDir && !t.noIngest) {
+    await runIngestForTransfer(t, win)
+  }
+
+  jl('info', 'resume.detached.done', { id: t.id })
+
+  // Try to start next queued item now that a slot is free
+  drainPersistedQueue()
+}
+
+// ── Drain persisted queue (start queued items respecting concurrency) ─────────
+
+function drainPersistedQueue() {
+  const queued = getQueuedTransfers()
+  if (!queued.length) return
+
+  const runningCount = inflightPids.size
+  let available = MAX_CONCURRENT_MAIN - runningCount
+
+  jl('info', 'queue.drain', { queued: queued.length, running: runningCount, available })
+
+  for (const t of queued) {
+    if (available <= 0) break
+    startQueuedTransfer(t)
+    available--
+  }
+}
+
+/** Start a queued transfer (fresh rsync spawn, not a respawn) */
+function startQueuedTransfer(t: PersistedTransfer) {
+  const knownHostsPath = t.knownHostsPath || path.join(app.getPath('userData'), 'known_hosts')
+  const keyPath = t.keyPath || defaultClientKey()
+
+  // Source file may have been removed — skip if so
+  if (!fs.existsSync(t.src)) {
+    jl('warn', 'queue.src_gone', { id: t.id, src: t.src })
+    markTransfer(t.id, 'failed')
+    const win = BrowserWindow.getAllWindows()[0]
+    win?.webContents?.send(`upload:done:${t.id}`, { error: 'Source file no longer exists' })
+    drainPersistedQueue()
+    return
+  }
+
+  try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
+
+  const picked = buildRsyncCmdAndArgs({
+    id: t.id, src: t.src, host: t.host, user: t.user, destDir: t.destDir,
+    port: t.port, keyPath, bwlimitKb: t.bwlimitKb, extraArgs: t.extraArgs,
+    shareRoot: t.shareRoot, knownHostsPath,
+    transcodeProxy: t.transcodeProxy, proxyQualities: t.proxyQualities,
+    watermark: t.watermark, watermarkFileName: t.watermarkFileName,
+    watermarkProxyQualities: t.watermarkProxyQualities, noIngest: t.noIngest,
+  })
+
+  const logFile = makeLogPath(t.id)
+  const win = BrowserWindow.getAllWindows()[0] ?? undefined
+
+  const { pid, tailer } = runRsyncDetached({
+    id: t.id, cmd: picked.cmd, args: picked.args, logFile, win,
+  })
+
+  // Update persisted record: queued → running
+  markTransferRunning(t.id, pid, logFile)
+  inflightPids.set(t.id, pid)
+  inflightTailers.set(t.id, tailer)
+
+  jl('info', 'queue.started', { id: t.id, pid, src: t.src })
+
+  tailer.done.then(ok => handleDetachedCompletion({ ...t, pid, logFile, status: 'running' }, ok))
+}
+
+/** Re-spawn an interrupted rsync transfer */
+function respawnTransfer(t: PersistedTransfer) {
+  const knownHostsPath = t.knownHostsPath || path.join(app.getPath('userData'), 'known_hosts')
+  const keyPath = t.keyPath || defaultClientKey()
+
+  // Source file may have been removed — skip if so
+  if (!fs.existsSync(t.src)) {
+    jl('warn', 'resume.detached.src_gone', { id: t.id, src: t.src })
+    markTransfer(t.id, 'failed')
+    return
+  }
+
+  try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
+
+  const picked = buildRsyncCmdAndArgs({
+    id: t.id, src: t.src, host: t.host, user: t.user, destDir: t.destDir,
+    port: t.port, keyPath, bwlimitKb: t.bwlimitKb, extraArgs: t.extraArgs,
+    shareRoot: t.shareRoot, knownHostsPath,
+    transcodeProxy: t.transcodeProxy, proxyQualities: t.proxyQualities,
+    watermark: t.watermark, watermarkFileName: t.watermarkFileName,
+    watermarkProxyQualities: t.watermarkProxyQualities, noIngest: t.noIngest,
+  })
+
+  const logFile = t.logFile ?? makeLogPath(t.id)  // reuse the same log file (append mode)
+  const win = BrowserWindow.getAllWindows()[0] ?? undefined
+
+  const { pid, tailer } = runRsyncDetached({
+    id: t.id, cmd: picked.cmd, args: picked.args, logFile, win,
+  })
+
+  // Update persisted record with new PID
+  t.pid = pid
+  upsertTransfer(t)
+  inflightPids.set(t.id, pid)
+  inflightTailers.set(t.id, tailer)
+
+  jl('info', 'resume.detached.respawned', { id: t.id, pid })
+
+  tailer.done.then(ok => handleDetachedCompletion(t, ok))
+}
+
+/** Run the ingest step for a completed transfer (mirrors the logic in upload:start) */
+async function runIngestForTransfer(t: PersistedTransfer, win?: BrowserWindow | null) {
+  const fileName = t.fileName || path.basename(t.src)
+  const apiPort = 9095
+  const base = `http://${t.host}:${apiPort}`
+  const shareRoot = t.shareRoot || await getShareRootForHost(t.host, apiPort)
+  const destRel = normalizeDestRel(t.destDir, shareRoot)
+
+  jl('info', 'ingest.dest.normalize.resumed', {
+    id: t.id, host: t.host, destDir: t.destDir,
+    shareRoot: shareRoot || null, destRel,
+  })
+
+  const wantsProxy = t.transcodeProxy === true
+  const proxyQualities = Array.isArray(t.proxyQualities)
+    ? t.proxyQualities.filter(q => typeof q === 'string' && q.length)
+    : []
+  const watermarkProxyQualities = Array.isArray(t.watermarkProxyQualities)
+    ? t.watermarkProxyQualities.filter(q => typeof q === 'string' && q.length)
+    : []
+  const rawWatermarkFileName = typeof t.watermarkFileName === 'string'
+    ? String(t.watermarkFileName).trim() : ''
+  const wantsWatermark = t.watermark === true && rawWatermarkFileName.length > 0
+  const isVideo = (() => {
+    const ext = path.extname(fileName).toLowerCase().replace('.', '')
+    const videoExts = new Set([
+      'mp4','mov','m4v','mkv','webm','avi','wmv','flv',
+      'mpg','mpeg','m2v','3gp','3g2','mxf','ts','m2ts','mts',
+      'ogv','vob','divx','f4v','asf','rm','rmvb','m4s',
+      'r3d','braw','ari','cine','dav',
+    ])
+    return videoExts.has(ext)
+  })()
+  const wantsProxyForFile = wantsProxy && isVideo
+  const wantsWatermarkForFile = wantsWatermark && isVideo
+  const wantsHlsForFile = isVideo
+
+  // simplified: use only the raw watermark path (skip multi-candidate logic for resumed)
+  const params = new URLSearchParams()
+  params.set('dest', destRel)
+  params.set('name', fileName)
+  params.set('uploader', os.userInfo().username)
+  if (wantsHlsForFile) params.set('hls', '1')
+  if (wantsProxyForFile) params.set('proxy', '1')
+  if (wantsProxyForFile && proxyQualities.length) params.set('proxyQualities', proxyQualities.join(','))
+  if (wantsWatermarkForFile && rawWatermarkFileName) {
+    params.set('watermark', '1')
+    params.set('watermarkFile', rawWatermarkFileName)
+    if (watermarkProxyQualities.length) params.set('watermarkProxyQualities', watermarkProxyQualities.join(','))
+  }
+
+  const url = `${base}/api/ingest/register?${params.toString()}`
+  try {
+    const r = await fetch(url, { method: 'POST' })
+    const text = await r.text()
+    let j: any = {}
+    try { j = JSON.parse(text) } catch { j = { raw: text } }
+    jl('info', 'ingest.register.resumed', { id: t.id, ok: r.ok, status: r.status, resp: j })
+
+    if (j?.ok) {
+      const fileId = Number(j.fileId ?? j.file_id ?? j?.file?.id)
+      const assetVersionId = Number(j.assetVersionId ?? j.asset_version_id ?? j?.assetVersion?.id)
+      const jobs = j.jobs || { queuedKinds: [], skippedKinds: [] }
+
+      if (Number.isFinite(fileId) && fileId > 0) {
+        win?.webContents?.send(`upload:ingest:${t.id}`, {
+          ok: true, fileId,
+          assetVersionId: Number.isFinite(assetVersionId) ? assetVersionId : null,
+          host: t.host, apiPort,
+          transcodes: Number.isFinite(assetVersionId) ? [{ assetVersionId, jobs }] : [],
+        })
+      }
+    }
+  } catch (e: any) {
+    jl('warn', 'ingest.register.resumed.failed', { id: t.id, error: e?.message || String(e), url })
+  }
+}
+
+// ── IPC: list persisted transfers for the renderer ────────────────────────────
+
+ipcMain.handle('upload:list-persisted', async () => {
+  const running = getRunningTransfers()
+  const alive = running.filter(t => (t.pid && isPidAlive(t.pid)) || inflightPids.has(t.id))
+  const queued = getQueuedTransfers()
+  return [...alive, ...queued].map(t => ({
+    id: t.id,
+    fileName: t.fileName,
+    fileSize: t.fileSize,
+    host: t.host,
+    destDir: t.destDir,
+    startedAt: t.startedAt,
+    status: t.status,
+  }))
+})
+
+// ── IPC: persist a batch of queued uploads ────────────────────────────────────
+
+export type QueuedUploadItem = {
+  src: string
+  fileName: string
+  fileSize?: number
+  host: string
+  user: string
+  destDir: string
+  port?: number
+  keyPath?: string
+  shareRoot?: string
+  knownHostsPath?: string
+  transcodeProxy?: boolean
+  proxyQualities?: string[]
+  watermark?: boolean
+  watermarkFileName?: string
+  watermarkProxyQualities?: string[]
+  noIngest?: boolean
+}
+
+ipcMain.handle('upload:persist-queue', async (_event, items: QueuedUploadItem[]) => {
+  if (!Array.isArray(items)) return
+  for (const item of items) {
+    const id = uuidv4()
+    upsertTransfer({
+      id,
+      src: item.src,
+      host: item.host,
+      user: item.user,
+      destDir: item.destDir,
+      port: item.port,
+      keyPath: item.keyPath,
+      shareRoot: item.shareRoot,
+      knownHostsPath: item.knownHostsPath,
+      transcodeProxy: item.transcodeProxy,
+      proxyQualities: item.proxyQualities,
+      watermark: item.watermark,
+      watermarkFileName: item.watermarkFileName,
+      watermarkProxyQualities: item.watermarkProxyQualities,
+      noIngest: item.noIngest,
+      status: 'queued',
+      startedAt: Date.now(),
+      fileName: item.fileName,
+      fileSize: item.fileSize,
+    })
+  }
+  jl('info', 'upload.persist-queue', { count: items.length })
+})
 
 ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
@@ -2049,7 +2397,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
 
   try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
 
-  if (inflightRsync.has(id)) {
+  if (inflightRsync.has(id) || inflightPids.has(id)) {
     event.sender.send(`upload:done:${id}`, { error: 'duplicate id' })
     return
   }
@@ -2093,24 +2441,61 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     } else {
       const picked = buildRsyncCmdAndArgs({ ...opts, keyPath, knownHostsPath })
 
-      const rsync = runRsync({
+      // ── Detached spawn: survives app closure ─────────────────────────
+      const logFile = makeLogPath(id)
+      const { pid, tailer } = runRsyncDetached({
         id,
         cmd: picked.cmd,
         args: picked.args,
+        logFile,
         win: BrowserWindow.getAllWindows()[0],
       })
 
-      inflightRsync.set(id, rsync.child)
+      // Track PID so cancel handler can kill it
+      inflightPids.set(id, pid)
+      inflightTailers.set(id, tailer)
+      inflightRsync.delete(id) // no longer using the ChildProcess map slot
+
+      // Remove matching queued record (this upload is now running with its own ID)
+      removeQueuedMatch(src, opts.host, opts.destDir)
+
+      // Persist to disk so a restart can reattach
+      let fileSize: number | undefined
+      try { fileSize = fs.statSync(src).size } catch { /* ok */ }
+
+      upsertTransfer({
+        id, pid, logFile, src,
+        host: opts.host, user: opts.user, destDir: opts.destDir,
+        port: opts.port, keyPath, bwlimitKb: opts.bwlimitKb,
+        extraArgs: opts.extraArgs, shareRoot: opts.shareRoot,
+        knownHostsPath, transcodeProxy: opts.transcodeProxy,
+        proxyQualities: opts.proxyQualities, watermark: opts.watermark,
+        watermarkFileName: opts.watermarkFileName,
+        watermarkProxyQualities: opts.watermarkProxyQualities,
+        noIngest: opts.noIngest,
+        status: 'running', startedAt: Date.now(),
+        fileName: path.basename(src), fileSize,
+      })
+
       if (pendingRsyncCancel.delete(id)) {
-        try { rsync.child.kill('SIGINT') } catch { }
+        try { process.kill(pid, 'SIGINT') } catch { }
         jl('info', 'upload.cancel.kill-after-spawn', { id })
       }
-      const code = await rsync.done
-      if (code !== 0) {
-        event.sender.send(`upload:done:${id}`, { error: `rsync exited ${code}` })
-        jl('info', 'rsync.close', { id, code })
+
+      // Wait for rsync to finish (detected by PID death + log parsing)
+      const ok = await tailer.done
+
+      inflightPids.delete(id)
+      inflightTailers.delete(id)
+
+      if (!ok) {
+        markTransfer(id, 'failed')
+        event.sender.send(`upload:done:${id}`, { error: 'rsync failed (detached)' })
+        jl('info', 'rsync.detached.failed', { id, pid })
         return
       }
+
+      markTransfer(id, 'completed')
     }
 
     // Transfer success
@@ -2291,16 +2676,30 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     jl('error', 'upload.error', { id, error: err?.message || String(err) })
   } finally {
     inflightRsync.delete(id)
+    inflightPids.delete(id)
+    inflightTailers.delete(id)
     pendingRsyncCancel.delete(id)
   }
 })
 
 // One cancel handler only.
-// Handles three states:
+// Handles four states:
+// - detached PID tracked (kill by PID)
 // - active child process (kill immediately)
 // - upload id registered but child not attached yet (mark pending)
 // - cancel sent before upload:start processed (queue by id)
 ipcMain.on('upload:cancel', (_event, { id }) => {
+  // Check detached PID first
+  const pid = inflightPids.get(id)
+  if (pid) {
+    try { process.kill(pid, 'SIGINT') } catch { }
+    const tailer = inflightTailers.get(id)
+    tailer?.stop()
+    markTransfer(id, 'canceled')
+    jl('info', 'upload.cancel.detached', { id, pid })
+    return
+  }
+
   const p = inflightRsync.get(id)
   if (p) {
     try { p.kill('SIGINT') } catch { }

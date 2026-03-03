@@ -135,6 +135,18 @@ const studioPalettes: Array<{ label: string; theme: Theme; className: string }> 
     { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
     { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
     { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
+    { label: 'Pink + Orange', theme: 'theme-studio-grad-pink-orange', className: 'theme-btn-studio-grad-pink-orange' },
+    { label: 'Red + Blue + Green', theme: 'theme-studio-grad-red-blue-green', className: 'theme-btn-studio-grad-red-blue-green' },
+    { label: 'Red + Orange + Yellow', theme: 'theme-studio-grad-red-orange-yellow', className: 'theme-btn-studio-grad-red-orange-yellow' },
+    { label: 'Yellow + Orange + Red', theme: 'theme-studio-grad-yellow-orange-red', className: 'theme-btn-studio-grad-yellow-orange-red' },
+    { label: 'Orange + Pink', theme: 'theme-studio-grad-orange-pink', className: 'theme-btn-studio-grad-orange-pink' },
+    { label: 'Electric Violet', theme: 'theme-studio-grad-electric-violet', className: 'theme-btn-studio-grad-electric-violet' },
+    { label: 'Cinematic Gold', theme: 'theme-studio-grad-cinematic-gold', className: 'theme-btn-studio-grad-cinematic-gold' },
+    { label: 'Infrared', theme: 'theme-studio-grad-infrared', className: 'theme-btn-studio-grad-infrared' },
+    { label: 'Studio Chrome', theme: 'theme-studio-grad-chrome', className: 'theme-btn-studio-grad-chrome' },
+    { label: 'Aurora', theme: 'theme-studio-grad-aurora', className: 'theme-btn-studio-grad-aurora' },
+    { label: 'Coral Reef', theme: 'theme-studio-grad-coral-reef', className: 'theme-btn-studio-grad-coral-reef' },
+    { label: 'Plasma', theme: 'theme-studio-grad-plasma', className: 'theme-btn-studio-grad-plasma' },
 ]
 
 function selectTheme(theme: Theme) {
@@ -364,6 +376,125 @@ const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
 
 .theme-btn-studio-grad-moon-mist:hover {
     filter: brightness(1.05);
+}
+.theme-btn-studio-grad-pink-orange {
+  background: linear-gradient(135deg, #E84393 0%, #F39C12 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-pink-orange:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-red-blue-green {
+  background: linear-gradient(135deg, #EF4444 0%, #3B82F6 50%, #22C55E 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-red-blue-green:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-red-orange-yellow {
+  background: linear-gradient(135deg, #EF4444 0%, #F97316 50%, #EAB308 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-red-orange-yellow:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-yellow-orange-red {
+  background: linear-gradient(135deg, #EAB308 0%, #F97316 50%, #EF4444 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-yellow-orange-red:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-orange-pink {
+  background: linear-gradient(135deg, #F97316 0%, #EC4899 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-orange-pink:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-electric-violet {
+  background: linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-electric-violet:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-cinematic-gold {
+  background: linear-gradient(135deg, #92400E 0%, #D97706 45%, #F59E0B 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-cinematic-gold:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-infrared {
+  background: linear-gradient(135deg, #F43F7F 0%, #E11D48 50%, #9F1239 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-infrared:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-chrome {
+  background: linear-gradient(135deg, #64748B 0%, #94A3B8 50%, #475569 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-chrome:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-aurora {
+  background: linear-gradient(135deg, #10B981 0%, #0891B2 50%, #7C3AED 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-aurora:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-coral-reef {
+  background: linear-gradient(135deg, #F97068 0%, #2DD4BF 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-coral-reef:hover {
+  filter: brightness(1.05);
+}
+
+.theme-btn-studio-grad-plasma {
+  background: linear-gradient(135deg, #D946EF 0%, #2563EB 34%, #84CC16 68%, #F59E0B 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.theme-btn-studio-grad-plasma:hover {
+  filter: brightness(1.05);
 }
 
 .theme-btn {

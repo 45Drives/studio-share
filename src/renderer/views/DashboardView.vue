@@ -67,8 +67,10 @@ const { apiFetch } = useApi()
 const transfer = useTransferProgress()
 
 // Restore any active transcodes from the server (survives logout/app restart)
+// Also restore persisted uploads (detached rsync that survived app closure)
 onMounted(() => {
 	transfer.restoreActiveTranscodes(apiFetch)
+	transfer.restorePersistedUploads()
 })
 
 const leaveServer = () => {

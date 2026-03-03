@@ -1,5 +1,6 @@
 // src/main/rsync/rsync-runner.ts
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
+import fs from 'fs';
+import { spawn, ChildProcessWithoutNullStreams, ChildProcess } from 'node:child_process';
 import type { BrowserWindow } from 'electron';
 import { jl } from '../main';
 
@@ -16,6 +17,32 @@ export type RunOpts = {
 export type RunHandle = {
   child: ChildProcessWithoutNullStreams;
   done: Promise<number>;
+};
+
+// ── Detached rsync (survives app exit) ──────────────────────────────────────
+
+export type DetachedRunOpts = {
+  id: string;
+  cmd: string;
+  args: string[];
+  logFile: string;         // path to write combined stdout+stderr
+  env?: NodeJS.ProcessEnv;
+  win?: BrowserWindow;
+};
+
+export type DetachedRunHandle = {
+  pid: number;
+  tailer: LogTailer;
+};
+
+export type LogTailer = {
+  /** Stop tailing (idempotent) */
+  stop: () => void;
+  /**
+   * Promise that resolves when the process exits.
+   * Value = true if rsync appears to have succeeded, false otherwise.
+   */
+  done: Promise<boolean>;
 };
 
 // Parse rsync progress lines like:
@@ -90,4 +117,175 @@ export function runRsync(opts: RunOpts): RunHandle {
   });
 
   return { child, done };
+}
+
+// ── Detached rsync (survives app closure) ───────────────────────────────────
+
+/**
+ * Spawn rsync fully detached – it keeps running even if the Electron app
+ * quits.  Progress is written to `logFile` and polled from there.
+ */
+export function runRsyncDetached(opts: DetachedRunOpts): DetachedRunHandle {
+  const { id, cmd, args, logFile, env, win } = opts;
+
+  jl('info', 'rsync.exec.detached', { id, cmd, args, logFile });
+
+  // Open a file descriptor for the log so the child writes directly to disk
+  const logFd = fs.openSync(logFile, 'a');
+
+  const child: ChildProcess = spawn(cmd, args, {
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200', ...env },
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+    windowsHide: true,
+  });
+
+  const pid = child.pid!;
+  jl('info', 'rsync.detached.spawned', { id, pid });
+
+  // Allow the parent process to exit while the child keeps running.
+  child.unref();
+  // Parent no longer needs the fd – the child has its own copy.
+  fs.closeSync(logFd);
+
+  const tailer = tailLogFile({ id, logFile, pid, win });
+
+  return { pid, tailer };
+}
+
+// ── Log-file tailer ─────────────────────────────────────────────────────────
+
+type TailOpts = {
+  id: string;
+  logFile: string;
+  pid: number;
+  win?: BrowserWindow;
+  /** How often to read new bytes + check PID (ms). Default 500. */
+  intervalMs?: number;
+};
+
+/**
+ * Periodically reads new bytes appended to `logFile`, parses rsync progress
+ * lines, emits IPC events, and checks PID liveness.  Returns when the
+ * process has exited (PID gone) **and** all bytes have been read.
+ */
+export function tailLogFile(opts: TailOpts): LogTailer {
+  const { id, logFile, pid, win, intervalMs = 500 } = opts;
+
+  let stopped = false;
+  let offset = 0;
+  let partial = '';         // leftover bytes that don't end with \n
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let _resolve: ((ok: boolean) => void) | null = null;
+
+  const done = new Promise<boolean>((resolve) => { _resolve = resolve; });
+
+  const emit = (parsed: any) => {
+    try { win?.webContents?.send(`upload:progress:${id}`, parsed); } catch { /* window may be gone */ }
+  };
+
+  function tick() {
+    if (stopped) return;
+
+    // 1. Read new bytes from log
+    let chunk = '';
+    try {
+      const fd = fs.openSync(logFile, 'r');
+      const stat = fs.fstatSync(fd);
+      const bytesToRead = stat.size - offset;
+      if (bytesToRead > 0) {
+        const buf = Buffer.alloc(bytesToRead);
+        fs.readSync(fd, buf, 0, bytesToRead, offset);
+        offset += bytesToRead;
+        chunk = buf.toString('utf-8');
+      }
+      fs.closeSync(fd);
+    } catch {
+      // file not ready yet or disappeared
+    }
+
+    // 2. Parse lines
+    if (chunk) {
+      partial += chunk.replace(/\r/g, '\n');
+      const lines = partial.split('\n');
+      partial = lines.pop() || '';
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t) continue;
+        jl('info', 'rsync.tail', { id, line: t });
+        emit(parseProgress(t));
+      }
+    }
+
+    // 3. Check PID
+    let alive = false;
+    try { process.kill(pid, 0); alive = true; } catch { /* gone */ }
+
+    if (!alive) {
+      // Process is gone – do one final read
+      stopped = true;
+      if (timer) { clearInterval(timer); timer = null; }
+
+      // Read any remaining bytes
+      try {
+        const fd = fs.openSync(logFile, 'r');
+        const stat = fs.fstatSync(fd);
+        const bytesToRead = stat.size - offset;
+        if (bytesToRead > 0) {
+          const buf = Buffer.alloc(bytesToRead);
+          fs.readSync(fd, buf, 0, bytesToRead, offset);
+          const rest = (partial + buf.toString('utf-8')).replace(/\r/g, '\n');
+          for (const line of rest.split('\n')) {
+            const t = line.trim();
+            if (!t) continue;
+            jl('info', 'rsync.tail.final', { id, line: t });
+            emit(parseProgress(t));
+          }
+        }
+        fs.closeSync(fd);
+      } catch { /* ok */ }
+
+      // Heuristic: check the last progress line for 100% to decide success
+      const ok = lastProgressWas100(logFile);
+      jl('info', 'rsync.detached.exit', { id, pid, ok });
+      _resolve?.(ok);
+    }
+  }
+
+  timer = setInterval(tick, intervalMs);
+  // Run first tick immediately
+  tick();
+
+  return {
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      if (timer) { clearInterval(timer); timer = null; }
+    },
+    done,
+  };
+}
+
+/**
+ * Re-attach a tailer to a still-running detached rsync.
+ * Useful after the app restarts while a transfer was in progress.
+ */
+export function reattachTailer(opts: TailOpts): LogTailer {
+  return tailLogFile(opts);
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Read the last chunk of a log file and check if rsync reached 100% */
+function lastProgressWas100(logFile: string): boolean {
+  try {
+    const tail = fs.readFileSync(logFile, 'utf-8').slice(-4096);
+    // Look for the *last* percentage in the log
+    const matches = [...tail.matchAll(/(\d+(?:\.\d+)?)%/g)];
+    if (!matches.length) return false;
+    const lastPct = Number(matches[matches.length - 1][1]);
+    return lastPct >= 100;
+  } catch {
+    return false;
+  }
 }
