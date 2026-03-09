@@ -171,7 +171,6 @@ import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
-import { useThemeFromAlias } from '../composables/useThemeFromAlias'
 useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
@@ -182,36 +181,7 @@ const password = ref('');
 const showPassword = ref(false);
 const togglePassword = () => { showPassword.value = !showPassword.value; };
 const darkMode = useDarkModeState()
-const { currentTheme } = useThemeFromAlias()
-const connectMainCardBackground = computed(() => {
-    switch (currentTheme.value) {
-        case 'theme-studio-original-purple':
-            return '#6557A5'
-        case 'theme-studio-grad-purple-orange':
-            return 'linear-gradient(135deg, #6F58B8 0%, #C96E36 100%)'
-        case 'theme-studio-grad-purple-pink-orange':
-            return 'linear-gradient(135deg, #7A4FD8 0%, #D95AA5 52%, #E57A4A 100%)'
-        case 'theme-studio-grad-purple-pink-blue':
-            return 'linear-gradient(135deg, #6D4FE0 0%, #D65EAE 52%, #4C7CF4 100%)'
-        case 'theme-studio-grad-purple-blue':
-            return 'linear-gradient(135deg, #7A3CFF 0%, #4A7CEB 100%)'
-        case 'theme-studio-grad-red-purple-blue':
-            return 'linear-gradient(135deg, #F43F5E 0%, #8B5CF6 52%, #3B82F6 100%)'
-        case 'theme-studio-grad-sunset-laser':
-            return 'linear-gradient(135deg, #FF6A00 0%, #FF2D95 48%, #2CF3E9 100%)'
-        case 'theme-studio-grad-neon-studio':
-            return 'linear-gradient(135deg, #14B8A6 0%, #6D28D9 45%, #F43F5E 100%)'
-        case 'theme-studio-slate':
-            return '#5F6E82'
-        case 'theme-studio-ocean':
-            return '#3E6D84'
-        case 'theme-studio-grad-moon-mist':
-            return 'linear-gradient(135deg, #7A2CFF 0%, #2EA8FF 52%, #FFE44D 100%)'
-        case 'theme-studio':
-        default:
-            return '#4E6B93'
-    }
-})
+const connectMainCardBackground = 'var(--btn-primary-fill)'
 
 const selectedServerIp = ref<string>('')
 const providedCurrentServer = inject(currentServerInjectionKey)!;
@@ -941,30 +911,65 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
         const notif = new Notification('Server Update Available', msg, 'warning', 'never');
 
         notif.addAction('Install Update', async () => {
-            pushNotification(new Notification('Updating…', 'Installing broadcaster update on the server…', 'info', 4000));
+            pushNotification(new Notification('Updating…', 'Installing broadcaster update on the server. This may take a minute…', 'info', 'never'));
             try {
-                const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
-                    method: 'POST',
-                    headers: hdrs,
-                });
-                if (!installRes.ok) {
-                    const errBody = await installRes.json().catch(() => ({}));
-                    throw new Error((errBody as any)?.error || `HTTP ${installRes.status}`);
+                let oldVersion: string | undefined;
+                try {
+                    const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
+                        method: 'POST',
+                        headers: hdrs,
+                    });
+                    if (installRes.ok) {
+                        const installData = await installRes.json();
+                        oldVersion = installData.oldVersion;
+                    }
+                } catch {
+                    // Connection may drop if the server restarts before we read the response — that's expected
+                    window.appLog?.info('broadcaster-update-install.connection-dropped', { msg: 'expected during upgrade' });
                 }
-                const installData = await installRes.json();
-                if (installData.updated) {
+
+                // Poll until the server comes back (up to ~3 minutes)
+                const maxWaitMs = 180_000;
+                const pollIntervalMs = 3_000;
+                const startedAt = Date.now();
+                let newVersion: string | undefined;
+
+                while (Date.now() - startedAt < maxWaitMs) {
+                    await new Promise(r => setTimeout(r, pollIntervalMs));
+                    try {
+                        const ctrl = new AbortController();
+                        const timer = setTimeout(() => ctrl.abort(), 5_000);
+                        const checkRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
+                            headers: hdrs,
+                            signal: ctrl.signal,
+                        });
+                        clearTimeout(timer);
+                        if (checkRes.ok) {
+                            const checkData = await checkRes.json();
+                            newVersion = checkData.installedVersion;
+                            break; // server is back
+                        }
+                    } catch {
+                        // Server still down — keep polling
+                    }
+                }
+
+                if (newVersion) {
+                    const didUpdate = oldVersion && newVersion !== oldVersion;
                     pushNotification(new Notification(
-                        'Broadcaster Updated',
-                        `Updated from ${installData.oldVersion ?? '?'} to ${installData.newVersion ?? '?'}. The server will reconnect shortly.`,
-                        'success',
-                        8000
+                        didUpdate ? 'Broadcaster Updated' : 'Broadcaster Restarted',
+                        didUpdate
+                            ? `Updated from ${oldVersion} to ${newVersion}. Reconnecting…`
+                            : `Server is back (v${newVersion}).`,
+                        didUpdate ? 'success' : 'info',
+                        8000,
                     ));
                 } else {
                     pushNotification(new Notification(
-                        'No Update',
-                        installData.error || 'Already up to date.',
-                        'info',
-                        5000
+                        'Update Status Unknown',
+                        'The server has not come back yet. It may still be installing — check again in a moment.',
+                        'warning',
+                        10000,
                     ));
                 }
             } catch (err: any) {

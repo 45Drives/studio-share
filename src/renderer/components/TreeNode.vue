@@ -74,8 +74,8 @@
                     @select-range="$emit('select-range', $event)" />
                 <div v-else :class="[
                     'grid auto-rows-[28px] items-center border-b border-default cursor-pointer select-none [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]',
-                    (!modeIsUpload && selected.has(ch.path))
-                        ? 'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-10'
+                    (!modeIsUpload && selected.has(ch.path)) ?
+                    'bg-[var(--row-selected-bg)] ring-1 ring-[var(--btn-primary-border)] border-b-transparent relative z-[1]'
                         : 'ss-explorer-hover',
                     modeIsUpload ? 'opacity-90 pointer-events-none' : ''
                 ]" @click="($event) => onFileToggle(ch.path, $event)" @keydown.enter.prevent="onFileToggle(ch.path)"

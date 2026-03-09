@@ -49,7 +49,7 @@
     </div>
 
     <div class="fp-browser border rounded overflow-auto bg-accent" :class="containerHeights">
-      <div class="fp-toolbar sticky top-0 bg-accent border-b border-default px-2 py-1 flex items-center gap-2 z-10">
+      <div class="fp-toolbar sticky top-0 bg-accent border-b border-default px-2 py-1 flex items-center gap-2 z-20">
         <button class="btn btn-secondary" :disabled="!canGoUp || browseMode === 'roots'" @click="goUpOne"
           title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />

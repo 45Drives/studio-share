@@ -130,14 +130,22 @@
   --btn-primary-border: #4E6B93;
   --btn-primary-hover-bg: #3F587A;
   --btn-primary-hover-border: #3F587A;
+  --btn-primary-fill: linear-gradient(135deg, #2C3E5A 0%, #4E6B93 50%, #7A9BC0 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #223250 0%, #3F587A 50%, #6888AE 100%);
 
   --btn-secondary-bg: #3C5477;
   --btn-secondary-border: #3C5477;
   --btn-secondary-hover-bg: #2F445F;
   --btn-secondary-hover-border: #2F445F;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
 
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #4f596a);
   --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 60%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #2C3E5A 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #7A9BC0 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #e4eaf2 0%, #ecf1f8 50%, #f0f4fa 100%);
 }
 
 .theme-studio-original-purple {
@@ -145,18 +153,23 @@
   --btn-primary-border: #6557A5;
   --btn-primary-hover-bg: #504584;
   --btn-primary-hover-border: #504584;
+  --btn-primary-fill: linear-gradient(135deg, #3D2D78 0%, #6557A5 50%, #9B8ADB 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #312462 0%, #504584 50%, #8474C5 100%);
 
   --btn-secondary-bg: #584C91;
   --btn-secondary-border: #584C91;
   --btn-secondary-hover-bg: #463C73;
   --btn-secondary-hover-border: #463C73;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
 
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #636072);
   --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 62%, white);
   --ui-app-bg:
-    radial-gradient(80rem 40rem at -10% -12%, color-mix(in srgb, #7a67c8 12%, transparent), transparent 56%),
-    radial-gradient(72rem 38rem at 112% -12%, color-mix(in srgb, #5e4f9e 10%, transparent), transparent 62%),
-    linear-gradient(180deg, #f3f0fb, #e9e5f5 58%, #e3deef);
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #3D2D78 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #9B8ADB 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #ece6fb 0%, #f0ecf8 50%, #f5f0ff 100%);
+  --studio-logo-filter: saturate(1.12) hue-rotate(2deg) brightness(1.02);
 }
 
 .theme-studio-grad-purple-orange {
@@ -330,14 +343,22 @@
   --btn-primary-border: #5F6E82;
   --btn-primary-hover-bg: #4E5D71;
   --btn-primary-hover-border: #4E5D71;
+  --btn-primary-fill: linear-gradient(135deg, #374151 0%, #5F6E82 50%, #8B9DB3 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #2D3643 0%, #4E5D71 50%, #7889A0 100%);
 
   --btn-secondary-bg: #4A586A;
   --btn-secondary-border: #4A586A;
   --btn-secondary-hover-bg: #3D4958;
   --btn-secondary-hover-border: #3D4958;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
 
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 30%, #535c69);
   --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #374151 16%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #8B9DB3 14%, transparent), transparent 58%),
+    linear-gradient(145deg, #e8ecf0 0%, #edf0f4 50%, #f2f4f7 100%);
 }
 
 .theme-studio-ocean {
@@ -345,14 +366,22 @@
   --btn-primary-border: #3E6D84;
   --btn-primary-hover-bg: #31596D;
   --btn-primary-hover-border: #31596D;
+  --btn-primary-fill: linear-gradient(135deg, #1B3D4F 0%, #3E6D84 50%, #6BA4BE 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #153242 0%, #31596D 50%, #5890A8 100%);
 
   --btn-secondary-bg: #31576A;
   --btn-secondary-border: #31576A;
   --btn-secondary-hover-bg: #274859;
   --btn-secondary-hover-border: #274859;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
 
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 32%, #455a66);
   --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #1B3D4F 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #6BA4BE 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #dde9f0 0%, #e6eff5 50%, #edf5fa 100%);
 }
 
 .theme-studio-grad-moon-mist {
@@ -670,7 +699,83 @@
   --studio-logo-filter: saturate(1.3) hue-rotate(6deg) brightness(1.04);
 }
 
+.theme-studio-grad-enterprise {
+  --btn-primary-bg: #D92B2F;
+  --btn-primary-border: #D92B2F;
+  --btn-primary-hover-bg: #B02428;
+  --btn-primary-hover-border: #B02428;
+  --btn-primary-fill: linear-gradient(135deg, #8B1A1E 0%, #D92B2F 50%, #FF6B6B 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #6E1419 0%, #B02428 50%, #E05454 100%);
+
+  --btn-secondary-bg: #A02226;
+  --btn-secondary-border: #A02226;
+  --btn-secondary-hover-bg: #821B1F;
+  --btn-secondary-hover-border: #821B1F;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #d4a0a2);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #8B1A1E 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #FF6B6B 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #f5e0e0 0%, #ffe8e8 50%, #ffefef 100%);
+  --studio-logo-filter: saturate(1.2) hue-rotate(-6deg) brightness(1.02);
+}
+
+.theme-studio-grad-professional {
+  --btn-primary-bg: #65A443;
+  --btn-primary-border: #65A443;
+  --btn-primary-hover-bg: #4F8F37;
+  --btn-primary-hover-border: #4F8F37;
+  --btn-primary-fill: linear-gradient(135deg, #2D6A1E 0%, #65A443 50%, #A8E063 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #225414 0%, #4F8F37 50%, #8CC94F 100%);
+
+  --btn-secondary-bg: #447C31;
+  --btn-secondary-border: #447C31;
+  --btn-secondary-hover-bg: #346527;
+  --btn-secondary-hover-border: #346527;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #a0c8a0);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 56%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #2D6A1E 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #A8E063 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #e4f2dc 0%, #eef8e6 50%, #f5ffe8 100%);
+  --studio-logo-filter: saturate(1.18) hue-rotate(8deg) brightness(1.03);
+}
+
+.theme-studio-grad-homelab {
+  --btn-primary-bg: #2563EB;
+  --btn-primary-border: #2563EB;
+  --btn-primary-hover-bg: #1E4FCB;
+  --btn-primary-hover-border: #1E4FCB;
+  --btn-primary-fill: linear-gradient(135deg, #1E3A8A 0%, #2563EB 50%, #60A5FA 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #162D6E 0%, #1E4FCB 50%, #4A90E2 100%);
+
+  --btn-secondary-bg: #1B50C1;
+  --btn-secondary-border: #1B50C1;
+  --btn-secondary-hover-bg: #153FA0;
+  --btn-secondary-hover-border: #153FA0;
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 24%, #a0b8d8);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 58%, white);
+  --ui-app-bg:
+    radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #1E3A8A 18%, transparent), transparent 54%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #60A5FA 16%, transparent), transparent 58%),
+    linear-gradient(145deg, #dce8f8 0%, #e4efff 50%, #eef5ff 100%);
+  --studio-logo-filter: saturate(1.2) hue-rotate(2deg) brightness(1.03);
+}
+
 /* In gradient themes, keep utility/small actions solid; gradients remain for primary CTAs. */
+.theme-studio,
+.theme-studio-original-purple,
+.theme-studio-slate,
+.theme-studio-ocean,
 .theme-studio-grad-purple-orange,
 .theme-studio-grad-purple-pink-orange,
 .theme-studio-grad-purple-pink-blue,
@@ -690,7 +795,10 @@
 .theme-studio-grad-chrome,
 .theme-studio-grad-aurora,
 .theme-studio-grad-coral-reef,
-.theme-studio-grad-plasma {
+.theme-studio-grad-plasma,
+.theme-studio-grad-enterprise,
+.theme-studio-grad-professional,
+.theme-studio-grad-homelab {
   --btn-success-bg: #22C55E;
   --btn-success-border: #22C55E;
   --btn-success-hover-bg: #16A34A;
@@ -1096,6 +1204,9 @@ textarea:focus-visible {
 .theme-studio-grad-aurora,
 .theme-studio-grad-coral-reef,
 .theme-studio-grad-plasma,
+.theme-studio-grad-enterprise,
+.theme-studio-grad-professional,
+.theme-studio-grad-homelab,
 .dark {
   --text-primary: var(--btn-primary-bg);
   --text-primary-hover: var(--btn-primary-hover-bg);

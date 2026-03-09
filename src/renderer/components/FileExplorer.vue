@@ -13,7 +13,7 @@
     <!-- Table wrapper -->
     <div class="bg-accent border border-default rounded overflow-auto max-h-[440px] min-h-[300px] p-1">
       <!-- Small toolbar: List / Grid toggle -->
-      <div class="sticky top-0 bg-accent border-b border-default px-2 py-1 flex items-center gap-2 z-10">
+      <div class="sticky top-0 bg-primary rounded-md border-b border-default px-2 py-1 flex items-center gap-2 z-20">
         <button class="btn btn-secondary" :disabled="!canGoUp" @click="goUpOne" title="Go up one directory">
           <FontAwesomeIcon :icon="faArrowLeft" />
         </button>
@@ -230,7 +230,13 @@ async function togglePath({ path, isDir }: TogglePayload) {
 
   async function loadAllCwdFiles() {
     try {
-      allCwdFiles.value = await getFilesForFolder(rootRel.value || '/')
+      const dir = rootRel.value || '/'
+      const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dir)}`)
+      const dirPrefix = data.dir ?? dir
+      const files = (data.entries || [])
+        .filter((e: any) => !e.isDir)
+        .map((e: any) => (dirPrefix ? dirPrefix + '/' : '') + e.name)
+      allCwdFiles.value = files
     } catch {
       allCwdFiles.value = []
     }

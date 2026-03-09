@@ -1,96 +1,60 @@
 <template>
     <div class="z-50">
-        <button ref="menuButton" @click="toggle" class="btn bg-well hover:bg-accent text-default p-2 rounded-full">
-            <Bars3Icon class="w-6 h-6" />
+        <!-- Trigger button -->
+        <button ref="menuButton" @click="toggle" class="theme-trigger" title="Change theme">
+            Themes <SwatchIcon class="ml-2 w-5 h-5" />
         </button>
 
+        <!-- Popover -->
         <teleport to="body">
-            <div v-if="show"
-                class="fixed z-[1002] right-0 mt-2 w-60 max-h-[80vh] overflow-y-auto bg-well shadow-lg rounded-lg border p-4 text-left text-default"
-                ref="menuRef" :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }">
-                <!-- Navigation -->
-                <div class="mb-2 text-center items-center">
-                    <p class="text-xs text-default mb-1">Navigation</p>
+            <transition name="theme-pop">
+                <div v-if="show" ref="menuRef" class="theme-popover"
+                    :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }">
 
-                    <!-- Optional Dashboard -->
-                    <button class="btn btn-secondary wizard-btn w-full mb-1" :class="buttonClass('dashboard')"
-                        @click="gotoHome">
-                        {{ isLoggedIn ? 'Dashboard' : 'Home' }}
-                    </button>
-                </div>
-                <!-- <div v-if="canCheckUpdates" class="mb-2 text-center items-center">
-                    <p class="text-xs text-default mb-1">Application</p>
-                    <button class="btn btn-secondary wizard-btn w-full mb-1" :disabled="updateBusy"
-                        @click="checkForUpdates">
-                        {{ updateBusy ? 'Checking...' : 'Check for Updates' }}
-                    </button>
-                </div> -->
-                <details class="menu-disclosure mb-2" open>
-                    <summary class="menu-disclosure-summary">Studio Palette</summary>
-                    <div class="disclosure-content">
-                        <div class="palette-grid">
-                            <button v-for="palette in studioPalettes" :key="palette.theme" class="btn theme-btn w-full"
-                                :class="[palette.className, currentTheme === palette.theme ? 'theme-btn-active' : '']"
-                                @click="selectTheme(palette.theme)">
-                                {{ palette.label }}
-                            </button>
-                        </div>
+                    <!-- Header -->
+                    <div class="tp-header">
+                        <SwatchIcon class="w-4 h-4 opacity-70" />
+                        <span class="tp-title">Studio Palette</span>
                     </div>
-                </details>
 
-                <!-- Dark mode -->
-                <div class="mb-2 items-center">
-                    <button
-                        class="theme-btn text-xs w-full mb-1 flex flex-row items-center text-center justify-center space-x-2 text-default rounded-md"
-                        @click="toggleDarkMode()" :class="darkModeButtonClass">
-                        <transition name="fade" mode="out-in">
-                            <component :is="darkMode ? SunIcon : MoonIcon" class="w-6 h-6" />
-                        </transition>
-                        <span class="mb-0.5 font-semibold" :class="darkMode ? 'ml-5' : 'ml-4'">{{ darkModeLabel
-                        }}</span>
-                    </button>
+                    <!-- Palette grid -->
+                    <div class="tp-grid">
+                        <button v-for="palette in studioPalettes" :key="palette.theme"
+                            class="tp-swatch"
+                            :class="[palette.className, currentTheme === palette.theme ? 'tp-swatch-active' : '']"
+                            :title="palette.label"
+                            @click="selectTheme(palette.theme)">
+                            {{ palette.label }}
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </transition>
         </teleport>
     </div>
 </template>
 
 
 <script setup lang="ts">
-import { computed, ref, nextTick, onMounted, onBeforeUnmount, inject } from 'vue'
-import { useRoute } from 'vue-router'
-import { Bars3Icon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
-import { toggleDarkMode, useDarkModeState, pushNotification, Notification } from '@45drives/houston-common-ui'
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { SwatchIcon } from '@heroicons/vue/24/outline'
 import { useThemeFromAlias, type Theme } from '../composables/useThemeFromAlias'
-import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
-import { useResilientNav } from '../composables/useResilientNav'
-const { to } = useResilientNav()
-interface GlobalMenuProps {
-    server?: boolean;
-}
-defineProps<GlobalMenuProps>()
-
-const route = useRoute()
-
-// --- Auth state (injected from AppShell) ---
-const connectionMeta = inject(connectionMetaInjectionKey)!
-const currentServer = inject(currentServerInjectionKey)!
-const isLoggedIn = computed(() => Boolean(connectionMeta.value?.token) && Boolean(currentServer.value))
 
 // --- Popover state & positioning ---
 const show = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const menuButton = ref<HTMLElement | null>(null)
 const menuPosition = ref({ top: 0, left: 0 })
-const canCheckUpdates = ref(false)
-const updateBusy = ref(false)
 
 const toggle = async () => {
     show.value = !show.value
     if (show.value && menuButton.value) {
         await nextTick()
         const rect = menuButton.value.getBoundingClientRect()
-        menuPosition.value = { top: rect.bottom + 8, left: rect.right - 240 }
+        const popoverWidth = 340
+        menuPosition.value = {
+            top: rect.bottom + 8,
+            left: Math.max(8, rect.right - popoverWidth),
+        }
     }
 }
 
@@ -105,413 +69,194 @@ const handleKeydown = (event: KeyboardEvent) => { if (event.key === 'Escape') sh
 onMounted(() => {
     document.addEventListener('click', handleClickOutside)
     document.addEventListener('keydown', handleKeydown)
-
-    window.electron?.ipcRenderer.invoke<boolean>('is-dev')
-        .then((isDev) => { canCheckUpdates.value = !isDev })
-        .catch(() => { canCheckUpdates.value = false })
 })
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside)
     document.removeEventListener('keydown', handleKeydown)
 })
 
-// --- Dark mode + theme buttons ---
-const darkMode = useDarkModeState()
-const darkModeLabel = computed(() => (darkMode.value ? 'Light Mode' : 'Dark Mode'))
-const darkModeButtonClass = computed(() => (darkMode.value ? 'btn-sun' : 'btn-moon'))
-
 const { setTheme, currentTheme } = useThemeFromAlias()
 
 const studioPalettes: Array<{ label: string; theme: Theme; className: string }> = [
-    { label: 'Original Purple', theme: 'theme-studio-original-purple', className: 'theme-btn-studio-original-purple' },
-    { label: 'Purple + Orange', theme: 'theme-studio-grad-purple-orange', className: 'theme-btn-studio-grad-purple-orange' },
-    { label: 'Purple + Pink + Orange', theme: 'theme-studio-grad-purple-pink-orange', className: 'theme-btn-studio-grad-purple-pink-orange' },
-    { label: 'Purple + Pink + Blue', theme: 'theme-studio-grad-purple-pink-blue', className: 'theme-btn-studio-grad-purple-pink-blue' },
-    { label: 'Purple + Blue', theme: 'theme-studio-grad-purple-blue', className: 'theme-btn-studio-grad-purple-blue' },
-    { label: 'Red + Purple + Blue', theme: 'theme-studio-grad-red-purple-blue', className: 'theme-btn-studio-grad-red-purple-blue' },
-    { label: 'Sunset Laser', theme: 'theme-studio-grad-sunset-laser', className: 'theme-btn-studio-grad-sunset-laser' },
-    { label: 'Neon Studio', theme: 'theme-studio-grad-neon-studio', className: 'theme-btn-studio-grad-neon-studio' },
-    { label: 'Moon-Mist', theme: 'theme-studio-grad-moon-mist', className: 'theme-btn-studio-grad-moon-mist' },
-    { label: 'Balanced Blue', theme: 'theme-studio', className: 'theme-btn-studio-balanced' },
-    { label: 'Slate', theme: 'theme-studio-slate', className: 'theme-btn-studio-slate' },
-    { label: 'Ocean', theme: 'theme-studio-ocean', className: 'theme-btn-studio-ocean' },
-    { label: 'Pink + Orange', theme: 'theme-studio-grad-pink-orange', className: 'theme-btn-studio-grad-pink-orange' },
-    { label: 'Red + Blue + Green', theme: 'theme-studio-grad-red-blue-green', className: 'theme-btn-studio-grad-red-blue-green' },
-    { label: 'Red + Orange + Yellow', theme: 'theme-studio-grad-red-orange-yellow', className: 'theme-btn-studio-grad-red-orange-yellow' },
-    { label: 'Yellow + Orange + Red', theme: 'theme-studio-grad-yellow-orange-red', className: 'theme-btn-studio-grad-yellow-orange-red' },
-    { label: 'Orange + Pink', theme: 'theme-studio-grad-orange-pink', className: 'theme-btn-studio-grad-orange-pink' },
-    { label: 'Electric Violet', theme: 'theme-studio-grad-electric-violet', className: 'theme-btn-studio-grad-electric-violet' },
-    { label: 'Cinematic Gold', theme: 'theme-studio-grad-cinematic-gold', className: 'theme-btn-studio-grad-cinematic-gold' },
-    { label: 'Infrared', theme: 'theme-studio-grad-infrared', className: 'theme-btn-studio-grad-infrared' },
-    { label: 'Studio Chrome', theme: 'theme-studio-grad-chrome', className: 'theme-btn-studio-grad-chrome' },
-    { label: 'Aurora', theme: 'theme-studio-grad-aurora', className: 'theme-btn-studio-grad-aurora' },
-    { label: 'Coral Reef', theme: 'theme-studio-grad-coral-reef', className: 'theme-btn-studio-grad-coral-reef' },
-    { label: 'Plasma', theme: 'theme-studio-grad-plasma', className: 'theme-btn-studio-grad-plasma' },
+
+    { label: 'Flow', theme: 'theme-studio-grad-purple-pink-orange', className: 'tp-grad-purple-pink-orange' },
+    { label: 'Prism', theme: 'theme-studio-grad-red-purple-blue', className: 'tp-grad-red-purple-blue' },
+    { label: 'Synthwave', theme: 'theme-studio-grad-sunset-laser', className: 'tp-grad-sunset-laser' },
+    { label: 'Cyber Pulse', theme: 'theme-studio-grad-neon-studio', className: 'tp-grad-neon-studio' },
+
+    { label: 'Moon Mist', theme: 'theme-studio-grad-moon-mist', className: 'tp-grad-moon-mist' },
+    { label: 'Flamingo', theme: 'theme-studio-grad-pink-orange', className: 'tp-grad-pink-orange' },
+    { label: 'Spectrum', theme: 'theme-studio-grad-red-blue-green', className: 'tp-grad-red-blue-green' },
+    { label: 'Borealis', theme: 'theme-studio-grad-aurora', className: 'tp-grad-aurora' },
+
+    { label: 'Solstice', theme: 'theme-studio-grad-yellow-orange-red', className: 'tp-grad-yellow-orange-red' },
+    { label: 'Ultraviolet', theme: 'theme-studio-grad-electric-violet', className: 'tp-grad-electric-violet' },
+    { label: 'Infrared', theme: 'theme-studio-grad-infrared', className: 'tp-grad-infrared' },
+    { label: 'Gold Rush', theme: 'theme-studio-grad-cinematic-gold', className: 'tp-grad-cinematic-gold' },
+
+    { label: 'Steel Blue', theme: 'theme-studio', className: 'tp-studio-balanced' },
+    { label: 'Graphite', theme: 'theme-studio-slate', className: 'tp-studio-slate' },
+    { label: 'Deep Sea', theme: 'theme-studio-ocean', className: 'tp-studio-ocean' },
+    { label: 'Titanium', theme: 'theme-studio-grad-chrome', className: 'tp-grad-chrome' },
+
+    { label: 'Enterprise', theme: 'theme-studio-grad-enterprise', className: 'tp-grad-enterprise' },
+    { label: 'Homelab', theme: 'theme-studio-grad-homelab', className: 'tp-grad-homelab' },
+    { label: 'Professional', theme: 'theme-studio-grad-professional', className: 'tp-grad-professional' },
+    { label: 'Studio', theme: 'theme-studio-original-purple', className: 'tp-studio-original-purple' },
 ]
 
 function selectTheme(theme: Theme) {
     setTheme(theme)
 }
-
-
-function gotoHome() {
-    const target = isLoggedIn.value
-        ? 'dashboard'      // already authenticated → Dashboard
-    : 'server-selection'  // not logged in → Login/Server select
-    // router.push(target)
-    to(target);
-    show.value = false
-}
-
-async function checkForUpdates() {
-    if (updateBusy.value) return
-    updateBusy.value = true
-    try {
-        pushNotification(new Notification('Updater', 'Checking for updates...', 'info', 5000))
-        await window.electron?.ipcRenderer.invoke('update:check')
-        show.value = false
-    } catch (err: any) {
-        pushNotification(new Notification('Updater Error', err?.message || 'Unable to check updates', 'error', 8000))
-    } finally {
-        updateBusy.value = false
-    }
-}
-
-const isActive = (name: string) => route.name === name
-const buttonClass = (name: 'setup' | 'backup' | 'restore' | 'dashboard') =>
-    ['wizard-btn', isActive(name) ? 'animate-glow' : ''].join(' ')
 </script>
 
 <style scoped>
-.btn-moon {
-    background-color: #374151;
-    border: 1px solid #1f2937;
-    color: #e5e7eb;
-    transition: all 0.2s ease-in-out;
-}
-
-.btn-moon:hover {
-    background-color: #1f2937;
-    border-color: #111827;
-    color: #ffffff;
-}
-
-.btn-sun {
-    background-color: #fef9c3;
-    border: 1px solid #fcd34d;
-    color: #1f2937;
-    transition: all 0.2s ease-in-out;
-}
-
-.btn-sun:hover {
-    background-color: #fde68a;
-    border-color: #fbbf24;
-    color: #111827;
-}
-
-.btn-sun,
-.btn-moon {
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    /* rounded-md */
-    font-weight: 500;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-}
-
-
-.palette-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-}
-
-.menu-disclosure {
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 0.5rem;
-    padding: 0.35rem;
-    background: rgba(15, 23, 42, 0.12);
-}
-
-.menu-disclosure-summary {
+/* ── Trigger button ─────────────────────────────── */
+.theme-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #7262b2;
+    text-shadow: 0 0 10px rgba(196, 181, 253, 0.4);
     cursor: pointer;
-    font-size: 0.75rem;
+    transition: color 0.2s ease, transform 0.15s ease;
+    line-height: 1;
+}
+.theme-trigger:hover {
+    color: #8c4eff;
+    transform: scale(1.12);
+}
+
+/* ── Popover ────────────────────────────────────── */
+.theme-popover {
+    position: fixed;
+    z-index: 1002;
+    width: 340px;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    padding: 0.65rem;
+    color: #e2e8f0;
+}
+
+/* Light-mode override */
+:root:not(.dark) .theme-popover {
+    background: rgba(255, 255, 255, 0.94);
+    border-color: rgba(148, 163, 184, 0.35);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+    color: #1e293b;
+}
+
+/* ── Header ─────────────────────────────────────── */
+.tp-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.25rem 0.45rem;
+}
+
+.tp-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+/* ── Palette grid ───────────────────────────────── */
+.tp-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.3rem;
+    margin-bottom: 0.55rem;
+}
+
+/* ── Swatch button ──────────────────────────────── */
+.tp-swatch {
+    font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 0.01em;
-    user-select: none;
-    color: currentColor;
-}
-
-.disclosure-content {
-    margin-top: 0.45rem;
-}
-
-.theme-btn-studio-balanced {
-    background-color: #4E6B93;
-    border: 1px solid #4E6B93;
+    padding: 0.4rem 0.25rem;
+    border-radius: 0.35rem;
     color: white;
+    border: 2px solid rgba(0, 0, 0, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.2;
+    transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.theme-btn-studio-balanced:hover {
-    background-color: #3F587A;
-    border-color: #3F587A;
+.tp-swatch:hover {
+    transform: scale(1.04);
+    filter: brightness(1.08);
 }
 
-.theme-btn-studio-original-purple {
-    background-color: #6557A5;
-    border: 1px solid #6557A5;
-    color: white;
+.tp-swatch-active {
+    border-color: white;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 0 12px rgba(255, 255, 255, 0.2);
 }
 
-.theme-btn-studio-original-purple:hover {
-    background-color: #504584;
-    border-color: #504584;
+/* ── Transition ─────────────────────────────────── */
+.theme-pop-enter-active {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.theme-pop-leave-active {
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.theme-pop-enter-from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+}
+.theme-pop-leave-to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
 }
 
-.theme-btn-studio-grad-purple-orange {
-    background: linear-gradient(135deg, #6F58B8 0%, #C96E36 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
+/* ── Swatch colors ──────────────────────────────── */
+.tp-studio-balanced         { background: linear-gradient(135deg, #2C3E5A, #4E6B93 50%, #7A9BC0); }
+.tp-studio-balanced:hover   { background: linear-gradient(135deg, #223250, #3F587A 50%, #6888AE); }
 
-.theme-btn-studio-grad-purple-orange:hover {
-    filter: brightness(1.05);
-}
+.tp-studio-original-purple       { background: linear-gradient(135deg, #3D2D78, #6557A5 50%, #9B8ADB); }
+.tp-studio-original-purple:hover { background: linear-gradient(135deg, #312462, #504584 50%, #8474C5); }
 
-.theme-btn-studio-grad-purple-pink-orange {
-    background: linear-gradient(135deg, #7A4FD8 0%, #D95AA5 52%, #E57A4A 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
+.tp-studio-slate       { background: linear-gradient(135deg, #374151, #5F6E82 50%, #8B9DB3); }
+.tp-studio-slate:hover { background: linear-gradient(135deg, #2D3643, #4E5D71 50%, #7889A0); }
 
-.theme-btn-studio-grad-purple-pink-orange:hover {
-    filter: brightness(1.05);
-}
+.tp-studio-ocean       { background: linear-gradient(135deg, #1B3D4F, #3E6D84 50%, #6BA4BE); }
+.tp-studio-ocean:hover { background: linear-gradient(135deg, #153242, #31596D 50%, #5890A8); }
 
-.theme-btn-studio-grad-purple-pink-blue {
-    background: linear-gradient(135deg, #6D4FE0 0%, #D65EAE 50%, #4C7CF4 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-purple-pink-blue:hover {
-    filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-purple-blue {
-    background: linear-gradient(135deg, #7A3CFF 0%, #4A7CEB 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-purple-blue:hover {
-    filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-red-purple-blue {
-    background: linear-gradient(135deg, #F43F5E 0%, #8B5CF6 52%, #3B82F6 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-red-purple-blue:hover {
-    filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-sunset-laser {
-    background: linear-gradient(135deg, #FF6A00 0%, #FF2D95 48%, #2CF3E9 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-sunset-laser:hover {
-    filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-neon-studio {
-    background: linear-gradient(135deg, #14B8A6 0%, #6D28D9 45%, #F43F5E 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-neon-studio:hover {
-    filter: brightness(1.05);
-}
-
-.theme-btn-studio-slate {
-    background-color: #5F6E82;
-    border: 1px solid #5F6E82;
-    color: white;
-}
-
-.theme-btn-studio-slate:hover {
-    background-color: #4E5D71;
-    border-color: #4E5D71;
-}
-
-.theme-btn-studio-ocean {
-    background-color: #3E6D84;
-    border: 1px solid #3E6D84;
-    color: white;
-}
-
-.theme-btn-studio-ocean:hover {
-    background-color: #31596D;
-    border-color: #31596D;
-}
-
-.theme-btn-studio-grad-moon-mist {
-    background: linear-gradient(135deg, #7A2CFF 0%, #2EA8FF 52%, #FFE44D 100%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: white;
-}
-
-.theme-btn-studio-grad-moon-mist:hover {
-    filter: brightness(1.05);
-}
-.theme-btn-studio-grad-pink-orange {
-  background: linear-gradient(135deg, #E84393 0%, #F39C12 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-pink-orange:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-red-blue-green {
-  background: linear-gradient(135deg, #EF4444 0%, #3B82F6 50%, #22C55E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-red-blue-green:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-red-orange-yellow {
-  background: linear-gradient(135deg, #EF4444 0%, #F97316 50%, #EAB308 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-red-orange-yellow:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-yellow-orange-red {
-  background: linear-gradient(135deg, #EAB308 0%, #F97316 50%, #EF4444 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-yellow-orange-red:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-orange-pink {
-  background: linear-gradient(135deg, #F97316 0%, #EC4899 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-orange-pink:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-electric-violet {
-  background: linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-electric-violet:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-cinematic-gold {
-  background: linear-gradient(135deg, #92400E 0%, #D97706 45%, #F59E0B 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-cinematic-gold:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-infrared {
-  background: linear-gradient(135deg, #F43F7F 0%, #E11D48 50%, #9F1239 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-infrared:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-chrome {
-  background: linear-gradient(135deg, #64748B 0%, #94A3B8 50%, #475569 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-chrome:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-aurora {
-  background: linear-gradient(135deg, #10B981 0%, #0891B2 50%, #7C3AED 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-aurora:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-coral-reef {
-  background: linear-gradient(135deg, #F97068 0%, #2DD4BF 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-coral-reef:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn-studio-grad-plasma {
-  background: linear-gradient(135deg, #D946EF 0%, #2563EB 34%, #84CC16 68%, #F59E0B 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: white;
-}
-
-.theme-btn-studio-grad-plasma:hover {
-  filter: brightness(1.05);
-}
-
-.theme-btn {
-    font-size: 0.75rem;
-    font-weight: bold;
-    padding: 0.3rem 0.5rem;
-    border-radius: 0.25rem;
-    opacity: 0.88;
-    transition: all 0.2s ease-in-out;
-}
-
-.theme-btn:hover {
-    opacity: 1;
-    transform: scale(1.02);
-}
-
-.theme-btn-active {
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75);
-}
+.tp-grad-purple-orange       { background: linear-gradient(135deg, #6F58B8, #C96E36); }
+.tp-grad-purple-pink-orange  { background: linear-gradient(135deg, #7A4FD8, #D95AA5 52%, #E57A4A); }
+.tp-grad-purple-pink-blue    { background: linear-gradient(135deg, #6D4FE0, #D65EAE 50%, #4C7CF4); }
+.tp-grad-purple-blue         { background: linear-gradient(135deg, #7A3CFF, #4A7CEB); }
+.tp-grad-red-purple-blue     { background: linear-gradient(135deg, #F43F5E, #8B5CF6 52%, #3B82F6); }
+.tp-grad-sunset-laser        { background: linear-gradient(135deg, #FF6A00, #FF2D95 48%, #2CF3E9); }
+.tp-grad-neon-studio         { background: linear-gradient(135deg, #14B8A6, #6D28D9 45%, #F43F5E); }
+.tp-grad-moon-mist           { background: linear-gradient(135deg, #7A2CFF, #2EA8FF 52%, #FFE44D); }
+.tp-grad-pink-orange         { background: linear-gradient(135deg, #E84393, #F39C12); }
+.tp-grad-red-blue-green      { background: linear-gradient(135deg, #EF4444, #3B82F6 50%, #22C55E); }
+.tp-grad-red-orange-yellow   { background: linear-gradient(135deg, #EF4444, #F97316 50%, #EAB308); }
+.tp-grad-yellow-orange-red   { background: linear-gradient(135deg, #EAB308, #F97316 50%, #EF4444); }
+.tp-grad-orange-pink         { background: linear-gradient(135deg, #F97316, #EC4899); }
+.tp-grad-electric-violet     { background: linear-gradient(135deg, #7C3AED, #06B6D4); }
+.tp-grad-cinematic-gold      { background: linear-gradient(135deg, #92400E, #D97706 45%, #F59E0B); }
+.tp-grad-infrared            { background: linear-gradient(135deg, #F43F7F, #E11D48 50%, #9F1239); }
+.tp-grad-chrome              { background: linear-gradient(135deg, #64748B, #94A3B8 50%, #475569); }
+.tp-grad-aurora              { background: linear-gradient(135deg, #10B981, #0891B2 50%, #7C3AED); }
+.tp-grad-coral-reef          { background: linear-gradient(135deg, #F97068, #2DD4BF); }
+.tp-grad-plasma              { background: linear-gradient(135deg, #D946EF, #2563EB 34%, #84CC16 68%, #F59E0B); }
+.tp-grad-enterprise          { background: linear-gradient(135deg, #8B1A1E, #D92B2F 50%, #FF6B6B); }
+.tp-grad-professional        { background: linear-gradient(135deg, #2D6A1E, #65A443 50%, #A8E063); }
+.tp-grad-homelab             { background: linear-gradient(135deg, #1E3A8A, #2563EB 50%, #60A5FA); }
 </style>

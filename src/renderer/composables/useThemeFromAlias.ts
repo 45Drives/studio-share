@@ -29,6 +29,9 @@ export type Theme =
   | 'theme-studio-grad-aurora'
   | 'theme-studio-grad-coral-reef'
   | 'theme-studio-grad-plasma'
+  | 'theme-studio-grad-enterprise'
+  | 'theme-studio-grad-professional'
+  | 'theme-studio-grad-homelab'
 type Division = 'studio' | 'homelab' | 'professional' | 'default'
 
 const aliasToTheme: Record<string, Theme> = {
@@ -65,6 +68,9 @@ const themeToDivision: Record<Theme, Division> = {
   'theme-studio-grad-aurora': 'studio',
   'theme-studio-grad-coral-reef': 'studio',
   'theme-studio-grad-plasma': 'studio',
+  'theme-studio-grad-enterprise': 'default',
+  'theme-studio-grad-professional': 'professional',
+  'theme-studio-grad-homelab': 'homelab',
   'theme-default': 'default'
 }
 
@@ -101,6 +107,9 @@ function isTheme(value: string): value is Theme {
     'theme-studio-grad-aurora',
     'theme-studio-grad-coral-reef',
     'theme-studio-grad-plasma',
+    'theme-studio-grad-enterprise',
+    'theme-studio-grad-professional',
+    'theme-studio-grad-homelab',
   ].includes(value)
 }
 
@@ -172,6 +181,9 @@ function setHtmlThemeClass(theme: Theme) {
     'theme-studio-grad-aurora',
     'theme-studio-grad-coral-reef',
     'theme-studio-grad-plasma',
+    'theme-studio-grad-enterprise',
+    'theme-studio-grad-professional',
+    'theme-studio-grad-homelab',
     'theme-studio-carbon'
   )
   root.classList.add(theme)

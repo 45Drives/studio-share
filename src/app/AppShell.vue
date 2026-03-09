@@ -3,11 +3,11 @@
     class="w-screen h-screen overflow-hidden flex flex-col text-default bg-default app-bg-textured">
     <header
       v-if="!hideHeader"
-      class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"
+      class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"       :class="(divisionCode !== 'studio' ? 'py-2' : '')"
     >
       <!-- Left (logo) -->
       <div class="justify-self-start">
-        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)" />
+        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)"/>
       </div>
 
       <!-- Center (title) -->
@@ -23,7 +23,7 @@
 
       <!-- Right (menu) -->
       <div class="justify-self-end text-right flex items-center gap-2">
-        <GlobalMenu v-if="showGlobalMenu" />
+        <GlobalMenu />
         <button
           class="theme-icon-btn"
           :class="darkMode ? 'theme-icon-btn--sun' : 'theme-icon-btn--moon'"
@@ -72,8 +72,6 @@ const hideHeader = computed(() => route.meta.hideHeader === true)
 const { headerTitle } = useHeaderTitle()
 const hideTransfers = computed(() => route.meta.hideTransfers === true)
 const darkMode = useDarkModeState()
-const GLOBAL_MENU_UNLOCK_KEY = '45flow-global-menu-unlock-v1'
-const showGlobalMenu = ref(false)
 
 const hasToken = computed(() => {
   if (connectionMeta.value?.token) return true
@@ -95,42 +93,9 @@ const { currentDivision, setThemeControlsUnlocked } = useThemeFromAlias()
 watch(currentDivision, (d) => { divisionCode.value = d as DivisionType }, { immediate: true })
 
 let unregisterIpcListener: (() => void) | null = null
-let unregisterSecretKeyListener: (() => void) | null = null
-
-function loadGlobalMenuUnlockState() {
-  try {
-    return window.sessionStorage.getItem(GLOBAL_MENU_UNLOCK_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveGlobalMenuUnlockState(unlocked: boolean) {
-  try {
-    window.sessionStorage.setItem(GLOBAL_MENU_UNLOCK_KEY, unlocked ? '1' : '0')
-  } catch {
-    // no-op
-  }
-}
 
 onMounted(() => {
-  const initialUnlockState = loadGlobalMenuUnlockState()
-  showGlobalMenu.value = initialUnlockState
-  setThemeControlsUnlocked(initialUnlockState)
-
-  const secretToggleHandler = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase()
-    const hasMainModifier = event.metaKey || event.ctrlKey
-    if (!hasMainModifier || !event.shiftKey || !event.altKey || key !== 'g') return
-    event.preventDefault()
-    const next = !showGlobalMenu.value
-    showGlobalMenu.value = next
-    saveGlobalMenuUnlockState(next)
-    setThemeControlsUnlocked(next)
-  }
-
-  window.addEventListener('keydown', secretToggleHandler)
-  unregisterSecretKeyListener = () => window.removeEventListener('keydown', secretToggleHandler)
+  setThemeControlsUnlocked(true)
 
   const isJson = (s: string) => { try { JSON.parse(s); return true } catch { return false } }
 
@@ -157,7 +122,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unregisterIpcListener?.()
-  unregisterSecretKeyListener?.()
 })
 </script>
 

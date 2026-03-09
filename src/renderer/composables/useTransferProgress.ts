@@ -672,7 +672,8 @@ export function useTransferProgress() {
 
         let status: TranscodeStatus = 'unknown'
         if (failed > 0) status = 'failed'
-        else if (running > 0 || queued > 0) status = 'running'
+        else if (running > 0) status = 'running'
+        else if (queued > 0) status = 'queued'
         else if (done > 0) status = 'done'
 
         const m = pickMetricsFromItems(items as Array<ProgressItem | VersionProgressItem>, 'any')
@@ -750,7 +751,8 @@ export function useTransferProgress() {
 
         let status: TranscodeStatus = 'unknown'
         if (failed > 0) status = 'failed'
-        else if (running > 0 || queued > 0) status = 'running'
+        else if (running > 0) status = 'running'
+        else if (queued > 0) status = 'queued'
         else if (done > 0) status = 'done'
 
         if (jobKind === 'proxy_mp4' || jobKind === 'hls') {
@@ -878,6 +880,7 @@ export function useTransferProgress() {
                     }
                 }
                 if (nextStatus === 'done') nextProgress = 100
+                if (nextStatus === 'queued') nextProgress = 0
                 cur.progress = nextProgress
                 cur.speed = (nextStatus === 'running') ? formatSpeed(s.speedX ?? null) : null
                 const serverEta = formatEta(s.etaSeconds ?? null)
