@@ -1125,12 +1125,17 @@ export function useTransferProgress() {
                 if (_state.tasks.some(x => x.taskId === t.id)) continue
 
                 // Also skip if we already have a task with the same file + destDir
-                // (prevents duplicates when renderer's own queue is still active)
-                if (_state.tasks.some(x =>
-                    x.kind === 'upload' &&
-                    x.context?.file === t.fileName &&
-                    x.context?.destDir === t.destDir
-                )) continue
+                // (prevents duplicates when renderer's own queue is still active).
+                // context.file may be a full absolute path while t.fileName is just
+                // the basename, so compare basenames to catch both cases.
+                if (_state.tasks.some(x => {
+                    if (x.kind !== 'upload') return false
+                    if (x.context?.destDir !== t.destDir) return false
+                    const ctxFile = x.context?.file
+                    if (!ctxFile) return false
+                    const ctxBase = ctxFile.includes('/') ? ctxFile.slice(ctxFile.lastIndexOf('/') + 1) : ctxFile
+                    return ctxBase === t.fileName
+                })) continue
 
                 const isQueued = t.status === 'queued'
                 const taskId = t.id
