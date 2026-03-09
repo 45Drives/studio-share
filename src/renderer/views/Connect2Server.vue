@@ -907,74 +907,88 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
         if (!data.updateAvailable) return;
 
         // Show a persistent notification with an install button
-        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}`;
+        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}. Clicking Update will log you out while the server updates.`;
         const notif = new Notification('Server Update Available', msg, 'warning', 'never');
 
-        notif.addAction('Install Update', async () => {
-            pushNotification(new Notification('Updating…', 'Installing broadcaster update on the server. This may take a minute…', 'info', 'never'));
+        notif.addAction('Update', async () => {
+            // 1. Fire the install request (server responds then starts upgrade in background)
+            let oldVersion: string | undefined;
             try {
-                let oldVersion: string | undefined;
+                const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
+                    method: 'POST',
+                    headers: hdrs,
+                });
+                if (installRes.ok) {
+                    const installData = await installRes.json();
+                    oldVersion = installData.oldVersion;
+                }
+            } catch {
+                window.appLog?.info('broadcaster-update-install.connection-dropped', { msg: 'expected during upgrade' });
+            }
+
+            // 2. Clear auth and navigate back to the connection screen
+            try { sessionStorage.removeItem('hb_token'); } catch { }
+            connectionMeta.value = { ...connectionMeta.value, token: undefined };
+            to('server-selection');
+
+            // 3. Show a persistent "updating" notification on the connection screen
+            const updatingNotif = new Notification(
+                'Server Updating…',
+                'The broadcaster is installing an update and will restart. Please wait…',
+                'info',
+                'never',
+            );
+            pushNotification(updatingNotif);
+
+            // 4. Poll until the server comes back (up to ~4 minutes)
+            const maxWaitMs = 240_000;
+            const pollIntervalMs = 4_000;
+            const startedAt = Date.now();
+            let newVersion: string | undefined;
+
+            while (Date.now() - startedAt < maxWaitMs) {
+                await new Promise(r => setTimeout(r, pollIntervalMs));
                 try {
-                    const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
-                        method: 'POST',
+                    const ctrl = new AbortController();
+                    const timer = setTimeout(() => ctrl.abort(), 5_000);
+                    // Use a no-auth health-style check (token is cleared).
+                    // broadcaster-update-check requires auth, so use a simple GET
+                    // to see if the server is responding at all, then re-check version.
+                    const pingRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
                         headers: hdrs,
+                        signal: ctrl.signal,
                     });
-                    if (installRes.ok) {
-                        const installData = await installRes.json();
-                        oldVersion = installData.oldVersion;
+                    clearTimeout(timer);
+                    if (pingRes.ok) {
+                        const checkData = await pingRes.json();
+                        newVersion = checkData.installedVersion;
+                        break;
                     }
                 } catch {
-                    // Connection may drop if the server restarts before we read the response — that's expected
-                    window.appLog?.info('broadcaster-update-install.connection-dropped', { msg: 'expected during upgrade' });
+                    // Server still down — keep polling
                 }
+            }
 
-                // Poll until the server comes back (up to ~3 minutes)
-                const maxWaitMs = 180_000;
-                const pollIntervalMs = 3_000;
-                const startedAt = Date.now();
-                let newVersion: string | undefined;
+            // 5. Remove the "updating" notification and show result
+            updatingNotif.remove();
 
-                while (Date.now() - startedAt < maxWaitMs) {
-                    await new Promise(r => setTimeout(r, pollIntervalMs));
-                    try {
-                        const ctrl = new AbortController();
-                        const timer = setTimeout(() => ctrl.abort(), 5_000);
-                        const checkRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
-                            headers: hdrs,
-                            signal: ctrl.signal,
-                        });
-                        clearTimeout(timer);
-                        if (checkRes.ok) {
-                            const checkData = await checkRes.json();
-                            newVersion = checkData.installedVersion;
-                            break; // server is back
-                        }
-                    } catch {
-                        // Server still down — keep polling
-                    }
-                }
-
-                if (newVersion) {
-                    const didUpdate = oldVersion && newVersion !== oldVersion;
-                    pushNotification(new Notification(
-                        didUpdate ? 'Broadcaster Updated' : 'Broadcaster Restarted',
-                        didUpdate
-                            ? `Updated from ${oldVersion} to ${newVersion}. Reconnecting…`
-                            : `Server is back (v${newVersion}).`,
-                        didUpdate ? 'success' : 'info',
-                        8000,
-                    ));
-                } else {
-                    pushNotification(new Notification(
-                        'Update Status Unknown',
-                        'The server has not come back yet. It may still be installing — check again in a moment.',
-                        'warning',
-                        10000,
-                    ));
-                }
-            } catch (err: any) {
-                window.appLog?.error('broadcaster-update-install.error', { error: err?.message });
-                pushNotification(new Notification('Update Failed', err?.message || 'Could not install update.', 'error', 8000));
+            if (newVersion) {
+                const didUpdate = oldVersion && newVersion !== oldVersion;
+                pushNotification(new Notification(
+                    didUpdate ? 'Server Updated' : 'Server Restarted',
+                    didUpdate
+                        ? `Updated from ${oldVersion} to ${newVersion}. You can now log in.`
+                        : `Server is back (v${newVersion}). You can now log in.`,
+                    didUpdate ? 'success' : 'info',
+                    12000,
+                ));
+            } else {
+                pushNotification(new Notification(
+                    'Update Status Unknown',
+                    'The server has not come back yet. It may still be installing — try logging in shortly.',
+                    'warning',
+                    15000,
+                ));
             }
         }, true);
 
