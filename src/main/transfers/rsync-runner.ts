@@ -276,10 +276,17 @@ export function reattachTailer(opts: TailOpts): LogTailer {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Read the last chunk of a log file and check if rsync reached 100% */
+/** Read the last chunk of a log file and check if rsync completed successfully */
 function lastProgressWas100(logFile: string): boolean {
   try {
     const tail = fs.readFileSync(logFile, 'utf-8').slice(-4096);
+
+    // When the file is already up-to-date on the remote, rsync outputs
+    //   0   0%  0.00kB/s  0:00:00 (xfr#0, to-chk=0/N)
+    // and exits 0 (success).  Detect this: xfr#0 + to-chk=0/ means
+    // "nothing to transfer, all files checked" → success.
+    if (/\(xfr#0,\s*to-chk=0\/\d+\)/.test(tail)) return true;
+
     // Look for the *last* percentage in the log
     const matches = [...tail.matchAll(/(\d+(?:\.\d+)?)%/g)];
     if (!matches.length) return false;
