@@ -907,10 +907,13 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
         if (!data.updateAvailable) return;
 
         // Show a persistent notification with an install button
-        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}. Clicking Update will log you out while the server updates.`;
-        const notif = new Notification('Server Update Available', msg, 'warning', 'never');
+        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}.\n Clicking Update will log you out while the server updates.`;
+        const notif = new Notification('Server Update Available', msg, 'warning', 15000);
 
         notif.addAction('Update', async () => {
+            // Dismiss the "update available" notification immediately
+            notif.remove();
+
             // 1. Fire the install request (server responds then starts upgrade in background)
             let oldVersion: string | undefined;
             try {
@@ -940,32 +943,54 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
             );
             pushNotification(updatingNotif);
 
-            // 4. Poll until the server comes back (up to ~4 minutes)
-            const maxWaitMs = 240_000;
-            const pollIntervalMs = 4_000;
-            const startedAt = Date.now();
-            let newVersion: string | undefined;
-
-            while (Date.now() - startedAt < maxWaitMs) {
-                await new Promise(r => setTimeout(r, pollIntervalMs));
+            // 4a. Wait for the server to go DOWN first (up to 90s).
+            //     systemd-run --no-block returns instantly, so the old server
+            //     may still be alive for a bit until dnf/apt's %preun stops it.
+            const downDeadline = Date.now() + 90_000;
+            let serverWentDown = false;
+            while (Date.now() < downDeadline) {
+                await new Promise(r => setTimeout(r, 2_000));
                 try {
                     const ctrl = new AbortController();
                     const timer = setTimeout(() => ctrl.abort(), 5_000);
-                    // Use a no-auth health-style check (token is cleared).
-                    // broadcaster-update-check requires auth, so use a simple GET
-                    // to see if the server is responding at all, then re-check version.
-                    const pingRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
+                    await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
                         headers: hdrs,
                         signal: ctrl.signal,
                     });
                     clearTimeout(timer);
-                    if (pingRes.ok) {
-                        const checkData = await pingRes.json();
-                        newVersion = checkData.installedVersion;
-                        break;
-                    }
+                    // Still responding — not down yet
                 } catch {
-                    // Server still down — keep polling
+                    // Connection refused / timeout → server is down
+                    serverWentDown = true;
+                    break;
+                }
+            }
+
+            // 4b. Now wait for the server to come BACK UP (up to ~4 minutes)
+            let newVersion: string | undefined;
+            if (serverWentDown) {
+                const maxWaitMs = 240_000;
+                const pollIntervalMs = 4_000;
+                const startedAt = Date.now();
+
+                while (Date.now() - startedAt < maxWaitMs) {
+                    await new Promise(r => setTimeout(r, pollIntervalMs));
+                    try {
+                        const ctrl = new AbortController();
+                        const timer = setTimeout(() => ctrl.abort(), 5_000);
+                        const pingRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
+                            headers: hdrs,
+                            signal: ctrl.signal,
+                        });
+                        clearTimeout(timer);
+                        if (pingRes.ok) {
+                            const checkData = await pingRes.json();
+                            newVersion = checkData.installedVersion;
+                            break;
+                        }
+                    } catch {
+                        // Server still down — keep polling
+                    }
                 }
             }
 
@@ -990,7 +1015,7 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
                     15000,
                 ));
             }
-        }, true);
+        }, false);
 
         pushNotification(notif);
     } catch (err: any) {
