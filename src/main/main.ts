@@ -382,7 +382,7 @@ import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { getPin, rememberPin } from './certPins'
-import { ChildProcessWithoutNullStreams, spawn as cpSpawn } from 'node:child_process'
+import { ChildProcessWithoutNullStreams, spawn as cpSpawn, spawnSync } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
 import { buildRsyncCmdAndArgs, findRsyncPath, rsyncSupportsProgress2 } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
@@ -2079,84 +2079,88 @@ async function runLocalCopy(opts: {
   const pick = findRsyncPath()
   const supportsP2 = rsyncSupportsProgress2(pick.cmd, pick.useWSL)
 
+  // Check if we can use sudo non-interactively.
+  // This mirrors the privilege model of rsync-over-SSH where the
+  // receiving side runs as the SSH target user (typically root).
+  const useSudo = canSudoNonInteractive()
+
+  // Ensure dest dir exists (synchronous, before rsync starts)
+  const mkdirResult = useSudo
+    ? spawnSync('sudo', ['-n', 'mkdir', '-p', destDir], { encoding: 'utf8' })
+    : spawnSync('mkdir', ['-p', destDir], { encoding: 'utf8' })
+
+  if (mkdirResult.status !== 0) {
+    const mkdirErr = (mkdirResult.stderr || mkdirResult.error?.message || '').trim()
+    jl('error', 'localcopy.mkdir.failed', { id, destDir, useSudo, status: mkdirResult.status, error: mkdirErr })
+    emit({ raw: `local copy failed: could not create ${destDir}: ${mkdirErr}` })
+    return false
+  }
+
   const rsyncArgs = [
     '-az', '--partial', '--inplace',
     supportsP2 ? '--info=progress2' : '--progress',
     srcFinal, destFinal,
   ]
 
-  // Try with sudo -n first (non-interactive, no password prompt)
-  // This mirrors the privilege model of rsync-over-SSH where the
-  // receiving side runs as the SSH target user (typically root).
-  const useSudo = await testSudoRsync()
+  const cmd = useSudo ? 'sudo' : pick.cmd
+  const args = useSudo ? ['-n', pick.cmd, ...rsyncArgs] : rsyncArgs
+
+  jl('info', 'localcopy.rsync', { id, cmd, args, useSudo })
+  emit({ percent: 0, raw: 'copying locally…' })
 
   return new Promise<boolean>((resolve) => {
-    const cmd = useSudo ? 'sudo' : pick.cmd
-    const args = useSudo ? ['-n', pick.cmd, ...rsyncArgs] : rsyncArgs
+    const child = cpSpawn(cmd, args, {
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
+    })
 
-    // Ensure dest dir exists (may need sudo too)
-    const mkdirCmd = useSudo
-      ? cpSpawn('sudo', ['-n', 'mkdir', '-p', destDir])
-      : cpSpawn('mkdir', ['-p', destDir])
+    let stderr = ''
 
-    mkdirCmd.on('close', () => {
-      jl('info', 'localcopy.rsync', { id, cmd, args, useSudo })
-      emit({ percent: 0, raw: 'copying locally…' })
+    child.stdout?.on('data', (chunk) => {
+      const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t) continue
+        emit(parseProgress(t))
+      }
+    })
 
-      const child = cpSpawn(cmd, args, {
-        env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
-      })
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString()
+      const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t) continue
+        emit(parseProgress(t))
+      }
+    })
 
-      let stderr = ''
-
-      child.stdout?.on('data', (chunk) => {
-        const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
-        for (const line of lines) {
-          const t = line.trim()
-          if (!t) continue
-          const p = parseProgress(t)
-          emit(p)
-        }
-      })
-
-      child.stderr?.on('data', (chunk) => {
-        stderr += chunk.toString()
-        const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
-        for (const line of lines) {
-          const t = line.trim()
-          if (!t) continue
-          const p = parseProgress(t)
-          emit(p)
-        }
-      })
-
-      child.on('close', (code) => {
-        if (code === 0) {
-          emit({ percent: 100, raw: 'done' })
-          jl('info', 'localcopy.done', { id, src, destDir, code })
-          resolve(true)
-        } else {
-          jl('error', 'localcopy.failed', { id, src, destDir, code, stderr: stderr.trim().slice(0, 500) })
-          emit({ raw: `local copy failed (exit ${code})` })
-          resolve(false)
-        }
-      })
-
-      child.on('error', (err) => {
-        jl('error', 'localcopy.spawn.error', { id, error: err?.message || String(err) })
+    child.on('close', (code) => {
+      if (code === 0) {
+        emit({ percent: 100, raw: 'done' })
+        jl('info', 'localcopy.done', { id, src, destDir, code })
+        resolve(true)
+      } else {
+        jl('error', 'localcopy.failed', { id, src, destDir, code, stderr: stderr.trim().slice(0, 500) })
+        emit({ raw: `local copy failed (exit ${code})` })
         resolve(false)
-      })
+      }
+    })
+
+    child.on('error', (err) => {
+      jl('error', 'localcopy.spawn.error', { id, error: err?.message || String(err) })
+      resolve(false)
     })
   })
 }
 
-/** Check if we can run sudo non-interactively */
-function testSudoRsync(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const child = cpSpawn('sudo', ['-n', 'true'])
-    child.on('close', (code) => resolve(code === 0))
-    child.on('error', () => resolve(false))
-  })
+/** Check if sudo -n works non-interactively (cached per process) */
+let _sudoOk: boolean | null = null
+function canSudoNonInteractive(): boolean {
+  if (_sudoOk !== null) return _sudoOk
+  const r = spawnSync('sudo', ['-n', 'true'], { encoding: 'utf8', timeout: 3000 })
+  _sudoOk = r.status === 0
+  jl('info', 'localcopy.sudo.check', { ok: _sudoOk })
+  return _sudoOk
 }
 
 // ── Resume detached transfers from a previous session ─────────────────────────
