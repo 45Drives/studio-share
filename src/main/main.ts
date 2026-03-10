@@ -2097,7 +2097,7 @@ async function runLocalCopy(opts: {
   }
 
   const rsyncArgs = [
-    '-az', '--partial', '--inplace',
+    '-az', '--partial', '--inplace', '--mkpath',
     supportsP2 ? '--info=progress2' : '--progress',
     srcFinal, destFinal,
   ]
@@ -2105,7 +2105,7 @@ async function runLocalCopy(opts: {
   const cmd = useSudo ? 'sudo' : pick.cmd
   const args = useSudo ? ['-n', pick.cmd, ...rsyncArgs] : rsyncArgs
 
-  jl('info', 'localcopy.rsync', { id, cmd, args, useSudo })
+  jl('info', 'localcopy.rsync', { id, cmd, args, useSudo, destDir, src })
   emit({ percent: 0, raw: 'copying locally…' })
 
   return new Promise<boolean>((resolve) => {
