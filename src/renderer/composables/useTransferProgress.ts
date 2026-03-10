@@ -459,10 +459,12 @@ function hasActiveTranscode(opts: {
 
         if (ids.length) {
             const taskIds = t.assetVersionIds || []
-            return ids.some(id => taskIds.includes(id))
+            if (ids.some(id => taskIds.includes(id))) return true
         }
 
-        return file ? taskHasFile(t, file) : false
+        if (file && taskHasFile(t, file)) return true
+
+        return false
     })
 }
 
@@ -1241,7 +1243,7 @@ export function useTransferProgress() {
                     const jobKind = (kind === 'proxy_mp4' || kind === 'hls') ? kind : 'any' as const
 
                     // Skip if we already have an active task for this version+kind
-                    if (hasActiveTranscode({ assetVersionIds: [assetVersionId], jobKind })) continue
+                    if (hasActiveTranscode({ assetVersionIds: [assetVersionId], file: filePath, jobKind })) continue
 
                     const label = kind === 'hls' ? 'Generating adaptive stream'
                         : kind === 'proxy_mp4' ? 'Generating proxy files'

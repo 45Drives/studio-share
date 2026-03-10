@@ -58,57 +58,58 @@
                         </button>
                     </div>
 
-                    <!-- FILE GROUPS -->
-                    <div v-for="fg in g.files" :key="fg.key" class="drawer-file-group">
-                        <div class="drawer-file-header">
-                            <div class="text-sm font-semibold truncate" :title="fg.fileTitle">{{ fg.fileTitle }}</div>
-                            <div v-if="fg.fileSubtitle" class="text-xs opacity-70 truncate" :title="fg.fileSubtitle">{{ fg.fileSubtitle }}</div>
+                    <!-- FILE CARDS (proxy + HLS + upload merged per file) -->
+                    <div v-for="fg in g.files" :key="fg.key" class="drawer-file-card">
+                        <!-- Card header: filename + overall status + dismiss -->
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                                <div class="text-sm font-semibold truncate" :title="fg.fileTitle">{{ fg.fileTitle }}</div>
+                                <div v-if="fg.fileSubtitle" class="text-[11px] opacity-50 truncate" :title="fg.fileSubtitle">{{ fg.fileSubtitle }}</div>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <span class="drawer-status-badge" :class="statusClass(bestOfTasks(fg.tasks))">
+                                    {{ statusLabel(bestOfTasks(fg.tasks)) }}
+                                </span>
+                                <button class="btn btn-secondary px-2 py-0.5 text-[10px]" @click="dismissFileGroup(fg)">
+                                    Dismiss
+                                </button>
+                            </div>
                         </div>
 
-                        <!-- TASKS -->
-                        <div v-for="t in fg.tasks" :key="t.taskId" class="drawer-task">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="min-w-0 text-left">
-                                    <div class="text-xs font-semibold truncate" :title="taskLabel(t)">
-                                        {{ taskLabel(t) }}
+                        <!-- Compact task rows -->
+                        <div class="mt-2 space-y-1.5">
+                            <div v-for="t in fg.tasks" :key="t.taskId">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-[11px] font-semibold opacity-80">{{ taskRowLabel(t) }}</span>
+                                        <button
+                                            v-if="t.kind === 'upload' && (t.status === 'uploading' || t.status === 'queued')"
+                                            class="btn btn-danger px-1.5 py-0 text-[9px] leading-tight"
+                                            @click="cancelUpload(t.taskId)">
+                                            Cancel
+                                        </button>
                                     </div>
-                                    <div class="text-xs opacity-70 truncate" v-if="t.detail" :title="String(t.detail).trim()">
-                                        {{ String(t.detail).trim() }}
+                                    <div class="flex items-center gap-2 flex-shrink-0 text-[10px] opacity-60 tabular-nums">
+                                        <span v-if="t.speed">{{ t.speed }}</span>
+                                        <span v-if="t.eta">ETA {{ t.eta }}</span>
+                                        <span class="font-semibold opacity-100">{{ Math.round(t.progress || 0) }}%</span>
                                     </div>
                                 </div>
-
-                                <div class="flex items-center gap-1 flex-shrink-0">
-                                    <button
-                                        v-if="t.kind === 'upload' && (t.status === 'uploading' || t.status === 'queued')"
-                                        class="btn btn-secondary px-2 py-1 text-xs" @click="cancelUpload(t.taskId)">
-                                        Cancel
-                                    </button>
-                                    <button class="btn btn-secondary px-2 py-1 text-xs" @click="removeTask(t.taskId)">
-                                        Dismiss
-                                    </button>
-                                </div>
+                                <progress class="w-full h-1 rounded-lg overflow-hidden mt-0.5"
+                                    :class="t.status === 'done' ? 'progress-done' : 'progress-active'"
+                                    :value="t.progress || 0" max="100" />
                             </div>
+                        </div>
 
-                            <progress class="mt-2 w-full h-1.5 rounded-lg overflow-hidden"
-                                :class="t.status === 'done' ? 'progress-done' : 'progress-active'"
-                                :value="t.progress || 0" max="100" />
-
-                            <div class="mt-1 text-xs opacity-80 flex flex-wrap gap-x-2 gap-y-0.5">
-                                <span class="drawer-status-badge" :class="statusClass(t)">
-                                    {{ statusLabel(t) }}
-                                </span>
-                                <span v-if="t.speed"><b>Speed:</b> {{ t.speed }}</span>
-                                <span v-if="t.eta"><b>ETA:</b> {{ t.eta }}</span>
-                                <span><b>Progress:</b> {{ Math.round(t.progress || 0) }}%</span>
-                            </div>
-
-                            <div v-if="t.error" class="mt-1 text-xs text-red-400">
+                        <!-- Errors (collapsed) -->
+                        <template v-for="t in fg.tasks" :key="'err:' + t.taskId">
+                            <div v-if="t.error" class="mt-1.5 text-xs text-red-400">
                                 <details class="cursor-pointer">
-                                    <summary class="select-none">{{ errorSummary(t.error) }}</summary>
-                                    <pre class="mt-1 whitespace-pre-wrap break-all opacity-80 max-h-32 overflow-y-auto text-[11px] leading-tight">{{ t.error }}</pre>
+                                    <summary class="select-none">{{ taskRowLabel(t) }}: {{ errorSummary(t.error) }}</summary>
+                                    <pre class="mt-1 whitespace-pre-wrap break-all opacity-80 max-h-24 overflow-y-auto text-[11px] leading-tight">{{ t.error }}</pre>
                                 </details>
                             </div>
-                        </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -182,15 +183,31 @@ function statusClass(t: any): string {
     return ''
 }
 
-function taskLabel(t: any) {
-    if (t?.kind === 'upload') return 'Uploading'
+function taskRowLabel(t: any) {
+    if (t?.kind === 'upload') return 'Upload'
     if (t?.kind === 'transcode') {
         const jk = String(t?.jobKind || '').toLowerCase()
-        if (jk === 'hls') return 'Generating adaptive stream'
-        if (jk === 'proxy_mp4') return 'Generating proxy files'
-        return 'Generating transcodes'
+        if (jk === 'proxy_mp4') {
+            const m = String(t?.detail || '').match(/\(([^)]+)\)/)
+            return m ? `Proxy (${m[1]})` : 'Proxy'
+        }
+        if (jk === 'hls') return 'Stream'
+        return 'Transcode'
     }
     return t?.title || 'Task'
+}
+
+function bestOfTasks(tasks: any[]): any {
+    if (!tasks.length) return { status: 'unknown' }
+    let best = tasks[0]
+    for (let i = 1; i < tasks.length; i++) {
+        if (statusPriority(tasks[i]) < statusPriority(best)) best = tasks[i]
+    }
+    return best
+}
+
+function dismissFileGroup(fg: { tasks: any[] }) {
+    for (const t of fg.tasks) removeTask(t.taskId)
 }
 
 /** Extract a short human-readable summary from a (potentially long) error string */
@@ -484,23 +501,30 @@ function dismissGroup(groupKey: string) {
     height: 100%;
 }
 
-.drawer-inner {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--ui-panel-bg);
-    border-left: 1px solid var(--ui-panel-border);
-    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
-    color: #111827;
-}
 
 :is(.dark *) .drawer-inner,
 .drawer-inner:is(.dark *) {
     color: #f3f4f6;
 }
 
-/* ── Header ────────────────────────────────────────────── */
+.drawer-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    background: transparent;
+    border-left: 1px solid var(--ui-panel-border);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+    color: #111827;
+    min-height: 0;
+}
 .drawer-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -512,14 +536,12 @@ function dismissGroup(groupKey: string) {
     flex-shrink: 0;
 }
 
-/* ── Body ──────────────────────────────────────────────── */
 .drawer-body {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: visible;
     min-height: 0;
+    background: var(--ui-panel-bg);
 }
-
 /* ── Group ─────────────────────────────────────────────── */
 .drawer-group {
     border-bottom: 1px solid var(--ui-panel-border);
@@ -534,18 +556,10 @@ function dismissGroup(groupKey: string) {
     background: color-mix(in srgb, var(--btn-primary-bg) 8%, var(--ui-panel-bg));
 }
 
-/* ── File Group ────────────────────────────────────────── */
-.drawer-file-group {
+/* ── File Card (merged tasks per file) ─────────────────── */
+.drawer-file-card {
+    padding: 0.5rem 0.85rem 0.6rem;
     border-top: 1px solid color-mix(in srgb, var(--ui-panel-border) 50%, transparent);
-}
-
-.drawer-file-header {
-    padding: 0.4rem 0.85rem;
-}
-
-/* ── Task ──────────────────────────────────────────────── */
-.drawer-task {
-    padding: 0.35rem 0.85rem 0.65rem;
 }
 
 /* ── Progress bar (static colors — avoids repaints on theme change) ── */

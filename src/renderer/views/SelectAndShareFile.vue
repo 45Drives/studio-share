@@ -454,8 +454,8 @@
                                                                     {{ usingExistingWatermark ? 'Choose New Image' : 'Choose Image' }}
                                                                 </button>
                                                                 <span class="text-sm truncate min-w-0"
-                                                                    :title="watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected')">
-                                                                    {{ watermarkFile ? watermarkFile.name : (usingExistingWatermark ? 'Using existing watermark outputs' : 'No image selected') }}
+                                                                    :title="effectiveWatermarkName || (usingExistingWatermark ? 'Using existing watermark' : 'No image selected')">
+                                                                    {{ effectiveWatermarkName || (usingExistingWatermark ? 'Using existing watermark' : 'No image selected') }}
                                                                 </span>
                                                                 <select
                                                                     v-model="selectedExistingWatermark"
@@ -477,7 +477,7 @@
                                                             
                                                         </div>
                                                         <div class="rounded-md p-2.5 min-w-0">
-                                                            <div v-if="hasVideoSelected && watermarkEnabled && watermarkFile?.dataUrl"
+                                                            <div v-if="hasVideoSelected && watermarkEnabled && effectiveWatermarkPreviewUrl"
                                                                 class="mt-1">
                                                                 <div class="flex items-center justify-between gap-2 mb-1">
                                                                     <div class="text-xs text-slate-400">Preview
@@ -493,7 +493,7 @@
                                                                     <div
                                                                         class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60">
                                                                     </div>
-                                                                    <img :src="watermarkFile.dataUrl"
+                                                                    <img :src="effectiveWatermarkPreviewUrl"
                                                                         alt="Watermark preview"
                                                                         class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
                                                                 </div>
@@ -983,6 +983,7 @@ type LocalFile = { path: string; name: string; size: number; dataUrl?: string | 
 const watermarkFile = ref<LocalFile | null>(null)
 const existingWatermarkFiles = ref<string[]>([])
 const selectedExistingWatermark = ref('')
+const existingWatermarkPreviewUrl = ref<string | null>(null)
 const overwriteExisting = ref(false)
 const preflightLoading = ref(false)
 const preflightProxyBlocked = ref(false)
@@ -1039,8 +1040,21 @@ const usingExistingProxy = computed(() =>
 )
 
 const usingExistingWatermark = computed(() =>
-    !!watermarkEnabled.value && allSelectedVideosHaveWatermark.value
+    !!watermarkEnabled.value && allSelectedVideosHaveWatermark.value && !watermarkFile.value
 )
+
+const effectiveWatermarkPreviewUrl = computed(() =>
+    watermarkFile.value?.dataUrl || existingWatermarkPreviewUrl.value || null
+)
+
+const effectiveWatermarkName = computed(() => {
+    if (watermarkFile.value) return watermarkFile.value.name
+    if (selectedExistingWatermark.value) return selectedExistingWatermark.value.split('/').pop() || ''
+    if (allSelectedVideosHaveWatermark.value && existingWatermarkFiles.value.length) {
+        return existingWatermarkFiles.value[0].split('/').pop() || ''
+    }
+    return ''
+})
 
 const transcodeSwitchDisabled = computed(() =>
     !canTranscodeSelected.value || preflightLoading.value
@@ -1162,12 +1176,18 @@ watch(files, () => {
 }, { deep: true })
 
 watch(selectedExistingWatermark, (v) => {
-    if (String(v || '').trim()) watermarkFile.value = null
+    if (String(v || '').trim()) {
+        watermarkFile.value = null
+        void fetchExistingWatermarkPreview(v)
+    }
 })
 
 watch(watermarkEnabled, (enabled) => {
     if (enabled) void loadExistingWatermarkFiles()
-    if (!enabled) selectedExistingWatermark.value = ''
+    if (!enabled) {
+        selectedExistingWatermark.value = ''
+        existingWatermarkPreviewUrl.value = null
+    }
 })
 
 function pickWatermark() {
@@ -1178,7 +1198,11 @@ function pickWatermark() {
         }
     })
 }
-function clearWatermark() { watermarkFile.value = null }
+function clearWatermark() {
+    watermarkFile.value = null
+    existingWatermarkPreviewUrl.value = null
+    selectedExistingWatermark.value = ''
+}
 
 async function loadExistingWatermarkFiles() {
     try {
@@ -1189,8 +1213,35 @@ async function loadExistingWatermarkFiles() {
             .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
             .map((e: any) => `${dirRel}/${String(e.name).trim()}`)
             .sort((a: string, b: string) => a.localeCompare(b))
+
+        // Auto-load preview for first existing watermark when detected
+        if (allSelectedVideosHaveWatermark.value && existingWatermarkFiles.value.length && !watermarkFile.value && !selectedExistingWatermark.value) {
+            selectedExistingWatermark.value = existingWatermarkFiles.value[0]
+            void fetchExistingWatermarkPreview(existingWatermarkFiles.value[0])
+        }
     } catch {
         existingWatermarkFiles.value = []
+    }
+}
+
+async function fetchExistingWatermarkPreview(relPath: string) {
+    try {
+        const base = connectionMeta.value.apiBase ?? ''
+        const token = connectionMeta.value.token ?? ''
+        const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (!res.ok) { existingWatermarkPreviewUrl.value = null; return }
+        const blob = await res.blob()
+        existingWatermarkPreviewUrl.value = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+        })
+    } catch {
+        existingWatermarkPreviewUrl.value = null
     }
 }
 
