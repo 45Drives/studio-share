@@ -382,11 +382,11 @@ import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { getPin, rememberPin } from './certPins'
-import { ChildProcessWithoutNullStreams, spawn as cpSpawn, spawnSync } from 'node:child_process'
+import { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
-import { buildRsyncCmdAndArgs, findRsyncPath, rsyncSupportsProgress2 } from './transfers/rsync-path';
+import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
-import { runRsync, runRsyncDetached, reattachTailer, parseProgress, type LogTailer } from './transfers/rsync-runner';
+import { runRsyncDetached, reattachTailer, type LogTailer } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
 import {
   upsertTransfer, getRunningTransfers, getQueuedTransfers,
@@ -2055,112 +2055,114 @@ function isLocalHost(host: string): boolean {
 }
 
 /**
- * Copy a file or directory locally using rsync (no SSH).
- * Uses sudo -n for privilege escalation since the destination
- * (e.g. /tank/.45flow/) is typically owned by root/service user.
- * Falls back to direct rsync if sudo is unavailable.
+ * Copy a file locally by calling the houston-broadcaster API.
+ * The server runs as root and can write to any directory under SHARE_ROOT.
+ * For directory transfers, each file is copied individually via the API.
  */
 async function runLocalCopy(opts: {
   id: string
   src: string
   destDir: string
+  host: string
+  shareRoot?: string
   win?: BrowserWindow | null
 }): Promise<boolean> {
-  const { id, src, destDir, win } = opts
+  const { id, src, destDir, host, win } = opts
+  const apiPort = 9095
 
   const emit = (parsed: any) => {
     try { win?.webContents?.send(`upload:progress:${id}`, parsed) } catch {}
   }
 
-  const srcIsDir = (() => { try { return fs.statSync(src).isDirectory() } catch { return false } })()
-  const srcFinal = srcIsDir ? (src.endsWith('/') ? src : src + '/') : src
-  const destFinal = destDir.endsWith('/') ? destDir : destDir + '/'
+  emit({ percent: 0, raw: 'copying locally…' })
 
-  const pick = findRsyncPath()
-  const supportsP2 = rsyncSupportsProgress2(pick.cmd, pick.useWSL)
+  // Resolve share root so we can send a relative dest to the API
+  const shareRoot = opts.shareRoot || await getShareRootForHost(host, apiPort)
+  const destRel = normalizeDestRel(destDir, shareRoot)
 
-  // Check if we can use sudo non-interactively.
-  // This mirrors the privilege model of rsync-over-SSH where the
-  // receiving side runs as the SSH target user (typically root).
-  const useSudo = canSudoNonInteractive()
-
-  // Ensure dest dir exists (synchronous, before rsync starts)
-  const mkdirResult = useSudo
-    ? spawnSync('sudo', ['-n', 'mkdir', '-p', destDir], { encoding: 'utf8' })
-    : spawnSync('mkdir', ['-p', destDir], { encoding: 'utf8' })
-
-  if (mkdirResult.status !== 0) {
-    const mkdirErr = (mkdirResult.stderr || mkdirResult.error?.message || '').trim()
-    jl('error', 'localcopy.mkdir.failed', { id, destDir, useSudo, status: mkdirResult.status, error: mkdirErr })
-    emit({ raw: `local copy failed: could not create ${destDir}: ${mkdirErr}` })
+  if (!destRel) {
+    jl('error', 'localcopy.bad-dest', { id, destDir, shareRoot })
+    emit({ raw: 'local copy failed: could not determine relative destination' })
     return false
   }
 
-  const rsyncArgs = [
-    '-az', '--partial', '--inplace', '--mkpath',
-    supportsP2 ? '--info=progress2' : '--progress',
-    srcFinal, destFinal,
-  ]
+  const base = `http://127.0.0.1:${apiPort}`
 
-  const cmd = useSudo ? 'sudo' : pick.cmd
-  const args = useSudo ? ['-n', pick.cmd, ...rsyncArgs] : rsyncArgs
+  const srcIsDir = (() => { try { return fs.statSync(src).isDirectory() } catch { return false } })()
 
-  jl('info', 'localcopy.rsync', { id, cmd, args, useSudo, destDir, src })
-  emit({ percent: 0, raw: 'copying locally…' })
-
-  return new Promise<boolean>((resolve) => {
-    const child = cpSpawn(cmd, args, {
-      env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
-    })
-
-    let stderr = ''
-
-    child.stdout?.on('data', (chunk) => {
-      const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
-      for (const line of lines) {
-        const t = line.trim()
-        if (!t) continue
-        emit(parseProgress(t))
+  if (srcIsDir) {
+    // Collect all files in the directory tree
+    const allFiles: { abs: string; rel: string }[] = []
+    const walkDir = (dir: string, relBase: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const abs = path.join(dir, entry.name)
+        const rel = relBase ? `${relBase}/${entry.name}` : entry.name
+        if (entry.isDirectory()) {
+          walkDir(abs, rel)
+        } else if (entry.isFile()) {
+          allFiles.push({ abs, rel })
+        }
       }
-    })
+    }
+    walkDir(src, '')
 
-    child.stderr?.on('data', (chunk) => {
-      stderr += chunk.toString()
-      const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
-      for (const line of lines) {
-        const t = line.trim()
-        if (!t) continue
-        emit(parseProgress(t))
+    if (allFiles.length === 0) {
+      jl('warn', 'localcopy.empty-dir', { id, src })
+      emit({ percent: 100, raw: 'done (empty directory)' })
+      return true
+    }
+
+    const dirName = path.basename(src)
+    for (let i = 0; i < allFiles.length; i++) {
+      const f = allFiles[i]
+      const fileDest = `${destRel}/${dirName}/${path.dirname(f.rel)}`.replace(/\/\.$/, '')
+      const pct = Math.round(((i + 1) / allFiles.length) * 100)
+
+      const params = new URLSearchParams()
+      params.set('src', f.abs)
+      params.set('dest', fileDest)
+      params.set('name', path.basename(f.rel))
+
+      try {
+        const r = await fetch(`${base}/api/files/local-copy?${params}`, { method: 'POST' })
+        const j: any = await r.json().catch(() => ({}))
+        if (!r.ok || !j?.ok) {
+          jl('error', 'localcopy.api.failed', { id, file: f.abs, status: r.status, resp: j })
+          emit({ raw: `local copy failed: ${j?.error || r.statusText}` })
+          return false
+        }
+      } catch (e: any) {
+        jl('error', 'localcopy.api.error', { id, file: f.abs, error: e?.message || String(e) })
+        emit({ raw: `local copy failed: ${e?.message || 'API error'}` })
+        return false
       }
-    })
+      emit({ percent: pct, raw: `${f.rel} (${i + 1}/${allFiles.length})` })
+    }
+  } else {
+    // Single file copy
+    const params = new URLSearchParams()
+    params.set('src', src)
+    params.set('dest', destRel)
 
-    child.on('close', (code) => {
-      if (code === 0) {
-        emit({ percent: 100, raw: 'done' })
-        jl('info', 'localcopy.done', { id, src, destDir, code })
-        resolve(true)
-      } else {
-        jl('error', 'localcopy.failed', { id, src, destDir, code, stderr: stderr.trim().slice(0, 500) })
-        emit({ raw: `local copy failed (exit ${code})` })
-        resolve(false)
+    try {
+      const r = await fetch(`${base}/api/files/local-copy?${params}`, { method: 'POST' })
+      const j: any = await r.json().catch(() => ({}))
+      if (!r.ok || !j?.ok) {
+        jl('error', 'localcopy.api.failed', { id, src, dest: destRel, status: r.status, resp: j })
+        emit({ raw: `local copy failed: ${j?.error || r.statusText}` })
+        return false
       }
-    })
+      jl('info', 'localcopy.api.ok', { id, src, dest: j.dest, size: j.size })
+    } catch (e: any) {
+      jl('error', 'localcopy.api.error', { id, src, error: e?.message || String(e) })
+      emit({ raw: `local copy failed: ${e?.message || 'API error'}` })
+      return false
+    }
+  }
 
-    child.on('error', (err) => {
-      jl('error', 'localcopy.spawn.error', { id, error: err?.message || String(err) })
-      resolve(false)
-    })
-  })
-}
-
-/** Check if sudo -n works non-interactively (cached per process) */
-let _sudoOk: boolean | null = null
-function canSudoNonInteractive(): boolean {
-  if (_sudoOk !== null) return _sudoOk
-  const r = spawnSync('sudo', ['-n', 'true'], { encoding: 'utf8', timeout: 3000 })
-  _sudoOk = r.status === 0
-  jl('info', 'localcopy.sudo.check', { ok: _sudoOk })
-  return _sudoOk
+  emit({ percent: 100, raw: 'done' })
+  jl('info', 'localcopy.done', { id, src, destDir })
+  return true
 }
 
 // ── Resume detached transfers from a previous session ─────────────────────────
@@ -2289,7 +2291,7 @@ function startQueuedTransfer(t: PersistedTransfer) {
     const win = BrowserWindow.getAllWindows()[0] ?? undefined
     jl('info', 'queue.local', { id: t.id, src: t.src, destDir: t.destDir })
     markTransferRunning(t.id, 0, '')
-    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, win })
+    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, host: t.host, shareRoot: t.shareRoot, win })
       .then(ok => handleDetachedCompletion({ ...t, pid: 0, logFile: '', status: 'running' }, ok))
     return
   }
@@ -2338,7 +2340,7 @@ function respawnTransfer(t: PersistedTransfer) {
   if (isLocalHost(t.host)) {
     const win = BrowserWindow.getAllWindows()[0] ?? undefined
     jl('info', 'resume.local', { id: t.id, src: t.src, destDir: t.destDir })
-    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, win })
+    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, host: t.host, shareRoot: t.shareRoot, win })
       .then(ok => handleDetachedCompletion(t, ok))
     return
   }
@@ -2560,6 +2562,8 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         id,
         src,
         destDir: opts.destDir,
+        host: opts.host,
+        shareRoot: opts.shareRoot,
         win: BrowserWindow.getAllWindows()[0],
       })
 
