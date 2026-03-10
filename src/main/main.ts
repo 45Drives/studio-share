@@ -382,11 +382,11 @@ import { server, unwrap } from '@45drives/houston-common-lib';
 import { installServerDepsRemotely } from './installServerDeps';
 import { checkSSH } from './setupSsh';
 import { getPin, rememberPin } from './certPins'
-import { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { ChildProcessWithoutNullStreams, spawn as cpSpawn } from 'node:child_process'
 import { NodeSSH } from 'node-ssh';
-import { buildRsyncCmdAndArgs } from './transfers/rsync-path';
+import { buildRsyncCmdAndArgs, findRsyncPath, rsyncSupportsProgress2 } from './transfers/rsync-path';
 import { registerSensitiveToken, scrubSecrets } from './scrubSecrets';
-import { runRsync, runRsyncDetached, reattachTailer, type LogTailer } from './transfers/rsync-runner';
+import { runRsync, runRsyncDetached, reattachTailer, parseProgress, type LogTailer } from './transfers/rsync-runner';
 import { runWinSftp } from './transfers/win-file-sftp';
 import {
   upsertTransfer, getRunningTransfers, getQueuedTransfers,
@@ -2055,9 +2055,10 @@ function isLocalHost(host: string): boolean {
 }
 
 /**
- * Copy a file or directory locally (no SSH/rsync needed).
- * Emits progress events to the renderer via IPC.
- * Returns true on success, false on failure.
+ * Copy a file or directory locally using rsync (no SSH).
+ * Uses sudo -n for privilege escalation since the destination
+ * (e.g. /tank/.45flow/) is typically owned by root/service user.
+ * Falls back to direct rsync if sudo is unavailable.
  */
 async function runLocalCopy(opts: {
   id: string
@@ -2071,72 +2072,91 @@ async function runLocalCopy(opts: {
     try { win?.webContents?.send(`upload:progress:${id}`, parsed) } catch {}
   }
 
-  try {
-    const srcStat = fs.statSync(src)
-    const isDir = srcStat.isDirectory()
+  const srcIsDir = (() => { try { return fs.statSync(src).isDirectory() } catch { return false } })()
+  const srcFinal = srcIsDir ? (src.endsWith('/') ? src : src + '/') : src
+  const destFinal = destDir.endsWith('/') ? destDir : destDir + '/'
 
-    // Ensure destination directory exists
-    fs.mkdirSync(destDir, { recursive: true })
+  const pick = findRsyncPath()
+  const supportsP2 = rsyncSupportsProgress2(pick.cmd, pick.useWSL)
 
-    if (isDir) {
-      // Recursive directory copy
-      emit({ percent: 0, raw: 'copying directory locally…' })
-      copyDirRecursive(src, destDir)
-      emit({ percent: 100, raw: 'done' })
-      return true
-    }
+  const rsyncArgs = [
+    '-az', '--partial', '--inplace',
+    supportsP2 ? '--info=progress2' : '--progress',
+    srcFinal, destFinal,
+  ]
 
-    // Single file copy with progress via streams
-    const fileName = path.basename(src)
-    const destPath = path.join(destDir, fileName)
-    const totalBytes = srcStat.size
+  // Try with sudo -n first (non-interactive, no password prompt)
+  // This mirrors the privilege model of rsync-over-SSH where the
+  // receiving side runs as the SSH target user (typically root).
+  const useSudo = await testSudoRsync()
 
-    emit({ percent: 0, raw: 'copying locally…' })
+  return new Promise<boolean>((resolve) => {
+    const cmd = useSudo ? 'sudo' : pick.cmd
+    const args = useSudo ? ['-n', pick.cmd, ...rsyncArgs] : rsyncArgs
 
-    await new Promise<void>((resolve, reject) => {
-      const readStream = fs.createReadStream(src)
-      const writeStream = fs.createWriteStream(destPath)
-      let bytesCopied = 0
+    // Ensure dest dir exists (may need sudo too)
+    const mkdirCmd = useSudo
+      ? cpSpawn('sudo', ['-n', 'mkdir', '-p', destDir])
+      : cpSpawn('mkdir', ['-p', destDir])
 
-      readStream.on('data', (chunk) => {
-        bytesCopied += chunk.length
-        const pct = totalBytes > 0 ? Math.min(100, Math.round((bytesCopied / totalBytes) * 100)) : 0
-        emit({ percent: pct, bytesTransferred: bytesCopied, raw: `${pct}%` })
+    mkdirCmd.on('close', () => {
+      jl('info', 'localcopy.rsync', { id, cmd, args, useSudo })
+      emit({ percent: 0, raw: 'copying locally…' })
+
+      const child = cpSpawn(cmd, args, {
+        env: { ...process.env, LC_ALL: 'C', LANG: 'C', COLUMNS: '200' },
       })
 
-      readStream.on('error', reject)
-      writeStream.on('error', reject)
-      writeStream.on('finish', resolve)
+      let stderr = ''
 
-      readStream.pipe(writeStream)
+      child.stdout?.on('data', (chunk) => {
+        const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
+        for (const line of lines) {
+          const t = line.trim()
+          if (!t) continue
+          const p = parseProgress(t)
+          emit(p)
+        }
+      })
+
+      child.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString()
+        const lines = chunk.toString().replace(/\r/g, '\n').split('\n')
+        for (const line of lines) {
+          const t = line.trim()
+          if (!t) continue
+          const p = parseProgress(t)
+          emit(p)
+        }
+      })
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          emit({ percent: 100, raw: 'done' })
+          jl('info', 'localcopy.done', { id, src, destDir, code })
+          resolve(true)
+        } else {
+          jl('error', 'localcopy.failed', { id, src, destDir, code, stderr: stderr.trim().slice(0, 500) })
+          emit({ raw: `local copy failed (exit ${code})` })
+          resolve(false)
+        }
+      })
+
+      child.on('error', (err) => {
+        jl('error', 'localcopy.spawn.error', { id, error: err?.message || String(err) })
+        resolve(false)
+      })
     })
-
-    // Preserve file permissions
-    try { fs.chmodSync(destPath, srcStat.mode) } catch {}
-
-    emit({ percent: 100, raw: 'done' })
-    jl('info', 'localcopy.done', { id, src, destDir, size: totalBytes })
-    return true
-  } catch (e: any) {
-    jl('error', 'localcopy.failed', { id, src, destDir, error: e?.message || String(e) })
-    emit({ percent: 0, raw: `local copy failed: ${e?.message}` })
-    return false
-  }
+  })
 }
 
-function copyDirRecursive(src: string, destParent: string) {
-  const dirName = path.basename(src)
-  const destDir = path.join(destParent, dirName)
-  fs.mkdirSync(destDir, { recursive: true })
-
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name)
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destDir)
-    } else {
-      fs.copyFileSync(srcPath, path.join(destDir, entry.name))
-    }
-  }
+/** Check if we can run sudo non-interactively */
+function testSudoRsync(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = cpSpawn('sudo', ['-n', 'true'])
+    child.on('close', (code) => resolve(code === 0))
+    child.on('error', () => resolve(false))
+  })
 }
 
 // ── Resume detached transfers from a previous session ─────────────────────────
