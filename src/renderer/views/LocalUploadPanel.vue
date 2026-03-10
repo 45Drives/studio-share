@@ -240,7 +240,7 @@
 												]" />
 											</Switch>
 											<span class="text-sm text-muted">
-												{{ transcodeProxyAfterUpload ? 'Generate and use proxy files' : 'Share raw files only' }}
+												{{ transcodeProxyAfterUpload ? 'Generate and use proxy files' : 'Upload original files with streaming' }}
 											</span>
 										</div>
 

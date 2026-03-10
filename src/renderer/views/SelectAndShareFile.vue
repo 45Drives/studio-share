@@ -381,7 +381,7 @@
                                                                 <span class="text-sm truncate min-w-0 flex-1" :title="transcodeSwitchTitle">
                                                                     <template v-if="!canTranscodeSelected">(Only for Videos)</template>
                                                                     <template v-else>
-                                                                        {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share raw files only' }}
+                                                                        {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share original files with streaming' }}
                                                                     </template>
                                                                 </span>
                                                             </div>
