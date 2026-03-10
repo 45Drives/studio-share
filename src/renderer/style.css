@@ -1170,6 +1170,53 @@ textarea:focus-visible {
   padding-bottom: 0.45rem !important;
 }
 
+input[type="checkbox"].proxy-quality-checkbox {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  accent-color: initial !important;
+
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-color, #94a3b8);
+  background: var(--surface-color, #ffffff);
+  cursor: pointer;
+  box-shadow: none;
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+input[type="checkbox"].proxy-quality-checkbox:checked {
+  background-color: var(--btn-primary-bg);
+  border-color: var(--btn-primary-border);
+}
+
+input[type="checkbox"].proxy-quality-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: 0.095rem;
+  width: 0.25rem;
+  height: 0.5rem;
+  border: 2px solid #fff;
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+  box-sizing: content-box;
+}
+
+.proxy-quality-checkbox:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 2px;
+}
+
+.proxy-quality-checkbox:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 /* =====================
    Text color overrides that mirror button tokens

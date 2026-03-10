@@ -2289,47 +2289,4 @@ function onApplyUsers(
     scheduleAutoRegen()
 }
 
-
 </script>
-
-<style scoped>
-.proxy-quality-checkbox {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    width: 1rem;
-    height: 1rem;
-    border-radius: 0.25rem;
-    border: 1px solid #ffffff;
-    background-color: #ffffff;
-    cursor: pointer;
-    box-shadow: 0 0 0 0 transparent;
-}
-
-.proxy-quality-checkbox:checked {
-    background-color: var(--btn-primary-bg);
-    border-color: var(--btn-primary-border);
-}
-
-.proxy-quality-checkbox:checked::after {
-    content: "";
-    display: block;
-    width: 0.25rem;
-    height: 0.5rem;
-    border: 2px solid #fff;
-    border-top: 0;
-    border-left: 0;
-    transform: translate(0.20rem, -0.05rem) rotate(45deg);
-    box-sizing: content-box;
-}
-
-.proxy-quality-checkbox:focus-visible {
-    outline: 2px solid #22c55e;
-    outline-offset: 2px;
-}
-
-.proxy-quality-checkbox:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-</style>

@@ -248,17 +248,17 @@
 											<label class="font-semibold block mb-1">Proxy Qualities</label>
 											<div class="flex flex-wrap gap-x-3 gap-y-2">
 												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="checkbox" value="720p" v-model="proxyQualities"
+													<input type="checkbox" class="proxy-quality-checkbox" value="720p" v-model="proxyQualities"
 														:disabled="!transcodeProxyAfterUpload" />
 													<span>720p</span>
 												</label>
 												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="checkbox" value="1080p" v-model="proxyQualities"
+													<input type="checkbox" class="proxy-quality-checkbox" value="1080p" v-model="proxyQualities"
 														:disabled="!transcodeProxyAfterUpload" />
 													<span>1080p</span>
 												</label>
 												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="checkbox" value="original" v-model="proxyQualities"
+													<input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities"
 														:disabled="!transcodeProxyAfterUpload" />
 													<span>Original</span>
 												</label>
@@ -1445,9 +1445,9 @@ function goBack() {
 
 .wizard-stepper {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr) 1fr minmax(0, 1fr) 1fr minmax(0, 1fr);
 	align-items: center;
-	gap: 0.45rem;
+	gap: 0.0rem;
 }
 
 .wizard-step-item {
@@ -1455,11 +1455,15 @@ function goBack() {
 	align-items: center;
 	gap: 0.52rem;
 	min-width: 0;
+	border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 28%, #4f5160);
+	border-radius: 5rem;
+	padding: 0.15rem 0.15rem;
+	background-color: color-mix(in srgb, var(--btn-primary-bg) 6%, transparent);
 }
 
 .wizard-step-divider {
 	height: 1px;
-	width: 2rem;
+	width: 100%;
 	background: color-mix(in srgb, var(--btn-primary-bg) 28%, #56566a);
 }
 
