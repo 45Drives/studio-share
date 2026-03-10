@@ -2047,6 +2047,98 @@ const inflightPids = new Map<string, number>()
 const pendingRsyncCancel = new Set<string>()
 const MAX_CONCURRENT_MAIN = 3
 
+// ── Local copy for same-machine (localhost) transfers ─────────────────────────
+
+function isLocalHost(host: string): boolean {
+  const h = String(host || '').trim().toLowerCase()
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1'
+}
+
+/**
+ * Copy a file or directory locally (no SSH/rsync needed).
+ * Emits progress events to the renderer via IPC.
+ * Returns true on success, false on failure.
+ */
+async function runLocalCopy(opts: {
+  id: string
+  src: string
+  destDir: string
+  win?: BrowserWindow | null
+}): Promise<boolean> {
+  const { id, src, destDir, win } = opts
+
+  const emit = (parsed: any) => {
+    try { win?.webContents?.send(`upload:progress:${id}`, parsed) } catch {}
+  }
+
+  try {
+    const srcStat = fs.statSync(src)
+    const isDir = srcStat.isDirectory()
+
+    // Ensure destination directory exists
+    fs.mkdirSync(destDir, { recursive: true })
+
+    if (isDir) {
+      // Recursive directory copy
+      emit({ percent: 0, raw: 'copying directory locally…' })
+      copyDirRecursive(src, destDir)
+      emit({ percent: 100, raw: 'done' })
+      return true
+    }
+
+    // Single file copy with progress via streams
+    const fileName = path.basename(src)
+    const destPath = path.join(destDir, fileName)
+    const totalBytes = srcStat.size
+
+    emit({ percent: 0, raw: 'copying locally…' })
+
+    await new Promise<void>((resolve, reject) => {
+      const readStream = fs.createReadStream(src)
+      const writeStream = fs.createWriteStream(destPath)
+      let bytesCopied = 0
+
+      readStream.on('data', (chunk) => {
+        bytesCopied += chunk.length
+        const pct = totalBytes > 0 ? Math.min(100, Math.round((bytesCopied / totalBytes) * 100)) : 0
+        emit({ percent: pct, bytesTransferred: bytesCopied, raw: `${pct}%` })
+      })
+
+      readStream.on('error', reject)
+      writeStream.on('error', reject)
+      writeStream.on('finish', resolve)
+
+      readStream.pipe(writeStream)
+    })
+
+    // Preserve file permissions
+    try { fs.chmodSync(destPath, srcStat.mode) } catch {}
+
+    emit({ percent: 100, raw: 'done' })
+    jl('info', 'localcopy.done', { id, src, destDir, size: totalBytes })
+    return true
+  } catch (e: any) {
+    jl('error', 'localcopy.failed', { id, src, destDir, error: e?.message || String(e) })
+    emit({ percent: 0, raw: `local copy failed: ${e?.message}` })
+    return false
+  }
+}
+
+function copyDirRecursive(src: string, destParent: string) {
+  const dirName = path.basename(src)
+  const destDir = path.join(destParent, dirName)
+  fs.mkdirSync(destDir, { recursive: true })
+
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name)
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destDir)
+    } else {
+      fs.copyFileSync(srcPath, path.join(destDir, entry.name))
+    }
+  }
+}
+
 // ── Resume detached transfers from a previous session ─────────────────────────
 
 /**
@@ -2168,6 +2260,16 @@ function startQueuedTransfer(t: PersistedTransfer) {
     return
   }
 
+  // ── Same-machine: local copy instead of rsync ──────────────────────
+  if (isLocalHost(t.host)) {
+    const win = BrowserWindow.getAllWindows()[0] ?? undefined
+    jl('info', 'queue.local', { id: t.id, src: t.src, destDir: t.destDir })
+    markTransferRunning(t.id, 0, '')
+    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, win })
+      .then(ok => handleDetachedCompletion({ ...t, pid: 0, logFile: '', status: 'running' }, ok))
+    return
+  }
+
   try { if (!fs.existsSync(knownHostsPath)) fs.writeFileSync(knownHostsPath, '') } catch { }
 
   const picked = buildRsyncCmdAndArgs({
@@ -2205,6 +2307,15 @@ function respawnTransfer(t: PersistedTransfer) {
   if (!fs.existsSync(t.src)) {
     jl('warn', 'resume.detached.src_gone', { id: t.id, src: t.src })
     markTransfer(t.id, 'failed')
+    return
+  }
+
+  // ── Same-machine: local copy instead of rsync ──────────────────────
+  if (isLocalHost(t.host)) {
+    const win = BrowserWindow.getAllWindows()[0] ?? undefined
+    jl('info', 'resume.local', { id: t.id, src: t.src, destDir: t.destDir })
+    runLocalCopy({ id: t.id, src: t.src, destDir: t.destDir, win })
+      .then(ok => handleDetachedCompletion(t, ok))
     return
   }
 
@@ -2415,7 +2526,25 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
     // ─────────────────────────────────────────────────────────────────────────
     // 1) TRANSFER
     // ─────────────────────────────────────────────────────────────────────────
-    if (process.platform === 'win32') {
+    if (isLocalHost(opts.host)) {
+      // ── Same-machine: direct file copy, no SSH/rsync needed ──────────
+      jl('info', 'upload.local', { id, src, destDir: opts.destDir })
+      inflightRsync.delete(id)
+      removeQueuedMatch(src, opts.host, opts.destDir)
+
+      const ok = await runLocalCopy({
+        id,
+        src,
+        destDir: opts.destDir,
+        win: BrowserWindow.getAllWindows()[0],
+      })
+
+      if (!ok) {
+        event.sender.send(`upload:done:${id}`, { error: 'local copy failed' })
+        jl('info', 'upload.local.failed', { id })
+        return
+      }
+    } else if (process.platform === 'win32') {
       event.sender.send(`upload:progress:${id}`, { percent: 0, raw: 'starting' })
 
       // NOTE: runWinSftp expects SSH port (22) normally.
