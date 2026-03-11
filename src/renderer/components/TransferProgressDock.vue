@@ -495,31 +495,12 @@ function dismissGroup(groupKey: string) {
 }
 
 /* ── Drawer Panel ──────────────────────────────────────── */
-.drawer-panel {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
-
 
 :is(.dark *) .drawer-inner,
 .drawer-inner:is(.dark *) {
     color: #f3f4f6;
 }
 
-.drawer-inner {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-gutter: stable;
-    background: transparent;
-    border-left: 1px solid var(--ui-panel-border);
-    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
-    color: #111827;
-    min-height: 0;
-}
 .drawer-header {
     position: sticky;
     top: 0;
@@ -536,11 +517,32 @@ function dismissGroup(groupKey: string) {
     flex-shrink: 0;
 }
 
+.drawer-panel {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--ui-panel-bg);
+    border-left: 1px solid var(--ui-panel-border);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+}
+
+.drawer-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    background: var(--ui-panel-bg);
+    color: #111827;
+}
+
 .drawer-body {
     flex: 1;
-    overflow: visible;
     min-height: 0;
-    background: var(--ui-panel-bg);
+    overflow: visible;
+    background: transparent;
 }
 /* ── Group ─────────────────────────────────────────────── */
 .drawer-group {
@@ -562,6 +564,10 @@ function dismissGroup(groupKey: string) {
     border-top: 1px solid color-mix(in srgb, var(--ui-panel-border) 50%, transparent);
 }
 
+.drawer-group,
+.drawer-file-card {
+    background: var(--ui-panel-bg);
+}
 /* ── Progress bar (static colors — avoids repaints on theme change) ── */
 progress {
     appearance: none;
