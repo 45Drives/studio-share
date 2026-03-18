@@ -237,7 +237,12 @@ function selectTheme(theme: Theme) {
 .tp-studio-ocean:hover { background: linear-gradient(135deg, #153242, #31596D 50%, #5890A8); }
 
 .tp-grad-purple-orange       { background: linear-gradient(135deg, #6F58B8, #C96E36); }
-.tp-grad-purple-pink-orange  { background: linear-gradient(135deg, #7A4FD8, #D95AA5 52%, #E57A4A); }
+/* .tp-grad-purple-pink-orange {
+    background: linear-gradient(135deg, #7A4FD8, #D95AA5 52%, #E57A4A);
+} */
+.tp-grad-purple-pink-orange {
+    background: linear-gradient(135deg, #9A24E4 0%, #CF20AE 32%, #F6336E 64%, #FE774F 100%);
+}
 .tp-grad-purple-pink-blue    { background: linear-gradient(135deg, #6D4FE0, #D65EAE 50%, #4C7CF4); }
 .tp-grad-purple-blue         { background: linear-gradient(135deg, #7A3CFF, #4A7CEB); }
 .tp-grad-red-purple-blue     { background: linear-gradient(135deg, #F43F5E, #8B5CF6 52%, #3B82F6); }

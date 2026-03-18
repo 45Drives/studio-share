@@ -653,14 +653,54 @@ if truthy "${RUN_MAC_BUILD:-1}"; then
     fi
   done
 
-  # if truthy "$MAC_FETCH_CLEANUP_OLD" && [[ "$MAC_FETCH_DIR_TEMPLATE" == *"__BUNDLE_TAG__"* ]]; then
-  #   MAC_FETCH_BASE_DIR="${MAC_FETCH_DIR_TEMPLATE%%__BUNDLE_TAG__*}"
-  #   MAC_FETCH_BASE_DIR="${MAC_FETCH_BASE_DIR%/}"
-  #   if [[ -n "$MAC_FETCH_BASE_DIR" ]]; then
-  #     MAC_CLEANUP_CMD="cd '${MAC_FETCH_BASE_DIR}' && ls -1dt ${MAC_FETCH_CLEANUP_GLOB} 2>/dev/null | awk 'NR>${MAC_FETCH_KEEP_COUNT} {print}' | while IFS= read -r d; do rm -rf -- \"\$d\"; done"
-  #     ssh_run "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" "$MAC_CLEANUP_CMD"
-  #   fi
-  # fi
+  # ---------------------------------------------------------------------------
+  # Clean up old mac signing artifacts on remote hosts
+  # ---------------------------------------------------------------------------
+  MAC_CLEANUP_OLD="${MAC_CLEANUP_OLD:-1}"
+  MAC_CLEANUP_KEEP="${MAC_CLEANUP_KEEP:-5}"
+  MAC_CLEANUP_GLOB="${MAC_CLEANUP_GLOB:-mac-*}"
+
+  if truthy "$MAC_CLEANUP_OLD"; then
+    # Helper: keep only the N most recent directories matching a glob.
+    # Usage: cleanup_old_dirs <host> <user> <pass> <port> <parent_dir> <glob> <keep>
+    cleanup_old_dirs() {
+      local h="$1" u="$2" pw="$3" pt="$4" dir="$5" gl="$6" keep="$7"
+      local cmd="cd '${dir}' 2>/dev/null && ls -1dt ${gl} 2>/dev/null | awk 'NR>${keep} {print}' | while IFS= read -r d; do echo \"Removing old artifact dir: ${dir}/\$d\"; rm -rf -- \"\$d\"; done"
+      ssh_run "$h" "$u" "$pw" "$pt" "$cmd" || true
+    }
+
+    # 1) ARM Mac: Mac-signed/ (synced-back signed artifacts)
+    MAC_ARM_SIGNED_BASE="${MAC_FETCH_DIR_TEMPLATE%%__BUNDLE_TAG__*}"
+    MAC_ARM_SIGNED_BASE="${MAC_ARM_SIGNED_BASE%/}"
+    if [[ -n "$MAC_ARM_SIGNED_BASE" ]]; then
+      echo "Cleaning old artifacts on ARM Mac: $MAC_ARM_SIGNED_BASE"
+      cleanup_old_dirs "$MAC_FETCH_HOST" "$MAC_FETCH_USER" "${MAC_FETCH_PASSWORD:-}" "$MAC_FETCH_PORT" \
+        "$MAC_ARM_SIGNED_BASE" "$MAC_CLEANUP_GLOB" "$MAC_CLEANUP_KEEP"
+    fi
+
+    # 2) Intel Mac: SIGN_INBOX/<bundle_tag> dirs (unsigned .app bundles sent for signing)
+    if [[ -n "${MAC_SIGN_HOST:-}" && -n "${MAC_SIGN_USER:-}" ]]; then
+      MAC_SIGN_INBOX_DIR="${MAC_SIGN_INBOX:-}"
+      if [[ -z "$MAC_SIGN_INBOX_DIR" && -n "${MAC_SIGN_OUTPUT_DIR:-}" ]]; then
+        MAC_SIGN_INBOX_DIR="$(dirname "${MAC_SIGN_OUTPUT_DIR}")"
+      fi
+      MAC_SIGN_PORT="${MAC_SIGN_PORT:-22}"
+      MAC_SIGN_PASSWORD="${MAC_SIGN_PASSWORD:-}"
+
+      if [[ -n "$MAC_SIGN_INBOX_DIR" ]]; then
+        echo "Cleaning old unsigned bundles on Intel Mac: $MAC_SIGN_INBOX_DIR"
+        cleanup_old_dirs "$MAC_SIGN_HOST" "$MAC_SIGN_USER" "$MAC_SIGN_PASSWORD" "$MAC_SIGN_PORT" \
+          "$MAC_SIGN_INBOX_DIR" "$MAC_CLEANUP_GLOB" "$MAC_CLEANUP_KEEP"
+      fi
+
+      # 3) Intel Mac: SIGN_OUTPUT_DIR/ (signed .zip/.dmg output bundles)
+      if [[ -n "${MAC_SIGN_OUTPUT_DIR:-}" ]]; then
+        echo "Cleaning old signed output on Intel Mac: $MAC_SIGN_OUTPUT_DIR"
+        cleanup_old_dirs "$MAC_SIGN_HOST" "$MAC_SIGN_USER" "$MAC_SIGN_PASSWORD" "$MAC_SIGN_PORT" \
+          "$MAC_SIGN_OUTPUT_DIR" "$MAC_CLEANUP_GLOB" "$MAC_CLEANUP_KEEP"
+      fi
+    fi
+  fi
 fi
 
 run_windows_flow

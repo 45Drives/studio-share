@@ -5,6 +5,7 @@ import type { Ref } from 'vue'
 import type { Server, ConnectionMeta } from '../types'
 import { currentServerInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { clearLastSession } from './useSessionPersistence'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 type ApiInit = RequestInit & {
@@ -97,7 +98,7 @@ export function useApi() {
                     }
 
                     // existing behavior:
-                    try { sessionStorage.removeItem('hb_token') } catch { }
+                    clearLastSession()
                     meta.value = { ...meta.value, token: undefined }
 
                     if (!authRedirectInFlight) {

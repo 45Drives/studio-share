@@ -163,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
@@ -171,6 +171,7 @@ import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
+import { loadLastSession, saveLastSession, clearLastSession, saveManualServer } from '../composables/useSessionPersistence';
 useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
@@ -864,6 +865,24 @@ async function connectToServer() {
             httpsPort: httpsPort.value ?? 443,
         });
 
+        // Persist manual server so it appears in the dropdown on next launch
+        if (!discovered) {
+            saveManualServer({ ip, name: effectiveServer?.name || ip });
+        }
+
+        // Persist session for auto-login on next app open
+        saveLastSession({
+            serverIp: ip,
+            serverName: effectiveServer?.name || ip,
+            username: username.value,
+            token,
+            apiPort: apiPortToUse,
+            sshPort: sshPortToUse,
+            httpsPort: httpsPort.value ?? 443,
+            apiBase,
+            savedAt: Date.now(),
+        });
+
         window.appLog?.info('login.success', { ip });
 
         // Fire-and-forget: check for broadcaster package updates via API (runs in background)
@@ -878,6 +897,89 @@ async function connectToServer() {
         isBusy.value = false;
     }
 }
+
+// ─── Auto-login from saved session on mount ─────────────────────
+onMounted(async () => {
+    const saved = loadLastSession()
+    if (!saved) return
+
+    // Pre-fill form fields from the saved session (so user sees what's being used)
+    const existingServer = discoveryState.servers.find(s => s.ip === saved.serverIp)
+    if (existingServer) {
+        selectedServerIp.value = existingServer.ip
+    } else {
+        manualIp.value = saved.serverIp
+    }
+    username.value = saved.username
+    if (saved.sshPort) sshPort.value = saved.sshPort
+    if (saved.apiPort && saved.apiPort !== DEFAULT_API_PORT) broadcasterPort.value = saved.apiPort
+    if (saved.httpsPort && saved.httpsPort !== DEFAULT_HTTPS_PORT) httpsPort.value = saved.httpsPort
+
+    // Validate the saved token with a quick API call
+    isBusy.value = true
+    statusLine.value = 'Resuming previous session…'
+    try {
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), 8000)
+        const res = await fetch(`${saved.apiBase}/api/links`, {
+            headers: { 'Authorization': `Bearer ${saved.token}` },
+            signal: ctrl.signal,
+        })
+        clearTimeout(timer)
+
+        if (res.status === 401) {
+            // Token expired — clear and let user log in normally
+            clearLastSession()
+            statusLine.value = ''
+            isBusy.value = false
+            return
+        }
+
+        if (!res.ok) {
+            // Server error but not auth — clear and proceed to manual login
+            clearLastSession()
+            statusLine.value = ''
+            isBusy.value = false
+            return
+        }
+
+        // Token is valid — restore the full session and navigate
+        const serverObj: Server = existingServer ?? {
+            ip: saved.serverIp,
+            name: saved.serverName,
+            lastSeen: Date.now(),
+            status: 'unknown',
+            manuallyAdded: true,
+        }
+
+        providedCurrentServer.value = serverObj
+        connectionMeta.value = {
+            ...connectionMeta.value,
+            token: saved.token,
+            port: saved.apiPort,
+            apiBase: saved.apiBase,
+            ssh: {
+                server: saved.serverIp,
+                username: saved.username,
+                port: saved.sshPort,
+            },
+        }
+
+        try { sessionStorage.setItem('hb_token', saved.token) } catch { /* ignore */ }
+
+        window.appLog?.info('auto-login.restored', { ip: saved.serverIp })
+        statusLine.value = ''
+        isBusy.value = false
+
+        checkBroadcasterUpdateInBackground(saved.apiBase, saved.token)
+        to('dashboard')
+    } catch {
+        // Network error (server unreachable) — let user log in manually
+        clearLastSession()
+        statusLine.value = ''
+        isBusy.value = false
+    }
+})
 
 onUnmounted(() => {
     unlistenProgress?.()
@@ -930,7 +1032,7 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
             }
 
             // 2. Clear auth and navigate back to the connection screen
-            try { sessionStorage.removeItem('hb_token'); } catch { }
+            clearLastSession()
             connectionMeta.value = { ...connectionMeta.value, token: undefined };
             to('server-selection');
 

@@ -49,7 +49,8 @@
 
   --ui-shadow: 0 12px 28px rgba(17, 33, 52, 0.14);
   --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 65%, white);
-  --ui-panel-bg: color-mix(in srgb, color-mix(in srgb, #ffffff 94%, var(--btn-primary-bg) 6%) 86%, transparent);
+    --ui-panel-bg: color-mix(in srgb, color-mix(in srgb, #ffffff 94%, var(--btn-primary-bg) 6%) 86%, transparent);
+  /* --ui-panel-bg: color-mix(in srgb, #ffffff 88%, var(--btn-primary-bg) 12%); */
   --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 22%, #c7cedb);
   --ui-subtle-text: color-mix(in srgb, currentColor 72%, transparent);
   --ui-app-texture-image: url('../../assets/textures/gplay.png');
@@ -195,7 +196,7 @@
     linear-gradient(135deg, #f4eeff 0%, #fbeee2 100%);
 }
 
-.theme-studio-grad-purple-pink-orange {
+/* .theme-studio-grad-purple-pink-orange {
   --btn-primary-bg: #7A4FD8;
   --btn-primary-border: #7A4FD8;
   --btn-primary-hover-bg: #653FC0;
@@ -216,6 +217,35 @@
     radial-gradient(72rem 34rem at -8% -12%, color-mix(in srgb, #7A4FD8 18%, transparent), transparent 54%),
     radial-gradient(68rem 34rem at 108% -10%, color-mix(in srgb, #FF6FAF 14%, transparent), transparent 56%),
     linear-gradient(140deg, #f5ecff 0%, #ffe7f1 52%, #ffe8d8 100%);
+} */
+
+.theme-studio-grad-purple-pink-orange {
+  --btn-primary-bg: #9A24E4;
+  --btn-primary-border: #9A24E4;
+  --btn-primary-hover-bg: #7F18C7;
+  --btn-primary-hover-border: #7F18C7;
+  --btn-primary-fill: linear-gradient(135deg, #9A24E4 0%, #CF20AE 32%, #F6336E 64%, #FE774F 100%);
+  --btn-primary-hover-fill: linear-gradient(135deg, #8219CB 0%, #B21B97 32%, #DB2A60 64%, #E5653F 100%);
+
+  /* --btn-secondary-bg: #D92E86;
+  --btn-secondary-border: #D92E86;
+  --btn-secondary-hover-bg: #B82571;
+  --btn-secondary-hover-border: #B82571; */
+  --btn-secondary-bg: #9A24E4;
+    --btn-secondary-border: #9A24E4;
+    --btn-secondary-hover-bg: #7F18C7;
+    --btn-secondary-hover-border: #7F18C7
+  --btn-secondary-fill: var(--btn-secondary-bg);
+  --btn-secondary-hover-fill: var(--btn-secondary-hover-bg);
+
+  --ui-panel-border: color-mix(in srgb, var(--btn-primary-bg) 28%, #dca3b2);
+  --ui-ring: color-mix(in srgb, var(--btn-primary-bg) 64%, white);
+  --ui-app-bg:
+    radial-gradient(76rem 36rem at -8% -12%, color-mix(in srgb, #9A24E4 24%, transparent), transparent 54%),
+    radial-gradient(66rem 28rem at 50% -18%, color-mix(in srgb, #F6336E 16%, transparent), transparent 50%),
+    radial-gradient(72rem 34rem at 108% -10%, color-mix(in srgb, #FE774F 20%, transparent), transparent 58%),
+    linear-gradient(140deg, #f7efff 0%, #ffedf4 54%, #fff1e6 100%); 
+  --studio-logo-filter: saturate(1.18) hue-rotate(-2deg) brightness(1.03);
 }
 
 .theme-studio-grad-purple-pink-blue {

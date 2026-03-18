@@ -1,12 +1,25 @@
 // useServerDiscovery.ts
 import { reactive, onMounted, onBeforeUnmount } from 'vue'
 import type { Server } from '../types'
+import { loadSavedManualServers } from './useSessionPersistence'
 
 export function useServerDiscovery() {
   const discoveryState = reactive<{ servers: Server[]; fallbackTriggered: boolean }>({
     servers: [],
     fallbackTriggered: false,
   })
+
+  // Pre-populate with any manually-saved servers from previous sessions
+  const savedManual = loadSavedManualServers()
+  for (const s of savedManual) {
+    discoveryState.servers.push({
+      ip: s.ip,
+      name: s.name || s.ip,
+      lastSeen: s.savedAt,
+      status: 'unknown',
+      manuallyAdded: true,
+    })
+  }
 
   function onDiscovered(_evt:any, mdnsList: Server[]) {
     mdnsList.forEach(m => {

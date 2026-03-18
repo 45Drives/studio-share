@@ -60,6 +60,7 @@ import LogViewModal from '../components/modals/LogViewModal.vue'
 import { ref, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
 import { useTransferProgress } from '../composables/useTransferProgress'
+import { clearLastSession } from '../composables/useSessionPersistence'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()
@@ -74,7 +75,7 @@ onMounted(() => {
 })
 
 const leaveServer = () => {
-	// router.push({ name: 'server-selection'});
+	clearLastSession()
 	to('server-selection');
 }
 
