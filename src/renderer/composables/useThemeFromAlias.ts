@@ -133,7 +133,7 @@ function saveStoredTheme(theme: Theme) {
 
 function loadThemeUnlockState() {
   try {
-    return window.sessionStorage.getItem(THEME_UNLOCK_KEY) === '1'
+    return window.localStorage.getItem(THEME_UNLOCK_KEY) === '1'
   } catch {
     return false
   }
@@ -141,7 +141,7 @@ function loadThemeUnlockState() {
 
 function saveThemeUnlockState(unlocked: boolean) {
   try {
-    window.sessionStorage.setItem(THEME_UNLOCK_KEY, unlocked ? '1' : '0')
+    window.localStorage.setItem(THEME_UNLOCK_KEY, unlocked ? '1' : '0')
   } catch {
     // no-op
   }
