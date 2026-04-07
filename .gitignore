@@ -18,3 +18,4 @@ buildMac.sh
 
 scripts/release/RELEASE_RUNBOOK.md
 scripts/release/RELEASE_RUNBOOK.pdf
+.electron-dev-userdata

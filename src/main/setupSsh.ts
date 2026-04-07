@@ -108,6 +108,21 @@ run_root() {
   if have_sudo; then sudo "$@"; else printf '%s\\n' "$PW" | sudo -S -p '' "$@"; fi
 }
 
+# Check if already installed — skip full install if so
+already_installed=false
+if command -v rpm >/dev/null 2>&1; then
+  rpm -q houston-broadcaster >/dev/null 2>&1 && already_installed=true
+elif command -v dpkg >/dev/null 2>&1; then
+  dpkg -s houston-broadcaster >/dev/null 2>&1 && already_installed=true
+fi
+
+if [ "$already_installed" = true ]; then
+  # Package exists — just make sure the service is enabled and running
+  run_root systemctl enable --now houston-broadcaster || true
+  echo "houston-broadcaster already installed, ensured service is running"
+  exit 0
+fi
+
 if command -v rpm >/dev/null 2>&1; then
   # --- RHEL/CentOS/Rocky/Fedora family ---
   if command -v dnf >/dev/null 2>&1; then

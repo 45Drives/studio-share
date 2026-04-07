@@ -171,7 +171,7 @@ import { DiscoveryState, Server } from '../types'
 import { pushNotification, Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
-import { loadLastSession, saveLastSession, clearLastSession, saveManualServer } from '../composables/useSessionPersistence';
+import { loadLastSession, saveLastSession, clearLastSession, saveManualServer, saveRegistryLicenseId } from '../composables/useSessionPersistence';
 useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
@@ -885,6 +885,12 @@ async function connectToServer() {
 
         window.appLog?.info('login.success', { ip });
 
+        // Fire-and-forget: cache licenseId for VPS registry discovery
+        fetch(`${apiBase}/api/license/status`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.license?.licenseId) saveRegistryLicenseId(d.license.licenseId) })
+            .catch(() => { /* best-effort */ })
+
         // Fire-and-forget: check for broadcaster package updates via API (runs in background)
         checkBroadcasterUpdateInBackground(apiBase, token);
 
@@ -973,11 +979,14 @@ onMounted(async () => {
 
         checkBroadcasterUpdateInBackground(saved.apiBase, saved.token)
         to('dashboard')
-    } catch {
-        // Network error (server unreachable) — let user log in manually
-        clearLastSession()
+    } catch (err: any) {
+        // Network error (server unreachable) — keep saved credentials so user
+        // doesn't have to re-enter them; just stop the auto-login attempt.
+        window.appLog?.warn('auto-login.network-error', { ip: saved.serverIp, error: err?.message })
         statusLine.value = ''
         isBusy.value = false
+        // Don't clearLastSession() here — the server may just be slow to boot.
+        // Credentials stay pre-filled so user can retry with one click.
     }
 })
 

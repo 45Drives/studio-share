@@ -1196,26 +1196,102 @@ function isPortOpen(ip: string, port: number, timeout = 2000): Promise<boolean> 
 const TIMEOUT_DURATION = 30000;
 const serviceType = '_houstonserver._tcp.local';
 
-const getLocalIP = () => {
+const isPrivateV4 = (addr: string): boolean => {
+  const parts = addr.split('.').map(Number);
+  if (parts.length !== 4) return false;
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true;
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+};
+
+/** All private IPv4 addresses on this machine, with CIDR prefix length */
+type LocalNic = { address: string; prefixLength: number };
+
+const getAllLocalIPs = (): LocalNic[] => {
+  const out: LocalNic[] = [];
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
-    const something = nets[name];
-    if (something) {
-      for (const net of something) {
-        if (net.family === "IPv4" && !net.internal && net.address.startsWith("192")) {
-          return net.address;
-        }
+    const ifaces = nets[name];
+    if (!ifaces) continue;
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal && isPrivateV4(iface.address)) {
+        out.push({ address: iface.address, prefixLength: netmaskToCidr(iface.netmask) });
       }
     }
   }
-  return "127.0.0.1"; // Fallback
+  return out;
 };
 
+const getLocalIP = () => {
+  const all = getAllLocalIPs();
+  return all.length > 0 ? all[0].address : '127.0.0.1';
+};
 
-function getSubnetBase(ip: string): string {
-  const parts = ip.split('.');
-  return `${parts[0]}.${parts[1]}.${parts[2]}`;
+/** Convert dotted netmask (e.g. "255.255.0.0") to CIDR prefix (e.g. 16) */
+function netmaskToCidr(mask: string): number {
+  const parts = mask.split('.').map(Number);
+  let bits = 0;
+  for (const p of parts) {
+    bits += (p >>> 0).toString(2).split('').filter(b => b === '1').length;
+  }
+  return bits;
 }
+
+/**
+ * Generate candidate IPs to scan for a given NIC.
+ * For /24: scans the full 254 hosts.
+ * For /16 or wider: scans a set of representative /24 subnets (every .1 across
+ * the range) to stay fast. Max ~1024 candidates per interface.
+ */
+function scanCandidatesForNic(nic: LocalNic): string[] {
+  const parts = nic.address.split('.').map(Number);
+  const ip32 = (parts[0] << 24 | parts[1] << 16 | parts[2] << 8 | parts[3]) >>> 0;
+  const mask32 = (0xFFFFFFFF << (32 - nic.prefixLength)) >>> 0;
+  const network = (ip32 & mask32) >>> 0;
+  const hostBits = 32 - nic.prefixLength;
+  const totalHosts = (1 << hostBits) >>> 0;
+
+  const candidates: string[] = [];
+
+  if (hostBits <= 8) {
+    // /24 or smaller: scan every host
+    for (let h = 1; h < totalHosts - 1 && h < 255; h++) {
+      const candidate = (network + h) >>> 0;
+      if (candidate === ip32) continue;
+      candidates.push(`${(candidate >>> 24) & 0xFF}.${(candidate >>> 16) & 0xFF}.${(candidate >>> 8) & 0xFF}.${candidate & 0xFF}`);
+    }
+  } else {
+    // /16 or wider: scan .1 and .254 of each /24 in the range (common server addresses),
+    // plus the full local /24 around our own IP
+    const localSubnetBase = (ip32 & 0xFFFFFF00) >>> 0;
+
+    // Full scan of our own /24
+    for (let h = 1; h < 255; h++) {
+      const candidate = (localSubnetBase + h) >>> 0;
+      if (candidate === ip32) continue;
+      candidates.push(`${(candidate >>> 24) & 0xFF}.${(candidate >>> 16) & 0xFF}.${(candidate >>> 8) & 0xFF}.${candidate & 0xFF}`);
+    }
+
+    // Probe .1 and .254 of other /24s in the range (gateway and high addresses where servers often live)
+    const numSubnets = totalHosts >>> 8;
+    for (let s = 0; s < numSubnets && candidates.length < 1024; s++) {
+      const subnetBase = (network + (s << 8)) >>> 0;
+      if (subnetBase === localSubnetBase) continue; // already scanned above
+      for (const offset of [1, 2, 10, 20, 30, 31, 50, 100, 200, 240, 254]) {
+        const candidate = (subnetBase + offset) >>> 0;
+        if (candidate === ip32) continue;
+        candidates.push(`${(candidate >>> 24) & 0xFF}.${(candidate >>> 16) & 0xFF}.${(candidate >>> 8) & 0xFF}.${candidate & 0xFF}`);
+      }
+    }
+  }
+
+  return candidates;
+}
+
 
 let mainWindowRef: BrowserWindow | null = null
 
@@ -1261,52 +1337,105 @@ function createWindow() {
 
   async function doFallbackScan(): Promise<Server[]> {
     
-    const ip = getLocalIP();
-    const subnet = getSubnetBase(ip);
-    jl('info', 'fallback.scan.start', { subnet, localIP: ip });
+    const nics = getAllLocalIPs();
+    const localAddrs = new Set(nics.map(n => n.address));
+    jl('info', 'fallback.scan.start', { nics: nics.map(n => `${n.address}/${n.prefixLength}`), count: nics.length });
 
-    const ips = Array
-      .from({ length: 256 }, (_, i) => `${subnet}.${i}`)
-      .filter(candidate => candidate !== ip);
+    if (!nics.length) {
+      jl('warn', 'fallback.scan.no-nics');
+      return [];
+    }
+
+    // Collect unique candidate IPs across all interfaces
+    const allCandidates = new Set<string>();
+    for (const nic of nics) {
+      for (const ip of scanCandidatesForNic(nic)) {
+        if (!localAddrs.has(ip)) allCandidates.add(ip);
+      }
+    }
+
+    jl('info', 'fallback.scan.candidates', { total: allCandidates.size });
+
+    const ips = [...allCandidates];
 
     const scanned = await Promise.allSettled(
       ips.map(async candidateIp => {
 
         // console.debug("checking for server at ", candidateIp);
 
-        const portOpen = await isPortOpen(candidateIp, 9090);
-        if (!portOpen) return null;
-        console.debug("port open at 9090 ", candidateIp);
-        jl('debug', 'fallback.scan.port-open', { ip: candidateIp });
+        // Check broadcaster API port (9095) first, fall back to Cockpit (9090)
+        const bcastOpen = await isPortOpen(candidateIp, 9095);
+        const cockpitOpen = !bcastOpen ? await isPortOpen(candidateIp, 9090) : false;
+        if (!bcastOpen && !cockpitOpen) return null;
+        jl('debug', 'fallback.scan.port-open', { ip: candidateIp, bcast: bcastOpen, cockpit: cockpitOpen });
 
         try {
-          const res = await fetch(`https://${candidateIp}:9090/`, {
-            method: 'GET',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(3000),
-            
-          });
-          if (!res.ok) return null;
+          // Prefer broadcaster healthz; fall back to Cockpit HTTPS probe
+          if (bcastOpen) {
+            const hRes = await fetch(`http://${candidateIp}:9095/healthz`, {
+              method: 'GET',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(3000),
+            });
+            if (!hRes.ok) return null;
+          } else {
+            const res = await fetch(`https://${candidateIp}:9090/`, {
+              method: 'GET',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(3000),
+            });
+            if (!res.ok) return null;
+          }
 
-          console.debug("https at 9090 ", candidateIp);
-          jl('debug', 'fallback.scan.https-ok', { ip: candidateIp });
-          jl('info', 'fallback.scan.done', { found: fallbackServers.length });
+          jl('debug', 'fallback.scan.probe-ok', { ip: candidateIp, bcast: bcastOpen });
+
+          // Try to fetch server identity from broadcaster API
+          let serverName = candidateIp;
+          let displayName = candidateIp;
+          let setupComplete = false;
+          let shareName = '';
+          let setupTime = '';
+          const serverInfo: any = { moboMake: '', moboModel: '', serverModel: '', aliasStyle: '', chassisSize: '' };
+
+          if (bcastOpen) {
+            try {
+              const infoRes = await fetch(`http://${candidateIp}:9095/.well-known/houston`, {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(3000),
+              });
+              if (infoRes.ok) {
+                const info = await infoRes.json();
+                // Prefer mdnsName (sanitized, e.g. "tank2-0") over raw hostname ("tank2.0")
+                const rawName = info.mdnsName || (info.name ? info.name.replace(/\./g, '-') : '');
+                if (rawName) {
+                  displayName = rawName.endsWith('.local') ? rawName : `${rawName}.local`;
+                }
+                const setup = info.setup || {};
+                if (setup.serverName) serverName = setup.serverName;
+                else if (info.name) serverName = info.name;
+                setupComplete = !!setup.setupComplete;
+                shareName = setup.shareName || '';
+                setupTime = setup.setupTime || '';
+                if (setup.moboMake) serverInfo.moboMake = setup.moboMake;
+                if (setup.moboModel) serverInfo.moboModel = setup.moboModel;
+                if (setup.serverModel) serverInfo.serverModel = setup.serverModel;
+                if (setup.aliasStyle) serverInfo.aliasStyle = setup.aliasStyle;
+                if (setup.chassisSize) serverInfo.chassisSize = setup.chassisSize;
+              }
+            } catch { /* best-effort */ }
+          }
+
+          jl('info', 'fallback.scan.done', { ip: candidateIp, serverName });
 
           return {
             ip: candidateIp,
-            name: candidateIp,
+            name: displayName,
             status: 'unknown',
-            setupComplete: false,
-            serverName: candidateIp,
-            shareName: '',
-            setupTime: '',
-            serverInfo: {
-              moboMake: '',
-              moboModel: '',
-              serverModel: '',
-              aliasStyle: '',
-              chassisSize: '',
-            },
+            setupComplete,
+            serverName,
+            shareName,
+            setupTime,
+            serverInfo,
             lastSeen: Date.now(),
             fallbackAdded: true
           } as Server;
@@ -1322,7 +1451,18 @@ function createWindow() {
       .filter((s): s is Server => s !== null);
 
     if (fallbackServers.length) {
-      discoveredServers = fallbackServers;
+      // Merge fallback results into existing discovered servers (don't replace!)
+      for (const fb of fallbackServers) {
+        const existing = discoveredServers.find(x => x.ip === fb.ip);
+        if (existing) {
+          // Preserve mDNS-resolved name if we already have one
+          existing.lastSeen = Date.now();
+          if (!existing.fallbackAdded) continue; // mDNS already knows this server
+          Object.assign(existing, fb);
+        } else {
+          discoveredServers.push(fb);
+        }
+      }
       safeSend('discovered-servers', discoveredServers);
     }
 

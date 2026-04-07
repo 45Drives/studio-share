@@ -43,12 +43,27 @@ export async function runWinSftp(o: WinSftpOpts): Promise<number> {
   const sftp = new SftpClient();
 
   try {
-    await sftp.connect({
+    jl('info', 'sftp.connecting', { id: o.id, host: o.host, port: o.port ?? 22, hasKey: !!privateKey });
+
+    // Wrap connect in a race with a 30-second timeout so it doesn't hang forever
+    const connectPromise = sftp.connect({
       host: o.host,
       port: o.port ?? 22,
       username: o.user,
       privateKey,
+      readyTimeout: 30000,
+      retries: 1,
+      retry_minTimeout: 2000,
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `SFTP connection timed out after 30s (host=${o.host}, port=${o.port ?? 22}). ` +
+        `Check: 1) SSH port is reachable, 2) SSH key is deployed to server, 3) firewall allows port ${o.port ?? 22}.`
+      )), 30000)
+    );
+
+    await Promise.race([connectPromise, timeoutPromise]);
 
     jl('info', 'sftp.connected', { id: o.id });
 
