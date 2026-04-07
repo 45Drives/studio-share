@@ -93,9 +93,13 @@ RSYNC_SSH=(ssh "${SSH_OPTS[@]}")
 
 echo "Build tag: $BUNDLE_TAG"
 echo "BUNDLE_TAG=$BUNDLE_TAG"
-echo "Building macOS (${MAC_BUILD_KIND}) unsigned..."
 
-rm -rf dist/mac-universal dist/mac-arm64 dist/mac-x64 dist/sign-stage || true
+if ! truthy "${MAC_SKIP_BUILD:-0}"; then
+  echo "Building macOS (${MAC_BUILD_KIND}) unsigned..."
+  rm -rf dist/mac-universal dist/mac-arm64 dist/mac-x64 dist/sign-stage || true
+else
+  echo "MAC_SKIP_BUILD=1; skipping build, using existing app bundle for (${MAC_BUILD_KIND})."
+fi
 
 resolve_app_path() {
   local kind="$1"
@@ -142,15 +146,17 @@ resolve_app_path() {
   return 1
 }
 
-if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
-  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:universal
-elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
-  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:arm64
-elif [[ "${MAC_BUILD_KIND}" == "x64" ]]; then
-  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:x64
-else
-  echo "MAC_BUILD_KIND must be 'arm64', 'x64', or 'universal'" >&2
-  exit 1
+if ! truthy "${MAC_SKIP_BUILD:-0}"; then
+  if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
+    CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:universal
+  elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
+    CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:arm64
+  elif [[ "${MAC_BUILD_KIND}" == "x64" ]]; then
+    CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:x64
+  else
+    echo "MAC_BUILD_KIND must be 'arm64', 'x64', or 'universal'" >&2
+    exit 1
+  fi
 fi
 
 APP_PATH="$(resolve_app_path "${MAC_BUILD_KIND}" || true)"
