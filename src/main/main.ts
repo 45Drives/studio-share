@@ -2179,6 +2179,7 @@ export type RsyncStartOpts = {
   watermarkFileName?: string
   watermarkProxyQualities?: string[]
   noIngest?: boolean
+  apiToken?: string
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -2566,8 +2567,10 @@ async function runIngestForTransfer(t: PersistedTransfer, win?: BrowserWindow | 
   }
 
   const url = `${base}/api/ingest/register?${params.toString()}`
+  const resumeHeaders: Record<string, string> = {}
+  if (t.apiToken) resumeHeaders['Authorization'] = `Bearer ${t.apiToken}`
   try {
-    const r = await fetch(url, { method: 'POST' })
+    const r = await fetch(url, { method: 'POST', headers: resumeHeaders })
     const text = await r.text()
     let j: any = {}
     try { j = JSON.parse(text) } catch { j = { raw: text } }
@@ -2628,6 +2631,7 @@ export type QueuedUploadItem = {
   watermarkFileName?: string
   watermarkProxyQualities?: string[]
   noIngest?: boolean
+  apiToken?: string
 }
 
 ipcMain.handle('upload:persist-queue', async (_event, items: QueuedUploadItem[]) => {
@@ -2650,6 +2654,7 @@ ipcMain.handle('upload:persist-queue', async (_event, items: QueuedUploadItem[])
       watermarkFileName: item.watermarkFileName,
       watermarkProxyQualities: item.watermarkProxyQualities,
       noIngest: item.noIngest,
+      apiToken: item.apiToken,
       status: 'queued',
       startedAt: Date.now(),
       fileName: item.fileName,
@@ -2661,6 +2666,7 @@ ipcMain.handle('upload:persist-queue', async (_event, items: QueuedUploadItem[])
 
 ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
   const { id } = opts
+  if (opts.apiToken) registerSensitiveToken(opts.apiToken)
   const knownHostsPath = opts.knownHostsPath || path.join(app.getPath('userData'), 'known_hosts')
   const keyPath = opts.keyPath || defaultClientKey()
   const src = opts.src
@@ -2770,6 +2776,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         watermarkFileName: opts.watermarkFileName,
         watermarkProxyQualities: opts.watermarkProxyQualities,
         noIngest: opts.noIngest,
+        apiToken: opts.apiToken,
         status: 'running', startedAt: Date.now(),
         fileName: path.basename(src), fileSize,
       })
@@ -2892,8 +2899,10 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         }
 
         const url = `${base}/api/ingest/register?${params.toString()}`
+        const ingestHeaders: Record<string, string> = {}
+        if (opts.apiToken) ingestHeaders['Authorization'] = `Bearer ${opts.apiToken}`
         try {
-          const r = await fetch(url, { method: 'POST' })
+          const r = await fetch(url, { method: 'POST', headers: ingestHeaders })
           const text = await r.text()
           let j: any = {}
           try { j = JSON.parse(text) } catch { j = { raw: text } }

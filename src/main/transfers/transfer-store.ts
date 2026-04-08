@@ -27,6 +27,7 @@ export type PersistedTransfer = {
   watermarkFileName?: string;
   watermarkProxyQualities?: string[];
   noIngest?: boolean;
+  apiToken?: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'canceled';
   startedAt: number;       // epoch ms
   completedAt?: number;

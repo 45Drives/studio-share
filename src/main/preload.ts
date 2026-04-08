@@ -40,6 +40,8 @@ export type RsyncOpts = {
   watermarkProxyQualities?: string[]
   /** skip ingest/register step after transfer (useful for helper assets like watermark images) */
   noIngest?: boolean
+  /** JWT token for authenticated ingest/register calls */
+  apiToken?: string
 }
 
 export type RsyncResult = { ok?: boolean; error?: string }

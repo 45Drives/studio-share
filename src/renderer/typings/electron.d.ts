@@ -37,6 +37,8 @@ export type RsyncOpts = {
   watermarkProxyQualities?: string[]
   /** skip ingest/register after transfer */
   noIngest?: boolean
+  /** JWT token for authenticated ingest/register calls */
+  apiToken?: string
 }
 export type LinkType = 'upload' | 'download' | 'collection'
 export type Status = 'active' | 'expired' | 'disabled'

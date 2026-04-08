@@ -1138,6 +1138,7 @@ function uploadOneFile(
 			watermark: enableWatermark,
 			watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
 			watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
+			apiToken: connectionMeta.value.token || undefined,
 		},
 		p => {
 			if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
@@ -1364,6 +1365,7 @@ async function startUploads() {
 				watermark: enableWm,
 				watermarkFileName: enableWm ? watermarkRelPathForIngest : undefined,
 				watermarkProxyQualities: enableWm ? proxyQualities.value.slice() : undefined,
+				apiToken: connectionMeta.value.token || undefined,
 			}))
 		)
 	} catch { /* best-effort */ }

@@ -27,6 +27,14 @@
           Check Now
         </button>
         <button
+          v-if="state === 'available'"
+          class="btn btn-primary px-4 py-2 text-sm"
+          :disabled="busy"
+          @click="downloadNow"
+        >
+          Download Update
+        </button>
+        <button
           v-if="state === 'downloaded'"
           class="btn btn-success px-4 py-2 text-sm"
           :disabled="busy"
@@ -73,7 +81,7 @@ const title = computed(() => {
 
 const message = computed(() => {
   if (state.value === 'checking') return 'Looking for the latest release.'
-  if (state.value === 'available') return latestVersion.value ? `Version ${latestVersion.value} is being downloaded.` : 'Downloading latest version.'
+  if (state.value === 'available') return latestVersion.value ? `Version ${latestVersion.value} is available. Would you like to download it?` : 'A new version is available. Would you like to download it?'
   if (state.value === 'downloading') return latestVersion.value ? `Downloading version ${latestVersion.value}.` : 'Downloading update package.'
   if (state.value === 'downloaded') return latestVersion.value ? `Version ${latestVersion.value} is ready to install.` : 'The update is ready to install.'
   if (state.value === 'error') return errorMessage.value || 'Unable to check or download update.'
@@ -113,6 +121,19 @@ async function checkNow() {
   try {
     setState('checking')
     await window.electron?.ipcRenderer.invoke('update:check')
+  } catch (err: any) {
+    errorMessage.value = toUserFriendlyError(err)
+    setState('error')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function downloadNow() {
+  busy.value = true
+  try {
+    setState('downloading')
+    await window.electron?.ipcRenderer.invoke('update:download')
   } catch (err: any) {
     errorMessage.value = toUserFriendlyError(err)
     setState('error')
