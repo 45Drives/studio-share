@@ -345,30 +345,30 @@
                                             </div>
                                         </div>
                                  
-                                        <!-- Share Original Quality -->
+                                        <!-- Share Raw File -->
                                         <div v-if="hasVideoSelected || tourSpoofing" data-tour="share-original-toggle" class="border-t border-default mt-2 pt-2 min-w-0">
                                             <div class="ss-toned-panel rounded-md px-3 py-2.5">
                                                 <div class="flex flex-wrap items-center gap-2 min-w-0">
                                                     <label class="font-semibold sm:whitespace-nowrap" for="share-original-switch">
-                                                        Share Original Quality:
+                                                        Share Raw File:
                                                     </label>
                                                     <Switch id="share-original-switch" v-model="shareOriginalQuality"
                                                         :class="[
                                                             shareOriginalQuality ? 'bg-secondary' : 'bg-well',
                                                             'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                                                         ]">
-                                                        <span class="sr-only">Share original quality files</span>
+                                                        <span class="sr-only">Share raw file without transcoding</span>
                                                         <span aria-hidden="true" :class="[
                                                             shareOriginalQuality ? 'translate-x-5' : 'translate-x-0',
                                                             'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
                                                         ]" />
                                                     </Switch>
                                                     <span class="text-sm truncate min-w-0 flex-1">
-                                                        {{ shareOriginalQuality ? 'Original files streamed with no transcoding — full resolution, color accuracy, and audio fidelity' : 'Use proxy files for faster streaming (some quality reduction)' }}
+                                                        {{ shareOriginalQuality ? 'Serves the raw file as-is — full resolution, color accuracy, and audio fidelity preserved' : 'Transcoded to HLS for adaptive streaming — optimized for smooth playback over any connection' }}
                                                     </span>
                                                 </div>
                                                 <p v-if="shareOriginalQuality" class="text-xs text-amber-700 dark:text-amber-300 mt-1.5 px-1">
-                                                    Note: Some formats (e.g. MKV, AVI, HEVC/H.265, ProRes) may not play in all browsers without transcoding. For widest compatibility, use proxy files.
+                                                    Raw files are served without transcoding. Large or high-bitrate files (e.g. 4K ProRes, RAW) may buffer or stall on slower connections. Some formats (MKV, AVI, HEVC) may not play in-browser — recipients will be prompted to download instead.
                                                 </p>
                                             </div>
                                         </div>
@@ -443,8 +443,8 @@
                                                                     </label>
                                                                 </div>
                                                                 <div class="text-xs text-slate-400 mt-2">
-                                                                    Proxy versions for streaming. Use 'Share Original Quality' above
-                                                                    to share the raw file instead.
+                                                                    Proxy versions for streaming. Use 'Share Raw File' above
+                                                                    to serve the original untranscoded file instead.
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -666,13 +666,13 @@ const shareFilesTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="share-original-toggle"]',
-		message: 'This section appears when you select video files.\n\nEnable "Share Original Quality" to stream the original files at full resolution with no transcoding — preserving color accuracy and audio fidelity.\n\nDisable it to generate lighter proxy files for faster streaming (with some quality reduction).',
+		message: 'This section appears when you select video files.\n\nEnable "Share Raw File" to serve the original untranscoded file — preserving full resolution, color accuracy, and audio fidelity. Note: large or high-bitrate files may buffer on slower connections, and some formats may not play in-browser.\n\nDisable it to transcode to HLS for adaptive streaming — optimized for smooth playback over any connection (near-lossless quality at the original resolution).',
 		beforeShow: () => { tourSpoofing.value = true },
 		cleanup: () => { tourSpoofing.value = false },
 	},
 	{
 		target: '[data-tour="share-advanced-video"]',
-		message: 'When "Share Original Quality" is off and video files are selected, these advanced options appear.\n\n• Proxy Files — generate 720p, 1080p, or full-res proxy versions for streaming.\n• Watermark — overlay a logo or image on proxy videos to brand or protect your content.\n\nExpand this section to fine-tune proxy qualities and watermark settings.',
+		message: 'When "Share Raw File" is off and video files are selected, these advanced options appear.\n\n• Proxy Files — generate 720p, 1080p, or full-res proxy versions for HLS streaming.\n• Watermark — overlay a logo or image on proxy videos to brand or protect your content.\n\nExpand this section to fine-tune proxy qualities and watermark settings.',
 		beforeShow: () => { tourSpoofing.value = true },
 		cleanup: () => { tourSpoofing.value = false },
 	},

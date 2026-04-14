@@ -46,7 +46,7 @@
               <div>
                 <span class="opacity-70">Sharing Mode</span>
                 <div class="font-semibold">
-                  <span v-if="currentShareOriginalQuality" class="text-emerald-400">Original Quality</span>
+                  <span v-if="currentShareOriginalQuality" class="text-emerald-400">Raw File</span>
                   <template v-else>
                     {{ currentGenerateReviewProxy ? 'Transcoded' : 'Proxy Disabled' }}
                     <span v-if="currentProxyQualities.length" class="opacity-70">({{ currentProxyQualities.join(', ') }})</span>
