@@ -11,6 +11,7 @@
 					<button @click="goToManageUsers" data-tour="manage-users" class="btn btn-secondary px-5 py-2.5">Manage Users</button>
 					<button @click="goToLogs" data-tour="view-logs" class="btn btn-secondary px-5 py-2.5">View Logs</button>
 					<button @click="goToSettings" data-tour="settings" class="btn btn-secondary px-5 py-2.5">Settings</button>
+					<!-- <button @click="openUserGuide" class="btn btn-secondary px-5 py-2.5">User Guide</button> -->
 				</div>
 			</div>
 
@@ -163,6 +164,10 @@ const goToLogs = () => {
 const usersModalOpen = ref(false);
 const goToManageUsers = () => {
 	usersModalOpen.value = true;
+}
+
+const openUserGuide = () => {
+	window.open('https://github.com/45Drives/studio-share/blob/main/docs/45Flow_User_Guide.md', '_blank', 'noopener,noreferrer');
 }
 
 const goToShareFiles = () => {

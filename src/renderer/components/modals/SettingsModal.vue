@@ -211,6 +211,21 @@
                             </div>
                         </template>
 
+                        <!-- ═══ Help ══════════════════════════════════════════ -->
+                        <template v-if="activeSection === 'help'">
+                            <div class="divide-y divide-default">
+                                <SettingRow label="User Guide" description="Open the full 45Flow documentation in your browser.">
+                                    <button
+                                        class="btn btn-secondary text-sm px-3 py-1"
+                                        type="button"
+                                        @click="openUserGuide"
+                                    >
+                                        Open User Guide
+                                    </button>
+                                </SettingRow>
+                            </div>
+                        </template>
+
                         <!-- ═══ Maintenance ═══════════════════════════════════ -->
                         <template v-if="activeSection === 'maintenance'">
                             <p class="text-xs text-muted mb-3">
@@ -408,7 +423,7 @@ const settingsTourSteps: TourStep[] = [
 ]
 
 // ── Section navigation ──────────────────────────────────────────────────
-type Section = 'sharing' | 'project' | 'defaults' | 'app' | 'maintenance';
+type Section = 'sharing' | 'project' | 'defaults' | 'app' | 'maintenance' | 'help';
 const activeSection = ref<Section>('sharing');
 
 const navGroups = [
@@ -432,6 +447,12 @@ const navGroups = [
             { key: 'maintenance' as Section, label: 'Maintenance' },
         ],
     },
+    {
+        label: 'Help',
+        items: [
+            { key: 'help' as Section, label: 'User Guide' },
+        ],
+    },
 ];
 
 onMounted(() => {
@@ -451,6 +472,10 @@ function handleResetOnboarding() {
     pushNotification(
         new Notification('Tours Reset', 'First-time guided tours have been re-enabled.', 'success', 5000)
     );
+}
+
+function openUserGuide() {
+    window.open('https://github.com/45Drives/studio-share/blob/main/docs/45Flow_User_Guide.md', '_blank', 'noopener,noreferrer');
 }
 
 const busy = ref(false);
