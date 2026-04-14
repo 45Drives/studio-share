@@ -1767,7 +1767,7 @@ async function generateLink() {
     }
 
     body.generateReviewProxy = !!transcodeProxy.value
-    body.hls = !!transcodeProxy.value && !shareOriginalQuality.value
+    body.hls = hasVideoSelected.value && !shareOriginalQuality.value
     if (shareOriginalQuality.value) {
         body.shareOriginalQuality = true
     }
