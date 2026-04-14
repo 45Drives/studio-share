@@ -147,6 +147,8 @@ resolve_app_path() {
 }
 
 if ! truthy "${MAC_SKIP_BUILD:-0}"; then
+  echo "Running yarn install (macOS)..."
+  yarn install
   if [[ "${MAC_BUILD_KIND}" == "universal" ]]; then
     CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_AFTER_SIGN=1 yarn mac:dir:universal
   elif [[ "${MAC_BUILD_KIND}" == "arm64" ]]; then
