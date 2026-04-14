@@ -8,35 +8,35 @@
 				</div>
 
 				<div class="dashboard-utility button-group-row">
-					<button @click="goToManageUsers" class="btn btn-secondary px-5 py-2.5">Manage Users</button>
-					<button @click="goToLogs" class="btn btn-secondary px-5 py-2.5">View Logs</button>
-					<button @click="goToSettings" class="btn btn-secondary px-5 py-2.5">Settings</button>
+					<button @click="goToManageUsers" data-tour="manage-users" class="btn btn-secondary px-5 py-2.5">Manage Users</button>
+					<button @click="goToLogs" data-tour="view-logs" class="btn btn-secondary px-5 py-2.5">View Logs</button>
+					<button @click="goToSettings" data-tour="settings" class="btn btn-secondary px-5 py-2.5">Settings</button>
 				</div>
 			</div>
 
-			<div class="dashboard-actions">
-				<button @click="goToShareFiles" class="btn btn-primary dashboard-action">
+			<div class="dashboard-actions" data-tour="action-cards">
+				<button @click="goToShareFiles" class="btn btn-primary dashboard-action" data-tour="new-share-link">
 					<span class="dashboard-action-title">New File Share Link</span>
 					<span class="dashboard-action-copy">Generate a secure download or review link.</span>
 				</button>
-				<button @click="goToUploadFiles" class="btn btn-primary dashboard-action">
+				<button @click="goToUploadFiles" class="btn btn-primary dashboard-action" data-tour="upload-files">
 					<span class="dashboard-action-title">Upload Files Locally</span>
 					<span class="dashboard-action-copy">Send files from this workstation to the server.</span>
 				</button>
-				<button @click="goToLinkUploadPanel" class="btn btn-primary dashboard-action">
+				<button @click="goToLinkUploadPanel" class="btn btn-primary dashboard-action" data-tour="new-upload-link">
 					<span class="dashboard-action-title">New Upload Link</span>
 					<span class="dashboard-action-copy">Create an intake link for collaborators.</span>
 				</button>
 			</div>
 		</template>
 
-		<div class="dashboard-links-wrap">
-			<ManageLinks/>
+		<div class="dashboard-links-wrap" data-tour="manage-links">
+			<ManageLinks :tourActive="tourShowDemoLinks"/>
 		</div>
 
 		<template #footer>
 			<div class="dashboard-footer">
-				<button @click="leaveServer" class="btn btn-danger px-6 py-2.5 rounded-md">
+				<button @click="leaveServer" data-tour="logout" class="btn btn-danger px-6 py-2.5 rounded-md">
 					Log Out
 				</button>
 			</div>
@@ -61,17 +61,88 @@ import { ref, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { clearLastSession } from '../composables/useSessionPersistence'
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()
 const { apiFetch } = useApi()
 const transfer = useTransferProgress()
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+/** When true, ManageLinks shows demo rows so the tour can highlight them */
+const tourShowDemoLinks = ref(false)
+
+const dashboardTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="action-cards"]',
+		message: 'Welcome to 45Flow!\n\nThese are your three main actions. You can create a File Share Link for review, upload files directly from your workstation, or generate an Upload Link for collaborators to send files to you.',
+	},
+	{
+		target: '[data-tour="new-share-link"]',
+		message: 'Click here to create a new File Share Link.\n\nYou\'ll select files from your server, set an expiry, and choose access controls. Recipients get a secure link to view and download the files.',
+	},
+	{
+		target: '[data-tour="upload-files"]',
+		message: 'Upload Files Locally lets you transfer files from this computer directly to the server.\n\nA step-by-step wizard walks you through selecting files, choosing a destination folder, and monitoring the upload.',
+	},
+	{
+		target: '[data-tour="new-upload-link"]',
+		message: 'New Upload Link creates a shareable link that others can use to upload files to a specific folder on your server.\n\nGreat for collecting media from collaborators.',
+	},
+	{
+		target: '[data-tour="manage-users"]',
+		message: 'Manage Users lets you create and manage collaborator accounts.\n\nYou can assign roles, set passwords, and control which users have access to your shared links. A detailed tour will appear when you first open it.',
+	},
+	{
+		target: '[data-tour="view-logs"]',
+		message: 'View Logs opens the client log viewer — useful for troubleshooting or tracking link usage.\n\nFilter by level, search events, and expand entries for details.',
+	},
+	{
+		target: '[data-tour="settings"]',
+		message: 'Settings lets you configure external/internal URLs, default link options, project roots, and maintenance cleanup.\n\nYou can also re-enable all guided tours from Settings.',
+	},
+	{
+		target: '[data-tour="manage-links"]',
+		message: 'This is your link management table.\n\nAll your share and upload links appear here. You can search, filter by type or status, edit titles, copy links, enable/disable access, and view details.\n\nLet\'s walk through the key features with some example links.',
+		beforeShow: () => { tourShowDemoLinks.value = true },
+	},
+	{
+		target: '[data-tour="manage-links-toolbar"]',
+		message: 'Use the toolbar to search links by title, directory, or file name.\n\nYou can also filter by link type (Upload, Share) and status (Active, Expired, Disabled). The Refresh button fetches the latest data from the server.',
+		beforeShow: () => { tourShowDemoLinks.value = true },
+	},
+	{
+		target: '[data-tour="manage-links-table"]',
+		message: 'The table shows all your links at a glance.\n\nEach row displays the link\'s title, type, sharing mode (Original or Proxy), a short URL you can copy, expiry countdown, status badge, access mode, creation date, and action buttons.\n\nClick any column header to sort. These are example links for the tour — your real links will appear here.',
+		beforeShow: () => { tourShowDemoLinks.value = true },
+	},
+	{
+		target: '[data-tour="manage-links-actions"]',
+		message: 'Each link has three action buttons:\n\n• Details — opens a full modal with all link settings, access logs, file lists, and version management.\n• Open — opens the link in a new browser tab (disabled when the link is disabled).\n• Disable/Enable — toggles the link on or off without deleting it.',
+		beforeShow: () => { tourShowDemoLinks.value = true },
+		cleanup: () => { tourShowDemoLinks.value = false },
+	},
+	{
+		target: '[data-tour="logout"]',
+		message: 'When you\'re done, click Log Out to disconnect from the server.\n\nThat\'s the tour! You\'re all set to start using 45Flow.',
+		placement: 'top',
+		cleanup: () => { tourShowDemoLinks.value = false },
+	},
+]
 
 // Restore any active transcodes from the server (survives logout/app restart)
 // Also restore persisted uploads (detached rsync that survived app closure)
 onMounted(() => {
 	transfer.restoreActiveTranscodes(apiFetch)
 	transfer.restorePersistedUploads()
+
+	if (!onboarding.value.dashboardTourDone) {
+		setTimeout(() => {
+			requestTour('dashboard', dashboardTourSteps, () => markDone('dashboardTourDone'))
+		}, 500)
+	}
 })
 
 const leaveServer = () => {

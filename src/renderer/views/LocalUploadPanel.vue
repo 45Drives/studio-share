@@ -3,7 +3,7 @@
 		<div class="ss-page-frame grid grid-cols-1 gap-3 text-xl">
 			<CardContainer class="local-upload-card ss-surface bg-accent rounded-md shadow-xl h-[calc(100vh-10rem)] flex flex-col">
 				<template #header>
-					<div class="wizard-head">
+					<div class="wizard-head" data-tour="upload-wizard-header">
 						<h2 class="wizard-main-title">Local Upload Wizard</h2>
 						<ol class="wizard-stepper" aria-label="Upload steps">
 							<li class="wizard-step-item">
@@ -36,7 +36,7 @@
 				<div class="wizard-stage">
 
 					<!-- STEP 1: Local files -->
-					<section v-show="step === 1" class="wizard-pane wizard-pane--fill">
+					<section v-show="step === 1" class="wizard-pane wizard-pane--fill" data-tour="upload-step-1">
 
 						<h2 class="wizard-heading">Pick local files</h2>
 
@@ -94,23 +94,25 @@
 					</section>
 
 					<!-- STEP 2: Destination (server) -->
-					<section v-show="step === 2" class="wizard-pane wizard-pane--fill">
+					<section v-show="step === 2" class="wizard-pane wizard-pane--fill" data-tour="upload-step-2">
 
 						<h2 class="wizard-heading">Choose destination on server</h2>
 
-						<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
-							subtitle="Pick the folder on the server where these files will be uploaded."
-							:auto-detect-roots="true" :allow-entire-tree="true" v-model:project="projectBase"
-							v-model:dest="destFolderRel" />
+						<div data-tour="upload-folder-picker">
+							<FolderPicker v-model="destFolderRel" :apiFetch="apiFetch" useCase="upload"
+								subtitle="Pick the folder on the server where these files will be uploaded."
+								:auto-detect-roots="true" :allow-entire-tree="true" v-model:project="projectBase"
+								v-model:dest="destFolderRel" />
+						</div>
 					</section>
 
 
 					<!-- STEP 3: Upload progress -->
-					<section v-show="step === 3" class="wizard-pane wizard-pane--fill">
+					<section v-show="step === 3" class="wizard-pane wizard-pane--fill" data-tour="upload-step-3">
 						<h2 class="wizard-heading">Uploading to {{ destDir || '/' }}</h2>
 
 						<!-- Overall progress summary -->
-						<div v-if="uploads.length" class="wizard-overall-progress">
+						<div v-if="uploads.length" data-tour="upload-progress" class="wizard-overall-progress">
 							<div class="flex items-center justify-between text-sm mb-1">
 								<span>
 									{{ uploadSummary.done }}/{{ uploadSummary.total }} completed
@@ -217,7 +219,7 @@
 								</table>
 							</div>
 
-							<div v-if="hasVideoSelected" class="advanced-video-card ss-toned-panel">
+							<div v-if="hasVideoSelected" data-tour="upload-advanced-video" class="advanced-video-card ss-toned-panel">
 								<div class="advanced-video-header">
 									<p class="font-semibold">Advanced video options</p>
 									<p class="text-xs text-muted">
@@ -260,11 +262,11 @@
 												<label class="inline-flex items-center gap-2 text-sm">
 													<input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities"
 														:disabled="!transcodeProxyAfterUpload" />
-													<span>Original</span>
+													<span>Full Res</span>
 												</label>
 											</div>
 											<div class="text-xs text-slate-400 mt-2">
-												These versions are used for shared links instead of original files.
+												Proxy versions for streaming. The raw file is always preserved.
 											</div>
 										</div>
 									</div>
@@ -342,7 +344,7 @@
 						</div>
 
 					<div class="justify-self-end">
-						<button class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
+						<button data-tour="upload-next-btn" class="btn btn-primary" :disabled="nextDisabled" @click="nextStep">
 							{{ nextLabel }}
 						</button>
 					</div>
@@ -361,7 +363,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, watch, onMounted } from 'vue'
+import { ref, computed, inject, watch, onMounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
 import { Switch } from '@headlessui/vue';
@@ -371,9 +373,102 @@ import { useResilientNav } from '../composables/useResilientNav'
 import { onBeforeRouteLeave } from 'vue-router';
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui';
 import { useTransferProgress } from '../composables/useTransferProgress'
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 const { to } = useResilientNav()
 useHeader('Upload Files')
 const transfer = useTransferProgress()
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const localUploadTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="upload-wizard-header"]',
+		message: 'Welcome to the Local Upload Wizard!\n\nThis 3-step process lets you transfer files from your computer to the server. The stepper at the top tracks your progress through each step.',
+	},
+	{
+		target: '[data-tour="upload-step-1"]',
+		message: 'Step 1: Select files or folders from your local machine.\n\nClick "Choose Files" to pick individual files (multi-select supported) or "Choose Folder" to add an entire directory. Selected files appear in the table below.\n\nGo ahead and select some files — when you\'re ready, the tour will continue.',
+	},
+	{
+		target: '[data-tour="upload-next-btn"]',
+		message: 'Now click "Next" to move to Step 2 where you\'ll choose where on the server these files will be uploaded.',
+		placement: 'top',
+	},
+	{
+		target: '[data-tour="upload-folder-picker"]',
+		message: 'Step 2: Choose the destination folder on the server.\n\nBrowse the directory tree to pick where your files will land. You can create new folders, toggle between icon and tree view, and switch between project roots.\n\nSelect a destination folder, then continue.',
+	},
+	{
+		target: '[data-tour="upload-next-btn"]',
+		message: 'Click "Next" to move to the final step — reviewing your upload and configuring video options.',
+		placement: 'top',
+	},
+	{
+		target: '[data-tour="upload-step-3"]',
+		message: 'Step 3: Review your files and start the upload.\n\nThe table shows every file queued for upload with its name, size, and status. Once uploaded, you\'ll see speed, ETA, and completion time for each file.',
+		placement: 'top',
+	},
+	{
+		target: '[data-tour="upload-next-btn"]',
+		message: 'When you\'re ready, click "Start Upload" to begin transferring files to the server.\n\nYou can cancel individual uploads while they\'re in progress. If you selected video files, configure proxy and watermark options above before starting.',
+		placement: 'top',
+	},
+]
+
+/** Request specific tour steps based on the current wizard step */
+function requestStepTour() {
+	if (onboarding.value.localUploadTourDone) return
+
+	if (step.value === 1 && !_tourStep1Shown) {
+		_tourStep1Shown = true
+		requestTour('local-upload', localUploadTourSteps.slice(0, 2), () => {})
+	}
+}
+
+/** Show the "click Next" hint after user adds files (first time only) */
+function requestNextHintForStep1() {
+	if (onboarding.value.localUploadTourDone || !_tourStep1Shown) return
+	if (_tourNextHint1Shown) return
+	_tourNextHint1Shown = true
+	requestTour('local-upload-next1', [localUploadTourSteps[2]], () => {})
+}
+
+/** Show step 2 tour after navigating there */
+function requestStep2Tour() {
+	if (onboarding.value.localUploadTourDone) return
+	if (_tourStep2Shown) return
+	_tourStep2Shown = true
+	requestTour('local-upload-step2', [localUploadTourSteps[3]], () => {})
+}
+
+/** Show "click Next" for step 2→3 after user picks a folder */
+function requestNextHintForStep2() {
+	if (onboarding.value.localUploadTourDone || !_tourStep2Shown) return
+	if (_tourNextHint2Shown) return
+	_tourNextHint2Shown = true
+	requestTour('local-upload-next2', [localUploadTourSteps[4]], () => {})
+}
+
+/** Show step 3 tour after navigating there */
+function requestStep3Tour() {
+	if (onboarding.value.localUploadTourDone) return
+	if (_tourStep3Shown) return
+	_tourStep3Shown = true
+	requestTour('local-upload-step3', localUploadTourSteps.slice(5, 7), () => markDone('localUploadTourDone'))
+}
+
+let _tourStep1Shown = false
+let _tourNextHint1Shown = false
+let _tourStep2Shown = false
+let _tourNextHint2Shown = false
+let _tourStep3Shown = false
+
+onMounted(() => {
+	if (!onboarding.value.localUploadTourDone) {
+		setTimeout(() => requestStepTour(), 300)
+	}
+})
 
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 
@@ -683,9 +778,9 @@ function waitForIngestAndStartTranscode(opts: {
 							const params = new URLSearchParams();
 							if (payload?.destRel) params.set('dest', String(payload.destRel));
 							if (payload?.name) params.set('name', String(payload.name));
-							if (opts.isVideo) {
+							if (opts.isVideo && opts.wantProxy) {
 								params.set('hls', '1');
-								if (opts.wantProxy) params.set('proxy', '1');
+								params.set('proxy', '1');
 								if (proxyQualities.value.length) params.set('proxyQualities', proxyQualities.value.join(','));
 							}
 
@@ -927,6 +1022,24 @@ watch(step, (s, old) => {
 
 	if (old === 3 && s !== 3 && allTerminal.value) {
 		resetUploadState()
+	}
+
+	// Tour: trigger tour segments on step transitions
+	if (s === 2) nextTick(() => requestStep2Tour())
+	if (s === 3) nextTick(() => requestStep3Tour())
+})
+
+// Tour: show "click Next" hint when files are first selected
+watch(() => selected.value.length, (len) => {
+	if (len > 0 && step.value === 1) {
+		nextTick(() => requestNextHintForStep1())
+	}
+})
+
+// Tour: show "click Next" hint when destination is picked
+watch(destFolderRel, (val) => {
+	if (val && step.value === 2) {
+		nextTick(() => requestNextHintForStep2())
 	}
 })
 

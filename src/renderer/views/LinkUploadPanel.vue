@@ -4,14 +4,14 @@
 			<div class="grid w-full grid-cols-1 gap-4 text-xl min-w-0">
 				<CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
 					<div class="ss-toned-panel flex flex-col gap-2 text-left min-w-0 p-3">
-						<div class="flex flex-col gap-2 text-left min-w-0">
-							<h2 class="text-xl font-semibold">Share a Folder</h2>
+						<div data-tour="upload-link-heading" class="flex flex-col gap-2 text-left min-w-0">
+							<h2 class="text-xl font-semibold">Share a Link for Remote Uploads</h2>
 							<div class="text-sm opacity-80 -mt-1">
 								Pick a folder on the server and generate a shareable link users can upload to.
 							</div>
 						</div>
 
-						<div class="min-w-0">
+						<div data-tour="upload-link-folder" class="min-w-0">
 							<FolderPicker
 								v-model="destFolderRel"
 								:apiFetch="apiFetch"
@@ -25,10 +25,10 @@
 							/>
 						</div>
 
-						<div class="border-t border-default mt-2 pt-3 min-w-0">
+						<div data-tour="upload-link-options" class="border-t border-default mt-2 pt-3 min-w-0">
 							<CommonLinkControls>
 							<template #expiry>
-								<div class="flex flex-col gap-3 min-w-0">
+								<div data-tour="upload-link-expiry" class="flex flex-col gap-3 min-w-0">
 									<div class="flex items-center gap-3 min-w-0">
 										<label class="font-semibold whitespace-nowrap flex-shrink-0">Expires in:</label>
 										<div class="flex items-center gap-2 min-w-0 flex-1">
@@ -56,7 +56,7 @@
 							</template>
 
 							<template #access>
-								<div class="flex flex-col gap-1 min-w-0">
+								<div data-tour="upload-link-network" class="flex flex-col gap-1 min-w-0">
 									<div class="flex flex-wrap items-center gap-3 min-w-0">
 										<span class="font-semibold sm:whitespace-nowrap">
 											Network Access:
@@ -106,7 +106,7 @@
 							</template>
 
 							<template #title>
-								<div class="flex flex-wrap items-center gap-3 min-w-0">
+								<div data-tour="upload-link-title" class="flex flex-wrap items-center gap-3 min-w-0">
 									<label class="font-semibold sm:whitespace-nowrap">Link Title:</label>
 									<input
 										type="text"
@@ -119,7 +119,7 @@
 
 							<!-- Link Access row -->
 							<template #after class="">
-								<div class="border-t border-default mt-2 pt-2 min-w-0 text-left">
+								<div data-tour="upload-link-access-mode" class="border-t border-default mt-2 pt-2 min-w-0 text-left">
 									<div class="ss-toned-panel min-w-0 p-3">
 										<div class="font-semibold mb-2">Link Access Mode</div>
 										<div class="grid grid-cols-3 gap-2 min-w-0">
@@ -261,6 +261,7 @@
 									Reset
 								</button>
 								<button
+									data-tour="upload-link-generate-btn"
 									class="btn btn-primary flex-1 min-w-[14rem]"
 									:disabled="!canGenerate || loading"
 									@click="generateLink"
@@ -310,11 +311,46 @@ import { useResilientNav } from '../composables/useResilientNav'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/20/solid'
 import type { Commenter } from '../typings/electron'
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 
 const { to } = useResilientNav()
 useHeader('Upload Files via Link')
 
 const { apiFetch } = useApi()
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const uploadLinkTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="upload-link-heading"]',
+		message: 'Welcome to Upload Link creation!\n\nThis page lets you create a shareable link that others can use to upload files directly to a folder on your server.',
+	},
+	{
+		target: '[data-tour="upload-link-folder"]',
+		message: 'Pick the destination folder on the server.\n\nBrowse directories, create new folders, and switch between tree and icon view. This is where uploaded files will land when collaborators use the link.',
+	},
+	{
+		target: '[data-tour="upload-link-expiry"]',
+		message: 'Set how long the upload link stays active.\n\nUse the input fields or preset buttons (1 hour, 1 day, 1 week, Never). After expiry, no new uploads can be submitted through this link.',
+	},
+	{
+		target: '[data-tour="upload-link-title"]',
+		message: 'Give your link an optional title.\n\nThis makes it easier to identify in the link management table on the dashboard.',
+	},
+	{
+		target: '[data-tour="upload-link-network"]',
+		message: 'Choose how the link is accessed on the network.\n\n"Share Locally" creates a link accessible over your LAN. "Share Externally" creates a public link — requires port forwarding to be configured.',
+	},
+	{
+		target: '[data-tour="upload-link-access-mode"]',
+		message: 'Control who can upload through this link.\n\n• "Anyone with the link" — WARNING: anyone can upload files to your server!\n• "Anyone + password" — one shared password for all uploaders.\n• "Only invited users" — each user signs in with their own account.',
+	},
+	{
+		target: '[data-tour="upload-link-generate-btn"]',
+		message: 'Once everything looks good, click here to generate the upload link.\n\nThe link appears below — copy it or open it directly. Share it with collaborators so they can upload files to your server.',
+	},
+]
 const linkContext = { type: 'upload' as const }
 
 const destFolderRel = ref<string>('')
@@ -380,6 +416,11 @@ async function loadLinkDefaults() {
 
 onMounted(async () => {
 	await loadLinkDefaults()
+	if (!onboarding.value.uploadLinkTourDone) {
+		setTimeout(() => {
+			requestTour('upload-link', uploadLinkTourSteps, () => markDone('uploadLinkTourDone'))
+		}, 500)
+	}
 })
 
 const loading = ref(false)

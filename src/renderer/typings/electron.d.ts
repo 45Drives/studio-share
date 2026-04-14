@@ -68,6 +68,7 @@ export type LinkItem = {
   createdUa?: string | null
   owner?: { id?: number|string|null, username?: string|null, display_name?: string|null }
   target?: { dirRel?: string; allowUpload?: boolean; files?: Array<{ id?: string; name?: string; size?: number; mime?: string }> }
+  shareMode?: string | null
 }
 export type Role = {
   id: number

@@ -6,6 +6,7 @@
         <!-- Tab (absolutely positioned on the left edge of the wrapper) -->
         <button
             class="drawer-tab"
+            data-tour="transfer-dock-tab"
             @click="setOpen(!state.open)"
             :title="state.open ? 'Close transfers panel' : 'Open transfers panel'"
         >
@@ -24,7 +25,7 @@
             <div class="drawer-inner">
 
             <!-- Drawer header -->
-            <div class="drawer-header">
+            <div class="drawer-header" data-tour="transfer-dock-header">
                 <div class="min-w-0">
                     <div class="font-semibold text-sm">
                         Transfers
@@ -40,7 +41,7 @@
             </div>
 
             <!-- Drawer body (scrollable) -->
-            <div class="drawer-body">
+            <div class="drawer-body" data-tour="transfer-dock-body">
                 <div v-if="!state.tasks.length" class="px-4 py-6 text-sm opacity-70 text-center">
                     No transfers.
                 </div>
@@ -88,6 +89,12 @@
                                             @click="cancelUpload(t.taskId)">
                                             Cancel
                                         </button>
+                                        <button
+                                            v-if="t.kind === 'transcode' && (t.status === 'running' || t.status === 'queued')"
+                                            class="btn btn-danger px-1.5 py-0 text-[9px] leading-tight"
+                                            @click="cancelTranscode(t.taskId)">
+                                            Cancel
+                                        </button>
                                     </div>
                                     <div class="flex items-center gap-2 flex-shrink-0 text-[10px] opacity-60 tabular-nums">
                                         <span v-if="t.speed">{{ t.speed }}</span>
@@ -119,8 +126,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useTransferProgress } from '../composables/useTransferProgress'
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 
 const {
     state,
@@ -130,7 +139,40 @@ const {
     removeTask,
     clearFinished,
     cancelUpload,
+    cancelTranscode,
 } = useTransferProgress()
+
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const transferDockTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="transfer-dock-tab"]',
+		message: 'This is the Transfers panel.\n\nClick this tab anytime to open or close the panel. The badge shows how many transfers are currently active.',
+		placement: 'left',
+	},
+	{
+		target: '[data-tour="transfer-dock-header"]',
+		message: 'The header shows overall status — active count and idle/in-progress indicator.\n\nUse "Clear finished" to remove completed transfers, or "Close" to collapse the panel.',
+		placement: 'left',
+	},
+	{
+		target: '[data-tour="transfer-dock-body"]',
+		message: 'Each file shows its upload progress with speed, ETA, and a progress bar.\n\nFiles are grouped by destination. You can cancel individual uploads or dismiss entire groups when finished.',
+		placement: 'left',
+	},
+]
+
+// Trigger dock tour the first time the panel opens
+let _dockTourTriggered = false
+watch(() => state.open, (open) => {
+	if (open && !_dockTourTriggered && !onboarding.value.transferDockTourDone) {
+		_dockTourTriggered = true
+		setTimeout(() => {
+			requestTour('transfer-dock', transferDockTourSteps, () => markDone('transferDockTourDone'))
+		}, 600)
+	}
+})
 
 function basename(p?: string) {
     if (!p) return ''

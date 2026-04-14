@@ -4,341 +4,371 @@
 
         <div class="absolute inset-0 flex items-center justify-center p-4">
             <div
-                class="w-full max-w-7xl max-h-[calc(100vh-2rem)] rounded-lg border border-default bg-default shadow-2xl flex flex-col">
+                class="w-full max-w-5xl h-[min(36rem,calc(100vh-2rem))] rounded-lg border border-default bg-default shadow-2xl flex flex-col"
+                @click.stop>
 
-                <CardContainer class="flex-1 min-h-0 overflow-y-auto w-full bg-accent rounded-md shadow-xl min-w-0">
-                    <template #header>
-                        <div class="flex items-center justify-between px-6 py-4 shrink-0">
-                            <div class="text-xl font-semibold text-default">45Flow Settings</div>
-                            <button class="btn btn-secondary" type="button" @click="close" :disabled="busy">
-                                Close
+                <!-- Header -->
+                <div class="flex items-center justify-between px-5 py-3 border-b border-default shrink-0" data-tour="settings-modal-header">
+                    <div>
+                        <h2 class="text-lg font-semibold text-default">45Flow Settings</h2>
+                        <div class="text-xs text-muted mt-0.5">Adjust global settings for share links.</div>
+                    </div>
+                    <button class="btn btn-secondary" type="button" @click="close" :disabled="busy">Close</button>
+                </div>
+
+                <!-- Body: sidebar + content -->
+                <div class="flex flex-1 min-h-0">
+                    <!-- Sidebar nav -->
+                    <nav class="w-44 shrink-0 border-r border-default py-3 overflow-y-auto" data-tour="settings-modal-nav">
+                        <template v-for="group in navGroups" :key="group.label">
+                            <p class="settings-nav-group-label">{{ group.label }}</p>
+                            <button v-for="item in group.items" :key="item.key"
+                                class="settings-nav-btn" :class="{ 'settings-nav-btn-active': activeSection === item.key }"
+                                @click="activeSection = item.key">
+                                {{ item.label }}
                             </button>
-                        </div>
-                        <div class="px-6 text-left text-sm text-muted">
-                            Adjust global settings for share links.
-                        </div>
-                    </template>
-                    <div class="grid grid-cols-2 w-full">
+                        </template>
+                    </nav>
 
-                        <div class="px-6 py-4 border-r border-default text-left gap-4 items-center">
-                            <div class="flex flex-col gap-1">
-                                <label>Default Link Access</label>
-                                <div class="flex items-center gap-4">
-                                    <!-- Internal (active when switch OFF) -->
-                                    <span class="text-sm" :class="[
-                                        !defaultAccessIsExternal
-                                            ? 'border-b-2 border-primary pb-0.5 font-semibold'
-                                            : 'opacity-70'
-                                    ]">
-                                        Internal
-                                    </span>
+                    <!-- Content -->
+                    <div class="flex-1 overflow-y-auto px-5 py-4 text-left" data-tour="settings-modal-urls">
 
-                                    <!-- Switch (ON = External) -->
-                                    <Switch id="link-access-switch" v-model="defaultAccessIsExternal" :class="[
-                                        defaultAccessIsExternal ? 'bg-primary' : 'bg-well',
-                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                        <!-- ═══ Link Sharing ══════════════════════════════════ -->
+                        <template v-if="activeSection === 'sharing'">
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Default Link Access" description="External uses your public domain or IP. Internal uses LAN or VPN routing.">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-sm" :class="!defaultAccessIsExternal ? 'font-semibold' : 'opacity-60'">Internal</span>
+                                        <Switch v-model="defaultAccessIsExternal" :class="[
+                                            defaultAccessIsExternal ? 'bg-primary' : 'bg-well',
+                                            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                        ]">
+                                            <span class="sr-only">Toggle link access</span>
+                                            <span :class="[
+                                                defaultAccessIsExternal ? 'translate-x-4' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                            ]" />
+                                        </Switch>
+                                        <span class="text-sm" :class="defaultAccessIsExternal ? 'font-semibold' : 'opacity-60'">External</span>
+                                    </div>
+                                </SettingRow>
+                            </div>
+
+                            <p class="text-xs font-semibold text-muted uppercase tracking-wide mt-5 mb-2">External Share URL (Public)</p>
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Auto-detect" description="Use the detected public WAN IP.">
+                                    <Switch v-model="externalAuto" :disabled="busy" :class="[
+                                        externalAuto ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
                                     ]">
-                                        <span class="sr-only">Toggle link access</span>
-                                        <span aria-hidden="true" :class="[
-                                            defaultAccessIsExternal ? 'translate-x-5' : 'translate-x-0',
-                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                        <span class="sr-only">Toggle external auto-detect</span>
+                                        <span :class="[
+                                            externalAuto ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
                                         ]" />
                                     </Switch>
-
-                                    <!-- External (active when switch ON) -->
-                                    <span class="text-sm" :class="[
-                                        defaultAccessIsExternal
-                                            ? 'border-b-2 border-primary pb-0.5 font-semibold'
-                                            : 'opacity-70'
-                                    ]">
-                                        External
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="text-xs text-muted mt-1">
-                                External uses your public domain or IP.
-                                Internal uses LAN or VPN routing.
-                            </div>
-                            <div class="space-y-4 mt-4">
-                                <div class="text-base font-semibold">External share URL (public)</div>
-
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" v-model="externalAuto" :disabled="busy" />
-                                    <span>Auto-detect (WAN IP)</span>
-                                </label>
-
-                                <div>
-                                    <label class="block text-sm opacity-80 mb-1">External base</label>
+                                </SettingRow>
+                                <SettingRow label="External base" description="Hostname or public IP only. No path. A domain requires a valid certificate.">
                                     <input v-model="externalBase" type="text" :disabled="busy || externalAuto"
-                                        class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                        class="input-textlike border border-default px-2 py-1 rounded text-sm w-56"
                                         placeholder="https://example.ddns.net" />
-                                    <div class="text-xs opacity-70 mt-1">
-                                        Hostname or public IP only. No path.
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm opacity-80 mb-1">External HTTPS port</label>
-                                    <input v-model.number="externalHttpsPort" type="number" min="1" max="65535"
-                                        :disabled="busy"
-                                        class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
-                                        placeholder="443" />
-                                    <div class="text-xs opacity-70 mt-1">
-                                        Port users enter in their browser.
-                                    </div>
-                                </div>
-
-                                <div class="text-xs opacity-70">
-                                    Using a domain requires a valid certificate for that domain.
-                                </div>
+                                </SettingRow>
+                                <SettingRow label="HTTPS port" description="Port users enter in their browser.">
+                                    <input v-model.number="externalHttpsPort" type="number" min="1" max="65535" :disabled="busy"
+                                        class="input-textlike border border-default px-2 py-1 rounded text-sm w-20 text-right" />
+                                </SettingRow>
                             </div>
-                            <div class="space-y-4 mt-4">
-                                <div class="text-base font-semibold">Internal share URL (LAN / VPN)</div>
 
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" v-model="internalAuto" :disabled="busy" />
-                                    <span>Auto-detect (LAN IP)</span>
-                                </label>
-                                <div>
-                                    <label class="block text-sm opacity-80 mb-1">Internal base</label>
+                            <p class="text-xs font-semibold text-muted uppercase tracking-wide mt-5 mb-2">Internal Share URL (LAN / VPN)</p>
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Auto-detect" description="Use the detected LAN IP.">
+                                    <Switch v-model="internalAuto" :disabled="busy" :class="[
+                                        internalAuto ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle internal auto-detect</span>
+                                        <span :class="[
+                                            internalAuto ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                                <SettingRow label="Internal base" description="Private IP or internal hostname.">
                                     <input v-model="internalBase" type="text" :disabled="busy || internalAuto"
-                                        class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
+                                        class="input-textlike border border-default px-2 py-1 rounded text-sm w-56"
                                         placeholder="http://192.168.1.123" />
-                                    <div class="text-xs opacity-70 mt-1">
-                                        Private IP or internal hostname.
-                                    </div>
-                                </div>
+                                </SettingRow>
                             </div>
 
-                            <div class="space-y-4 mt-6 border-t border-default pt-4">
-                                <div class="text-base font-semibold">Project Root (Share / Upload)</div>
-
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" v-model="forceProjectRoot" :disabled="busy" />
-                                    <span>Ignore ZFS pools and use project root by default</span>
-                                </label>
-
-                                <div>
-                                    <label class="block text-sm opacity-80 mb-1">Project root path</label>
-                                    <PathInput
-                                        v-model="projectRoot"
-                                        :apiFetch="apiFetch"
-                                        :dirsOnly="true"
-                                    />
-                                    <div class="text-xs opacity-70 mt-1">
-                                        Absolute path used as the default root when creating share/upload destinations.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-left space-y-3 bg-default px-6 py-4 rounded-md">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                                <div class="text-center text-base">
-                                    <label>Preview</label>
-                                </div>
-                                <div>
-                                    <div class="opacity-75 mb-1">External</div>
-                                    <div class="font-mono text-xs break-all">
-                                        {{ externalPreview || "—" }}
-                                    </div>
-                                    <div v-if="externalAuto && externalEffectivePreview"
-                                        class="mt-1 text-xs opacity-70 break-all">
-                                        Detected:
-                                        <span class="font-mono">{{ externalEffectivePreview }}</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div class="opacity-75 mb-1">Internal</div>
-                                    <div class="font-mono text-xs break-all">
-                                        {{ internalPreview || "—" }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="text-xs opacity-70">
-                                These base URLs are used when generating share links.
-                            </div>
-
-                            <div class="space-y-2">
-                                <div class="text-sm font-semibold">Domain / DDNS example</div>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono break-all">
+                            <!-- URL Preview -->
+                            <div class="mt-5 rounded-lg border border-default bg-default/40 p-3 space-y-2">
+                                <div class="text-xs font-semibold text-muted uppercase tracking-wide">URL Preview</div>
+                                <div class="grid grid-cols-2 gap-3 text-sm">
                                     <div>
-                                        <div class="opacity-70 mb-1">Before</div>
-                                        https:///&lt;ip&gt;/s/&lt;token&gt;
+                                        <div class="text-xs text-muted">External</div>
+                                        <div class="font-mono text-xs break-all mt-0.5">{{ externalPreview || '—' }}</div>
+                                        <div v-if="externalAuto && externalEffectivePreview"
+                                            class="mt-1 text-xs opacity-60 break-all">
+                                            Detected: <span class="font-mono">{{ externalEffectivePreview }}</span>
+                                        </div>
                                     </div>
                                     <div>
-                                        <div class="opacity-70 mb-1">After</div>
-                                        https://&lt;custom-domain&gt;/s/&lt;token&gt;
-                                    </div>
-                                </div>
-
-                                <div class="text-xs opacity-70">
-                                    Set External base to
-                                    <span class="font-mono">"https://custom-domain"</span>
-                                    and keep port 443 (or your forwarded port).
-                                </div>
-                            </div>
-
-                            <div class="border-t border-default pt-4 mt-4">
-                                <div class="text-base font-semibold">Default Link Options</div>
-                                <div class="space-y-3 mt-2 text-sm">
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" v-model="defaultRestrictAccess" :disabled="busy" />
-                                        <span>Restrict access to users</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" v-model="defaultAllowComments" :disabled="busy" />
-                                        <span>Allow comments on open links</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" v-model="defaultUseProxyFiles" :disabled="busy" />
-                                        <span>Generate proxy files by default</span>
-                                    </label>
-                                    <div class="text-xs opacity-70">
-                                        These defaults are applied when creating new links and can be changed per link.
+                                        <div class="text-xs text-muted">Internal</div>
+                                        <div class="font-mono text-xs break-all mt-0.5">{{ internalPreview || '—' }}</div>
                                     </div>
                                 </div>
                             </div>
+                        </template>
 
-                            <div class="border-t border-default pt-4 mt-4">
-                                <div class="text-base font-semibold">Maintenance Cleanup</div>
-                                <div class="text-xs opacity-70 mt-1">
-                                    Scan for orphaned transcode folders and missing-file metadata, then optionally apply cleanup.
+                        <!-- ═══ Project Root ══════════════════════════════════ -->
+                        <template v-if="activeSection === 'project'">
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Force project root" description="Ignore ZFS pools and use project root by default.">
+                                    <Switch v-model="forceProjectRoot" :disabled="busy" :class="[
+                                        forceProjectRoot ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle force project root</span>
+                                        <span :class="[
+                                            forceProjectRoot ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                            </div>
+
+                            <div class="mt-4">
+                                <label class="block text-sm font-medium text-default mb-1">Project root path</label>
+                                <PathInput
+                                    v-model="projectRoot"
+                                    :apiFetch="apiFetch"
+                                    :dirsOnly="true"
+                                />
+                                <div class="text-xs text-muted mt-1">
+                                    Absolute path used as the default root when creating share/upload destinations.
                                 </div>
+                            </div>
+                        </template>
 
-                                <div class="space-y-3 mt-3 text-sm">
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" v-model="cleanupDeleteOrphans" :disabled="busy || cleanupBusy" />
-                                        <span>Delete orphan transcode directories</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" v-model="cleanupPruneMissingFiles" :disabled="busy || cleanupBusy" />
-                                        <span>Prune DB rows for missing source files</span>
-                                    </label>
+                        <!-- ═══ Default Link Options ══════════════════════════ -->
+                        <template v-if="activeSection === 'defaults'">
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Restrict access to users" description="New links will require user accounts by default.">
+                                    <Switch v-model="defaultRestrictAccess" :disabled="busy" :class="[
+                                        defaultRestrictAccess ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle restrict access</span>
+                                        <span :class="[
+                                            defaultRestrictAccess ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                                <SettingRow label="Allow comments on open links" description="Enable commenting for links accessible without sign-in.">
+                                    <Switch v-model="defaultAllowComments" :disabled="busy" :class="[
+                                        defaultAllowComments ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle allow comments</span>
+                                        <span :class="[
+                                            defaultAllowComments ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                                <SettingRow label="Generate proxy files by default" description="Transcode video files to proxy quality when sharing.">
+                                    <Switch v-model="defaultUseProxyFiles" :disabled="busy" :class="[
+                                        defaultUseProxyFiles ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle proxy files</span>
+                                        <span :class="[
+                                            defaultUseProxyFiles ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                            </div>
+                            <p class="text-xs text-muted mt-3">
+                                These defaults apply when creating new links and can be changed per link.
+                            </p>
+                        </template>
 
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="block text-xs opacity-80 mb-1">Orphan min age (hours)</label>
-                                            <input
-                                                v-model.number="cleanupOrphanMinAgeHours"
-                                                type="number"
-                                                min="0"
-                                                max="8760"
-                                                :disabled="busy || cleanupBusy"
-                                                class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs opacity-80 mb-1">Max missing file checks</label>
-                                            <input
-                                                v-model.number="cleanupMaxMissingFiles"
-                                                type="number"
-                                                min="1"
-                                                max="5000"
-                                                :disabled="busy || cleanupBusy"
-                                                class="text-default input-textlike border px-3 py-2 rounded text-sm w-full"
-                                            />
-                                        </div>
+                        <!-- ═══ Application ═══════════════════════════════════ -->
+                        <template v-if="activeSection === 'app'">
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Re-enable guided tours" description="Reset onboarding walkthroughs so they show again on each page.">
+                                    <button
+                                        class="btn btn-secondary text-sm px-3 py-1"
+                                        type="button"
+                                        :disabled="busy || !anyOnboardingDone"
+                                        @click="handleResetOnboarding"
+                                    >
+                                        Reset Tours
+                                    </button>
+                                </SettingRow>
+                            </div>
+                        </template>
+
+                        <!-- ═══ Maintenance ═══════════════════════════════════ -->
+                        <template v-if="activeSection === 'maintenance'">
+                            <p class="text-xs text-muted mb-3">
+                                Scan for orphaned transcode folders and missing-file metadata, then optionally apply cleanup.
+                            </p>
+
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Delete orphan transcode directories" description="Remove transcode output folders no longer linked to any file.">
+                                    <Switch v-model="cleanupDeleteOrphans" :disabled="busy || cleanupBusy" :class="[
+                                        cleanupDeleteOrphans ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle delete orphans</span>
+                                        <span :class="[
+                                            cleanupDeleteOrphans ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                                <SettingRow label="Prune missing source files" description="Remove database rows referencing files that no longer exist.">
+                                    <Switch v-model="cleanupPruneMissingFiles" :disabled="busy || cleanupBusy" :class="[
+                                        cleanupPruneMissingFiles ? 'bg-primary' : 'bg-well',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                    ]">
+                                        <span class="sr-only">Toggle prune missing files</span>
+                                        <span :class="[
+                                            cleanupPruneMissingFiles ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                        ]" />
+                                    </Switch>
+                                </SettingRow>
+                            </div>
+
+                            <p class="text-xs font-semibold text-muted uppercase tracking-wide mt-5 mb-2">Parameters</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="flex items-center justify-between gap-2 rounded-lg border border-default bg-default/40 px-3 py-2">
+                                    <div class="text-sm text-default">Orphan min age</div>
+                                    <div class="flex items-center gap-1">
+                                        <input v-model.number="cleanupOrphanMinAgeHours" type="number" min="0" max="8760"
+                                            :disabled="busy || cleanupBusy"
+                                            class="input-textlike border border-default px-2 py-1 rounded text-sm w-16 text-right" />
+                                        <span class="text-xs text-muted">hrs</span>
                                     </div>
-
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <button class="btn btn-secondary" type="button" @click="runCleanup(false)" :disabled="busy || cleanupBusy">
-                                            <span v-if="cleanupBusy && cleanupMode === 'scan'">Scanning…</span>
-                                            <span v-else>Run Scan</span>
-                                        </button>
-                                        <button class="btn btn-danger" type="button" @click="runCleanup(true)" :disabled="busy || cleanupBusy">
-                                            <span v-if="cleanupBusy && cleanupMode === 'apply'">Applying…</span>
-                                            <span v-else>Apply Cleanup</span>
-                                        </button>
-                                        <button class="btn btn-secondary" type="button" @click="exportCleanupReport" :disabled="!cleanupResult || cleanupBusy">
-                                            Export JSON
-                                        </button>
-                                    </div>
-
-                                    <div v-if="cleanupError" class="text-danger text-xs">
-                                        {{ cleanupError }}
-                                    </div>
-
-                                    <div v-if="cleanupResult" class="rounded border border-default bg-default/20 p-3 text-xs space-y-2">
-                                        <div class="font-semibold">
-                                            Last run: {{ cleanupResult.apply ? 'Applied changes' : 'Dry run' }}
-                                        </div>
-                                        <div v-if="cleanupLastRunAt" class="opacity-75">
-                                            Ran at: {{ cleanupLastRunAtLabel }}
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <div>Transcode fixes: <span class="font-semibold">{{ cleanupTranscodeFixes.length }}</span></div>
-                                            <div>Orphan dirs: <span class="font-semibold">{{ cleanupOrphanDirs.length }}</span></div>
-                                            <div>Missing files: <span class="font-semibold">{{ cleanupMissingFiles.length }}</span></div>
-                                        </div>
-
-                                        <div v-if="cleanupOrphanDirs.length">
-                                            <div class="font-semibold mb-1">Sample orphan dirs</div>
-                                            <ul class="space-y-1">
-                                                <li v-for="(d, i) in cleanupOrphanDirs.slice(0, 5)" :key="`orphan-${i}`" class="font-mono break-all">
-                                                    {{ d.dir || d.path || d }}
-                                                </li>
-                                            </ul>
-                                        </div>
-
-                                        <div v-if="cleanupMissingFiles.length">
-                                            <div class="font-semibold mb-1">Sample missing files</div>
-                                            <ul class="space-y-1">
-                                                <li v-for="(m, i) in cleanupMissingFiles.slice(0, 5)" :key="`missing-${i}`" class="font-mono break-all">
-                                                    {{ m.abs || [m.rel_dir, m.filename].filter(Boolean).join('/') || m }}
-                                                </li>
-                                            </ul>
-                                        </div>
+                                </div>
+                                <div class="flex items-center justify-between gap-2 rounded-lg border border-default bg-default/40 px-3 py-2">
+                                    <div class="text-sm text-default">Max missing checks</div>
+                                    <div class="flex items-center gap-1">
+                                        <input v-model.number="cleanupMaxMissingFiles" type="number" min="1" max="5000"
+                                            :disabled="busy || cleanupBusy"
+                                            class="input-textlike border border-default px-2 py-1 rounded text-sm w-16 text-right" />
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        
+
+                            <div class="flex flex-wrap items-center gap-2 mt-4">
+                                <button class="btn btn-secondary text-sm" type="button" @click="runCleanup(false)" :disabled="busy || cleanupBusy">
+                                    <span v-if="cleanupBusy && cleanupMode === 'scan'">Scanning…</span>
+                                    <span v-else>Run Scan</span>
+                                </button>
+                                <button class="btn btn-danger text-sm" type="button" @click="runCleanup(true)" :disabled="busy || cleanupBusy">
+                                    <span v-if="cleanupBusy && cleanupMode === 'apply'">Applying…</span>
+                                    <span v-else>Apply Cleanup</span>
+                                </button>
+                                <button class="btn btn-secondary text-sm" type="button" @click="exportCleanupReport" :disabled="!cleanupResult || cleanupBusy">
+                                    Export JSON
+                                </button>
+                            </div>
+
+                            <div v-if="cleanupError" class="text-danger text-xs mt-2">{{ cleanupError }}</div>
+
+                            <div v-if="cleanupResult" class="mt-4 rounded-lg border border-default bg-default/40 p-3 text-xs space-y-2">
+                                <div class="font-semibold">
+                                    Last run: {{ cleanupResult.apply ? 'Applied changes' : 'Dry run' }}
+                                </div>
+                                <div v-if="cleanupLastRunAt" class="opacity-75">
+                                    Ran at: {{ cleanupLastRunAtLabel }}
+                                </div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>Transcode fixes: <span class="font-semibold">{{ cleanupTranscodeFixes.length }}</span></div>
+                                    <div>Orphan dirs: <span class="font-semibold">{{ cleanupOrphanDirs.length }}</span></div>
+                                    <div>Missing files: <span class="font-semibold">{{ cleanupMissingFiles.length }}</span></div>
+                                </div>
+
+                                <div v-if="cleanupOrphanDirs.length">
+                                    <div class="font-semibold mb-1">Sample orphan dirs</div>
+                                    <ul class="space-y-1">
+                                        <li v-for="(d, i) in cleanupOrphanDirs.slice(0, 5)" :key="`orphan-${i}`" class="font-mono break-all">
+                                            {{ d.dir || d.path || d }}
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div v-if="cleanupMissingFiles.length">
+                                    <div class="font-semibold mb-1">Sample missing files</div>
+                                    <ul class="space-y-1">
+                                        <li v-for="(m, i) in cleanupMissingFiles.slice(0, 5)" :key="`missing-${i}`" class="font-mono break-all">
+                                            {{ m.abs || [m.rel_dir, m.filename].filter(Boolean).join('/') || m }}
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </template>
+
                     </div>
-                    <template #footer>
-                        <div class="mb-1">
-                            <div v-if="validationError" class="text-danger text-sm">
-                                {{ validationError }}
-                            </div>
-                            <div v-if="saveError" class="text-danger text-sm">
-                                {{ saveError }}
-                            </div>
-                            <div v-if="saveOk" class="text-success text-sm">
-                                Saved.
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between px-6 py-4 shrink-0">
-                            <div class="text-xs text-muted">
-                                New shares will use these settings automatically.
-                            </div>
-                            <div class="flex gap-3">
-                                <button class="btn btn-secondary" type="button" @click="reload" :disabled="busy">
-                                    Reload
-                                </button>
-                                <button class="btn btn-success" type="button" @click="save"
-                                    :disabled="busy || !!validationError">
-                                    <span v-if="busy">Saving…</span>
-                                    <span v-else>Save settings</span>
-                                </button>
-                            </div>
-                        </div>
-                    </template>
-                </CardContainer>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-between px-5 py-3 border-t border-default shrink-0">
+                    <div class="min-w-0">
+                        <div v-if="validationError" class="text-danger text-sm">{{ validationError }}</div>
+                        <div v-else-if="saveError" class="text-danger text-sm">{{ saveError }}</div>
+                        <div v-else-if="saveOk" class="text-success text-sm">Saved.</div>
+                        <div v-else class="text-xs text-muted">New shares will use these settings automatically.</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="btn btn-secondary" type="button" @click="reload" :disabled="busy">Reload</button>
+                        <button class="btn btn-success" type="button" @click="save" :disabled="busy || !!validationError">
+                            <span v-if="busy">Saving…</span>
+                            <span v-else>Save Settings</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
+<!-- Inline sub-components -->
+<script lang="ts">
+import { defineComponent, h } from 'vue';
+
+const SettingRow = defineComponent({
+    props: {
+        label: { type: String, required: true },
+        description: { type: String, default: '' },
+    },
+    setup(props, { slots }) {
+        return () => h('div', { class: 'grid grid-cols-[1fr_auto] gap-x-6 gap-y-0.5 items-start py-3' }, [
+            h('div', { class: 'min-w-0' }, [
+                h('div', { class: 'text-sm font-medium text-default' }, props.label),
+                props.description
+                    ? h('div', { class: 'text-xs text-muted mt-0.5' }, props.description)
+                    : null,
+            ]),
+            h('div', { class: 'flex items-center gap-1 justify-end min-w-[160px]' }, slots.default?.()),
+        ]);
+    },
+});
+</script>
+
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { CardContainer } from "@45drives/houston-common-ui";
 import { Switch } from "@headlessui/vue";
 import { useApi } from "../../composables/useApi";
 import { pushNotification, Notification } from '@45drives/houston-common-ui';
 import PathInput from "../PathInput.vue";
+import { useOnboarding } from "../../composables/useOnboarding";
+import { useTourManager, type TourStep } from "../../composables/useTourManager";
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -358,6 +388,70 @@ const emit = defineEmits<{
 }>();
 
 const { apiFetch } = useApi();
+const { onboarding, resetAll: resetOnboarding, markDone } = useOnboarding();
+const { requestTour } = useTourManager();
+
+const settingsTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="settings-modal-header"]',
+		message: 'Welcome to 45Flow Settings.\n\nThis is where you configure global options that affect all new links and server behavior.',
+	},
+	{
+		target: '[data-tour="settings-modal-nav"]',
+		message: 'Use the sidebar to navigate between sections.\n\n• URLs & Access — configure external/internal share URLs.\n• Project Root — set the default directory root.\n• Link Options — default access, comments, and proxy settings.\n• Guided Tours — reset onboarding walkthroughs.\n• Maintenance — clean up orphaned files and metadata.',
+	},
+	{
+		target: '[data-tour="settings-modal-urls"]',
+		message: 'Each section shows its settings here.\n\nRight now you\'re viewing URLs & Access — toggle between Internal and External link access, configure your public domain or auto-detect, and set the HTTPS port.\n\nClick "Save Settings" at the bottom when you\'re done.',
+		beforeShow: () => { activeSection.value = 'sharing' },
+	},
+]
+
+// ── Section navigation ──────────────────────────────────────────────────
+type Section = 'sharing' | 'project' | 'defaults' | 'app' | 'maintenance';
+const activeSection = ref<Section>('sharing');
+
+const navGroups = [
+    {
+        label: 'Link Sharing',
+        items: [
+            { key: 'sharing' as Section, label: 'URLs & Access' },
+            { key: 'project' as Section, label: 'Project Root' },
+        ],
+    },
+    {
+        label: 'Defaults',
+        items: [
+            { key: 'defaults' as Section, label: 'Link Options' },
+        ],
+    },
+    {
+        label: 'Application',
+        items: [
+            { key: 'app' as Section, label: 'Guided Tours' },
+            { key: 'maintenance' as Section, label: 'Maintenance' },
+        ],
+    },
+];
+
+onMounted(() => {
+	if (!onboarding.value.settingsTourDone) {
+		setTimeout(() => {
+			requestTour('settings', settingsTourSteps, () => markDone('settingsTourDone'))
+		}, 400)
+	}
+})
+
+const anyOnboardingDone = computed(() =>
+    Object.values(onboarding.value).some(v => v === true)
+);
+
+function handleResetOnboarding() {
+    resetOnboarding();
+    pushNotification(
+        new Notification('Tours Reset', 'First-time guided tours have been re-enabled.', 'success', 5000)
+    );
+}
 
 const busy = ref(false);
 const loadError = ref<string | null>(null);
@@ -697,3 +791,54 @@ onMounted(() => {
     reload();
 });
 </script>
+
+<style scoped>
+.settings-nav-group-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgb(156 163 175);
+    padding: 0.5rem 0.75rem 0.25rem;
+}
+:root.dark .settings-nav-group-label {
+    color: rgb(107 114 128);
+}
+.settings-nav-group-label:not(:first-child) {
+    margin-top: 0.5rem;
+}
+.settings-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: rgb(107 114 128);
+    transition: all 0.15s ease;
+    border-left: 2px solid transparent;
+}
+:root.dark .settings-nav-btn {
+    color: rgb(156 163 175);
+}
+.settings-nav-btn:hover {
+    color: rgb(55 65 81);
+    background-color: rgb(249 250 251);
+}
+:root.dark .settings-nav-btn:hover {
+    color: rgb(209 213 219);
+    background-color: rgba(255,255,255,0.05);
+}
+.settings-nav-btn-active {
+    color: rgb(71 85 105);
+    background-color: rgba(71, 85, 105, 0.08);
+    font-weight: 600;
+    border-left-color: rgb(71 85 105);
+}
+:root.dark .settings-nav-btn-active {
+    color: rgb(148 163 184);
+    background-color: rgba(148, 163, 184, 0.1);
+    border-left-color: rgb(148 163 184);
+}
+</style>

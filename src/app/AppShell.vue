@@ -43,6 +43,7 @@
     <NotificationView />
     <UpdateBanner />
     <TransferProgressDock v-if="!hideTransfers" />
+    <GuidedTour v-if="ENABLE_TOUR && activeTour" :steps="activeTour.steps" :active="true" @done="finishTour" @skip="finishTour" />
   </div>
 </template>
 
@@ -60,7 +61,14 @@ import { registerIpcActionListener } from "../renderer/composables/registerIpcAc
 import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
 import UpdateBanner from '../renderer/components/UpdateBanner.vue'
 import GlobalMenu from '../renderer/components/GlobalMenu.vue'
+import GuidedTour from '../renderer/components/GuidedTour.vue'
+import { useTourManager } from '../renderer/composables/useTourManager'
 import flowLogo from '../../assets/logos/45Flow-w.png'
+
+/** Flip to true to re-enable the guided tour */
+const ENABLE_TOUR = true
+
+const { activeTour, finishTour, cancelTour } = useTourManager()
 
 // provide shared refs
 const currentServer = ref<Server | null>(null)
@@ -68,6 +76,14 @@ const divisionCode = ref<DivisionType>('default')
 const thisOS = ref<string>('')
 const route = useRoute()
 const router = useRouter()
+
+// Cancel any active tour when the route changes (user navigated away)
+watch(() => route.path, () => {
+  if (activeTour.value) {
+    cancelTour(activeTour.value.id)
+  }
+})
+
 const hideHeader = computed(() => route.meta.hideHeader === true)
 const { headerTitle } = useHeaderTitle()
 const hideTransfers = computed(() => route.meta.hideTransfers === true)

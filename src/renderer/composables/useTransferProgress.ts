@@ -53,6 +53,7 @@ export type TransferTask =
         startedAt?: number
         completedAt?: number
         stop?: () => void
+        _apiFetch?: (path: string, init?: any) => Promise<any>
         jobKind?: 'proxy_mp4' | 'hls' | 'any'
         context?: TransferContext
     }
@@ -260,7 +261,7 @@ function extractTranscodeError(
 function qualityLabel(q: string) {
     const s = String(q || '').trim().toLowerCase()
     if (!s) return ''
-    if (s === 'original') return 'Original'
+    if (s === 'original') return 'Full Res'
     return s
 }
 
@@ -638,6 +639,38 @@ export function useTransferProgress() {
         updateUpload(taskId, { status: 'canceled', completedAt: now(), speed: null, eta: null })
     }
 
+    async function cancelTranscode(taskId: string) {
+        const t = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+            | Extract<TransferTask, { kind: 'transcode' }>
+            | undefined
+        if (!t) return
+
+        // Stop polling first
+        try { t.stop?.() } catch { }
+
+        // Cancel on the server for each tracked asset version
+        const apiFetch = t._apiFetch
+        if (apiFetch) {
+            const versionIds = t.assetVersionIds || []
+            for (const vId of versionIds) {
+                const kinds = t.jobKind === 'any' ? ['proxy_mp4', 'hls'] : [t.jobKind || 'proxy_mp4']
+                for (const kind of kinds) {
+                    try {
+                        await apiFetch(`/api/transcodes/${vId}/${kind}`, { method: 'DELETE' })
+                    } catch (e) {
+                        console.warn(`[cancelTranscode] failed to cancel ${vId}/${kind}:`, e)
+                    }
+                }
+            }
+        }
+
+        t.status = 'failed'
+        t.error = 'Canceled'
+        t.speed = null
+        t.eta = null
+        t.completedAt = now()
+    }
+
     // Aggregate transcode progress from items:
     // - if any failed => failed
     // - else if any running/queued => running
@@ -822,6 +855,7 @@ export function useTransferProgress() {
             items: opts.initialItems,
             startedAt: now(),
             stop: undefined,
+            _apiFetch: opts.apiFetch,
             jobKind: opts.jobKind ?? 'any',
             context: opts.context,
         }
@@ -893,6 +927,17 @@ export function useTransferProgress() {
                     cur.error = extractTranscodeError(castItems as Array<ProgressItem | VersionProgressItem>, cur.jobKind ?? 'any')
                     cur.speed = null
                     cur.eta = null
+                    // Log to app file only once per failure (not on every poll tick)
+                    if (!(cur as any)._failureLogged) {
+                        (cur as any)._failureLogged = true
+                        window.appLog?.error('transcode.failed', {
+                            taskId: cur.taskId,
+                            title: cur.title,
+                            jobKind: cur.jobKind ?? 'any',
+                            error: cur.error,
+                            context: cur.context,
+                        })
+                    }
                 } else if (nextStatus === 'running' || nextStatus === 'done') {
                     cur.error = null
                     if (nextStatus === 'done') {
@@ -1292,6 +1337,7 @@ export function useTransferProgress() {
         updateUpload,
         finishUpload,
         cancelUpload,
+        cancelTranscode,
 
         startTranscodeTask,
         startAssetVersionTranscodeTask,

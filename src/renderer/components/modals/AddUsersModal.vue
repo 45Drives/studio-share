@@ -3,7 +3,7 @@
     <div class="absolute inset-0 bg-black/50" @click="close()"></div>
 
     <div class="relative w-[96vw] max-w-2xl bg-accent rounded-lg shadow-xl p-4 flex flex-col max-h-[90vh]">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center justify-between mb-3" data-tour="users-modal-header">
         <h3 class="text-lg font-semibold">{{ linkMode ? 'Manage link access' : 'Manage users' }}</h3>
 
         <div class="flex items-center gap-2">
@@ -15,7 +15,7 @@
       <div class="flex-1 overflow-auto pr-1 min-h-0">
         <div class="grid grid-cols-1 gap-4">
           <!-- Existing users -->
-          <div class="border rounded p-3 bg-accent/60">
+          <div class="border rounded p-3 bg-accent/60" data-tour="users-modal-list">
             <div class="flex items-center justify-between mb-2">
               <div class="font-semibold text-sm">{{ linkMode ? 'Select existing users' : 'Existing users' }}</div>
               <input type="text" v-model.trim="userSearch"
@@ -97,7 +97,7 @@
           </div>
 
           <!-- Create new user -->
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2" data-tour="users-modal-create">
             <div class="mr-auto">
               <button v-if="!showCreate"
                 class="btn btn-primary"
@@ -231,7 +231,7 @@
         </div>
       </div>
 
-      <div class="flex justify-end gap-2 mt-4">
+      <div class="flex justify-end gap-2 mt-4" data-tour="users-modal-actions">
         <button class="btn btn-secondary" @click="close()">{{ linkMode ? 'Cancel' : 'Close' }}</button>
         <button v-if="linkMode" class="btn btn-success" @click="apply()">Add to link</button>
       </div>
@@ -325,6 +325,32 @@ import type { Role, LinkItem, ExistingUser } from '../../typings/electron'
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue'
 import ResetPasswordModal from './ResetPasswordModal.vue';
 import RolesModal from './RolesModal.vue'
+import { useTourManager, type TourStep } from '../../composables/useTourManager'
+import { useOnboarding } from '../../composables/useOnboarding'
+
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const usersTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="users-modal-header"]',
+		message: 'This is the User Management panel.\n\nWhen opened from a link, it works in "link mode" — you select which users get access. From the dashboard, it\'s a general user manager.',
+	},
+	{
+		target: '[data-tour="users-modal-list"]',
+		message: 'Existing users appear here.\n\nSearch by name, username, email, company, or tags. In link mode, check the box next to each user to grant them access, and assign a role from the dropdown.',
+	},
+	{
+		target: '[data-tour="users-modal-create"]',
+		message: 'Create new user accounts here.\n\nFill in name, username, and a temporary password (use "Generate password" for a random one). Optionally add email, company, tags, and a comment color.\n\nIn link mode, newly created users are auto-selected for the link.',
+	},
+	{
+		target: '[data-tour="users-modal-actions"]',
+		message: 'When in link mode, click "Add to link" to assign the selected users.\n\nUse "Manage roles" in the header to create or edit permission roles that control what users can do.',
+	},
+]
+
+let _usersTourTriggered = false
 
 const props = defineProps<{
   modelValue: boolean
@@ -338,6 +364,16 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'apply', users: ExistingUser[]): void
 }>()
+
+// Tour: trigger on first open
+watch(() => props.modelValue, (open) => {
+	if (open && !_usersTourTriggered && !onboarding.value.manageUsersTourDone) {
+		_usersTourTriggered = true
+		setTimeout(() => {
+			requestTour('manage-users', usersTourSteps, () => markDone('manageUsersTourDone'))
+		}, 400)
+	}
+})
 
 // UI state
 const userSearch = ref('')

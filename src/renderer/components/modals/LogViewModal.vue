@@ -6,7 +6,7 @@
       <div class="w-full max-w-7xl max-h-[calc(100vh-2rem)] rounded-lg border border-default bg-default shadow-2xl flex flex-col">
         <CardContainer class="flex-1 min-h-0 overflow-y-auto w-full bg-accent rounded-md shadow-xl min-w-0">
           <template #header>
-            <div class="flex items-center justify-between px-6 py-4 shrink-0">
+            <div class="flex items-center justify-between px-6 py-4 shrink-0" data-tour="logs-modal-header">
               <div>
                 <div class="text-xl font-semibold text-default text-left">Client Log Viewer</div>
                 <div class="text-xs text-muted mt-1">Showing parsed entries from the local app log file.</div>
@@ -22,7 +22,7 @@
             </div>
           </template>
 
-          <div class="px-6 pb-4 text-left min-h-0">
+          <div class="px-6 pb-4 text-left min-h-0" data-tour="logs-modal-body">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
               <div class="rounded-md border border-default p-3 bg-default">
                 <div class="text-xs text-muted">Log file</div>
@@ -143,6 +143,22 @@
 <script setup lang="ts">
 import { CardContainer } from "@45drives/houston-common-ui";
 import { computed, onMounted, ref } from "vue";
+import { useTourManager, type TourStep } from "../../composables/useTourManager";
+import { useOnboarding } from "../../composables/useOnboarding";
+
+const { requestTour } = useTourManager();
+const { onboarding, markDone } = useOnboarding();
+
+const logsTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="logs-modal-header"]',
+		message: 'The Client Log Viewer shows parsed entries from the local app log file.\n\nUse "Refresh" to reload entries from disk.',
+	},
+	{
+		target: '[data-tour="logs-modal-body"]',
+		message: 'The log body shows stats (error/warning/info/debug counts), a search bar, and level filters.\n\nThe table below lists each log entry with timestamp, level, event, and summary. Click any row to expand details. Use "Errors & Warnings only" to quickly filter noise.',
+	},
+]
 
 type ParsedLogEntry = {
   id: string;
@@ -321,5 +337,10 @@ function close() {
 
 onMounted(() => {
   refresh();
+  if (!onboarding.value.viewLogsTourDone) {
+    setTimeout(() => {
+      requestTour('view-logs', logsTourSteps, () => markDone('viewLogsTourDone'))
+    }, 400)
+  }
 });
 </script>

@@ -5,7 +5,7 @@
     <div
       class="absolute inset-x-0 top-12 mx-auto w-11/12 max-w-5xl bg-accent border border-default rounded-lg shadow-lg z-50">
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-default">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-default" data-tour="link-details-header">
         <h3 class="text-lg font-semibold">
           Link Details — {{ link?.title || (link && fallbackTitle(link)) }}
         </h3>
@@ -27,7 +27,7 @@
       <!-- Body -->
       <div class="px-4 pt-4 pb-4 text-sm text-left space-y-4 overflow-y-auto max-h-[78vh]">
         <!-- Meta -->
-        <section class="grid gap-3 lg:grid-cols-3">
+        <section class="grid gap-3 lg:grid-cols-3" data-tour="link-details-meta">
           <div class="lg:col-span-2 rounded-lg border border-default bg-default/20 p-3 space-y-2">
             <div class="flex items-center justify-between gap-2 min-w-0">
               <div class="font-semibold text-default truncate">Primary Link</div>
@@ -44,10 +44,13 @@
                 <div class="font-semibold">{{ currentAccessSummary }}</div>
               </div>
               <div>
-                <span class="opacity-70">Proxy</span>
+                <span class="opacity-70">Sharing Mode</span>
                 <div class="font-semibold">
-                  {{ currentGenerateReviewProxy ? 'Enabled' : 'Disabled' }}
-                  <span v-if="currentProxyQualities.length" class="opacity-70">({{ currentProxyQualities.join(', ') }})</span>
+                  <span v-if="currentShareOriginalQuality" class="text-emerald-400">Original Quality</span>
+                  <template v-else>
+                    {{ currentGenerateReviewProxy ? 'Transcoded' : 'Proxy Disabled' }}
+                    <span v-if="currentProxyQualities.length" class="opacity-70">({{ currentProxyQualities.join(', ') }})</span>
+                  </template>
                 </div>
               </div>
               <div>
@@ -80,7 +83,7 @@
           </div>
         </section>
 
-        <section class="space-y-3 rounded-lg border border-default bg-default/10 p-3">
+        <section class="space-y-3 rounded-lg border border-default bg-default/10 p-3" data-tour="link-details-config">
           <div class="text-default font-semibold">Link Configuration</div>
           <div class="grid grid-cols-3">
             <div class="rounded-lg border border-default bg-default/20 p-3 space-y-3">
@@ -425,7 +428,7 @@
         </section>
 
         <!-- Files table (still shown in view mode; in edit mode it remains informational) -->
-        <section v-if="!editMode"  class="w-full">
+        <section v-if="!editMode"  class="w-full" data-tour="link-details-files">
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-semibold">
               {{ link?.type === 'upload' ? 'Uploaded Files' : 'Shared Files' }}
@@ -474,7 +477,7 @@
         </section>
 
         <!-- Activity -->
-        <section v-if="!editMode" class="w-full">
+        <section v-if="!editMode" class="w-full" data-tour="link-details-activity">
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-semibold">Access Activity</h4>
             <div class="text-xs opacity-70" v-if="!detailsLoading">{{ filteredAuditActivity.length }} item(s)</div>
@@ -710,6 +713,48 @@ import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { Switch } from '@headlessui/vue'
 import { useTransferProgress } from '../../composables/useTransferProgress'
 import { connectionMetaInjectionKey } from '../../keys/injection-keys'
+import { useTourManager, type TourStep } from '../../composables/useTourManager'
+import { useOnboarding } from '../../composables/useOnboarding'
+
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const linkDetailsTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="link-details-header"]',
+		message: 'This is the Link Details modal.\n\nView everything about a link — configuration, files, and activity. Click "Edit" to modify settings, or "Close" when done.',
+	},
+	{
+		target: '[data-tour="link-details-meta"]',
+		message: 'The top section shows the link\'s primary URL, access mode, sharing mode, watermark status, type, status, and creation/expiry dates.\n\nClick "Copy" to copy the URL to your clipboard.',
+	},
+	{
+		target: '[data-tour="link-details-config"]',
+		message: 'Link Configuration shows editable settings.\n\nTitle, notes, access mode, password protection, comments, media processing (proxy files, qualities, watermark), and for upload links — the destination directory.',
+	},
+	{
+		target: '[data-tour="link-details-files"]',
+		message: 'The Files table lists every file attached to this link.\n\nFor share links, these are the files recipients can access. For upload links, these are files that have been uploaded through the link.',
+	},
+	{
+		target: '[data-tour="link-details-activity"]',
+		message: 'The Activity section shows an audit log of all actions on this link — views, downloads, uploads, comments, and access changes.\n\nFilter by type and search by keyword to find specific events.',
+	},
+]
+
+const linkDetailsEditTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="link-details-config"]',
+		message: 'You\'re now in Edit mode!\n\nAll fields in this section are editable. Change the title, notes, access mode, password, proxy settings, or watermark configuration.\n\nFor upload links, you can also change the destination directory.',
+	},
+	{
+		target: '[data-tour="link-details-header"]',
+		message: 'Click "Save Changes" when done, or "Cancel" to discard edits.\n\nChanges take effect immediately after saving — active links will reflect the new settings.',
+	},
+]
+
+let _detailsTourTriggered = false
+let _editTourTriggered = false
 
 const props = defineProps<{
   modelValue: boolean
@@ -721,6 +766,16 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'updated', payload: Partial<LinkItem> & { id: LinkItem['id'] }): void
 }>()
+
+// Tour: trigger on first open
+watch(() => props.modelValue, (open) => {
+	if (open && !_detailsTourTriggered && !onboarding.value.linkDetailsTourDone) {
+		_detailsTourTriggered = true
+		setTimeout(() => {
+			requestTour('link-details', linkDetailsTourSteps, () => markDone('linkDetailsTourDone'))
+		}, 400)
+	}
+})
 
 const transfer = useTransferProgress()
 const connectionMeta = inject(connectionMetaInjectionKey, null)
@@ -879,6 +934,12 @@ const currentGenerateReviewProxy = computed(() => !!(props.link?.generateReviewP
 const currentProxyQualities = computed(() => normalizeQualities(props.link?.proxyQualities))
 const currentWatermark = computed(() => !!(props.link?.watermark))
 const currentWatermarkFile = computed(() => String(props.link?.watermarkFile || '').trim())
+const currentShareOriginalQuality = computed(() => {
+  const it: any = props.link
+  if (it?.shareOriginalQuality != null) return !!it.shareOriginalQuality
+  // Infer from media prefs: originalQuality = allow_original_download AND no proxy AND no hls
+  return !currentGenerateReviewProxy.value && !currentWatermark.value
+})
 const mediaSettingsDirty = computed(() => {
   if (!!draftGenerateReviewProxy.value !== currentGenerateReviewProxy.value) return true
   if (!sameValues(normalizeQualities(draftProxyQualities.value), currentProxyQualities.value)) return true
@@ -949,6 +1010,9 @@ function assignMediaSettingsFromSource(src: any) {
 
   const wmFile = src.watermarkFile ?? src.watermark_file
   if (wmFile != null) target.watermarkFile = String(wmFile || '')
+
+  const soq = src.shareOriginalQuality ?? src.share_original_quality
+  if (typeof soq === 'boolean') target.shareOriginalQuality = soq
 }
 
 const _videoExts = new Set([
@@ -2495,6 +2559,14 @@ async function removeAccess(userId: number) {
 function beginEdit() {
   if (!props.link) return
   editMode.value = true
+
+  // Tour: show edit-mode tour the first time
+  if (!_editTourTriggered && !onboarding.value.linkDetailsEditTourDone) {
+    _editTourTriggered = true
+    setTimeout(() => {
+      requestTour('link-details-edit', linkDetailsEditTourSteps, () => markDone('linkDetailsEditTourDone'))
+    }, 300)
+  }
 
   draftTitle.value = props.link.title || ''
   draftNotes.value = (props.link as any).notes || ''

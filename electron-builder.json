@@ -9,12 +9,12 @@
   "nsis": {
     "oneClick": false,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
+    "allowToChangeInstallationDirectory": false,
     "shortcutName": "45Flow"
   },
 
   "linux": {
-    "target": ["deb", "rpm"],
+    "target": ["deb", "rpm", "AppImage"],
     "category": "Utility",
     "synopsis": "Share and review media via Flow links",
     "vendor": "45Drives",

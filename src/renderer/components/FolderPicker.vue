@@ -84,17 +84,29 @@
       </div>
 
       <template v-if="pickerReady && browseMode === 'roots' && !showEntireTree && (autoDetectRoots ?? true)">
-        <div v-for="r in projectRoots" :key="r.mountpoint" class="fp-root-row grid items-center border-b border-default px-3 py-1 bg-default
-                 [grid-template-columns:40px_minmax(0,1fr)_120px_110px_180px]">
-          <div></div>
-          <div class="truncate">
-            <code :title="`${r.name} → ${r.mountpoint}`">{{ r.mountpoint }}</code>
+        <div v-if="detectingRoots" class="flex flex-col items-center justify-center gap-3 py-10 text-sm opacity-80">
+          <svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <span>Checking for ZFS pools…</span>
+        </div>
+        <template v-else-if="projectRoots.length">
+          <div v-for="r in projectRoots" :key="r.mountpoint" class="fp-root-row grid items-center border-b border-default px-3 py-1 bg-default
+                   [grid-template-columns:40px_minmax(0,1fr)_120px_180px]">
+            <div></div>
+            <div class="truncate">
+              <code :title="`${r.name} → ${r.mountpoint}`">{{ r.mountpoint }}</code>
+            </div>
+            <div>ZFS Pool</div>
+            <div class="px-2 py-1">
+              <button class="btn btn-secondary" @click="chooseProject(r.mountpoint)">Select</button>
+            </div>
           </div>
-          <div>ZFS Pool</div>
-          <div>—</div>
-          <div class="px-2 py-1">
-            <button class="btn btn-secondary" @click="chooseProject(r.mountpoint)">Select</button>
-          </div>
+        </template>
+        <div v-else class="flex flex-col items-center justify-center gap-3 py-10 text-sm opacity-80">
+          <span>No ZFS pools detected.</span>
+          <button class="btn btn-secondary text-xs" @click="retryDetect">Retry</button>
         </div>
       </template>
       <template v-if="pickerReady && browseMode !== 'roots' && viewMode === 'tree'">
@@ -210,6 +222,7 @@ const selectedFolderBridge = computed<string | null>({
 const showEntireTree = ref(false)
 const {
   detecting,
+  detectingRoots,
   projectRoots,
   loadProjectChoices,
   forceProjectRoot,
@@ -597,6 +610,15 @@ async function changeProject() {
   }
   emit('changed-cwd', browseCwd.value)
   pickerReady.value = true
+}
+
+async function retryDetect() {
+  await loadProjectChoices()
+  if (!projectRoots.value.length) {
+    browseMode.value = 'dir'
+    browseCwd.value = '/'
+    emit('changed-cwd', browseCwd.value)
+  }
 }
 
 const containerHeights = computed(() => props.heightClass || 'max-h-[28rem] min-h-[18rem]')

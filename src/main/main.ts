@@ -2550,7 +2550,7 @@ async function runIngestForTransfer(t: PersistedTransfer, win?: BrowserWindow | 
   })()
   const wantsProxyForFile = wantsProxy && isVideo
   const wantsWatermarkForFile = wantsWatermark && isVideo
-  const wantsHlsForFile = isVideo
+  const wantsHlsForFile = wantsProxy && isVideo
 
   // simplified: use only the raw watermark path (skip multi-candidate logic for resumed)
   const params = new URLSearchParams()
@@ -2854,7 +2854,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
       })();
       const wantsProxyForFile = wantsProxy && isVideo
       const wantsWatermarkForFile = wantsWatermark && isVideo
-      const wantsHlsForFile = isVideo
+      const wantsHlsForFile = wantsProxy && isVideo
 
       const watermarkCandidates: string[] = (() => {
         if (!wantsWatermarkForFile) return ['']

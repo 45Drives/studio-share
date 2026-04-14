@@ -3,14 +3,14 @@
     <div class="absolute inset-0 bg-black/50" @click="close()"></div>
 
     <div class="relative w-full max-w-4xl bg-accent rounded-lg shadow-xl p-4">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center justify-between mb-3" data-tour="roles-modal-header">
         <h3 class="text-lg font-semibold">Manage roles</h3>
         <button class="btn btn-secondary" @click="close()">Close</button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Create role -->
-        <div class="border rounded p-3 bg-accent/60">
+        <div class="border rounded p-3 bg-accent/60" data-tour="roles-modal-create">
           <div class="font-semibold text-sm mb-2">Create new role</div>
           <div class="flex flex-col gap-2 text-left">
             <div>
@@ -50,7 +50,7 @@
         </div>
 
         <!-- Roles list -->
-        <div class="border rounded p-3 bg-accent/60">
+        <div class="border rounded p-3 bg-accent/60" data-tour="roles-modal-list">
           <div class="flex items-center justify-between mb-2">
             <div class="font-semibold text-sm">Existing roles</div>
             <button class="btn btn-secondary" @click="fetchRoles" :disabled="loading">
@@ -146,6 +146,24 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { Role } from '../../typings/electron'
+import { useTourManager, type TourStep } from '../../composables/useTourManager'
+import { useOnboarding } from '../../composables/useOnboarding'
+
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+const rolesTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="roles-modal-create"]',
+		message: 'Create custom roles here.\n\nEach role has a name and four permission checkboxes: View, Comment, Download, and Upload. These control what users with this role can do on a shared link.',
+	},
+	{
+		target: '[data-tour="roles-modal-list"]',
+		message: 'Existing roles are listed here.\n\nSystem roles (marked with a badge) cannot be deleted. Click "Edit" to change a role\'s permissions, or "Delete" to remove custom roles.',
+	},
+]
+
+let _rolesTourTriggered = false
 
 const props = defineProps<{
   modelValue: boolean
@@ -156,6 +174,16 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'updated'): void
 }>()
+
+// Tour: trigger on first open
+watch(() => props.modelValue, (open) => {
+	if (open && !_rolesTourTriggered && !onboarding.value.manageRolesTourDone) {
+		_rolesTourTriggered = true
+		setTimeout(() => {
+			requestTour('manage-roles', rolesTourSteps, () => markDone('manageRolesTourDone'))
+		}, 400)
+	}
+})
 
 const roles = ref<Role[]>([])
 const loading = ref(false)

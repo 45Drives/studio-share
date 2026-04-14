@@ -6,7 +6,8 @@ type Root = { name: string; mountpoint: string }
 type DirEntry = { name: string; path: string }
 
 // ---- module-level caches (shared across component instances)
-let zfsRootsCache: Root[] | null = null
+let zfsRootsCache: { ts: number; roots: Root[] } | null = null
+const ZFS_ROOTS_TTL = 30_000 // ms – refetch pools after 30 s
 const dirCache = new Map<string, { ts: number; entries: DirEntry[] }>()
 const DIR_TTL = 5000 // ms
 
@@ -15,6 +16,7 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
 
     // state
     const detecting = ref(false)
+    const detectingRoots = ref(false)   // true only while fetching ZFS roots
     const detectError = ref<string | null>(null)
     const projectRoots = ref<Root[]>([])
     const projectDirs = ref<DirEntry[]>([])
@@ -158,19 +160,26 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
                 return
             }
 
-            // serve from cache when possible
-            if (zfsRootsCache) {
-                projectRoots.value = zfsRootsCache
+            // serve from cache if still fresh
+            const now = Date.now()
+            if (zfsRootsCache && (now - zfsRootsCache.ts) < ZFS_ROOTS_TTL && zfsRootsCache.roots.length > 0) {
+                projectRoots.value = zfsRootsCache.roots
                 browseMode.value = 'roots'
                 return
             }
 
+            detectingRoots.value = true
             const rootsUrl = (!useConfiguredProjectRoot.value && forceProjectRoot.value)
                 ? '/api/zfs/roots?ignoreConfiguredRoot=1'
                 : '/api/zfs/roots'
             const roots = await apiFetch(rootsUrl).catch(() => [])
             projectRoots.value = Array.isArray(roots) ? roots : []
-            zfsRootsCache = projectRoots.value
+            if (projectRoots.value.length > 0) {
+                zfsRootsCache = { ts: Date.now(), roots: projectRoots.value }
+            } else {
+                zfsRootsCache = null           // don't cache empty – retry next time
+            }
+            detectingRoots.value = false
             browseMode.value = 'roots'
         } catch {
             detectError.value = 'ZFS detection failed; showing system root.'
@@ -178,12 +187,13 @@ export function useProjectChoices(showEntireTree: Ref<boolean>) {
             await listDirs('/')
         } finally {
             detecting.value = false
+            detectingRoots.value = false
         }
     }
 
     return {
         // state/derived
-        detecting, detectError, projectRoots, projectDirs,
+        detecting, detectingRoots, detectError, projectRoots, projectDirs,
         browseMode, currentRoot, browsePath, canGoUp,
         forceProjectRoot, configuredProjectRoot, useConfiguredProjectRoot, hasConfiguredProjectRoot,
         // actions

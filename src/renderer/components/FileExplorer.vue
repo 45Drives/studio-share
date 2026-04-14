@@ -30,7 +30,7 @@
             <span v-if="allCwdFiles.length" class="text-muted">({{ allCwdFiles.length }})</span>
         </label>
 
-        <div class="ml-auto flex items-center">
+        <div class="ml-auto flex items-center" data-tour="file-browser-view-toggle">
           <button type="button" class="px-2 py-1 text-xs flex items-center justify-center hover:bg-white/5 rounded-l-md"
             :class="viewMode === 'list' ? 'bg-white/10' : ''" :aria-pressed="viewMode === 'list'" aria-label="List view"
             title="List view" @click="viewMode = 'list'">

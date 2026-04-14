@@ -1,5 +1,5 @@
 <template>
-	<div class="h-full min-h-0 flex flex-col">
+	<div class="min-h-0 flex flex-col">
 		<div class="manage-header">
 			<div class="manage-heading">
 				<h3>{{ headingTitle }}</h3>
@@ -13,8 +13,8 @@
 			</div>
 		</div>
 
-		<div class="manage-surface p-2 bg-well rounded-md min-w-0 flex-1 min-h-0 flex flex-col">
-			<div class="manage-toolbar">
+		<div class="manage-surface p-2 bg-well rounded-md min-w-0 flex flex-col">
+			<div data-tour="manage-links-toolbar" class="manage-toolbar">
 				<input v-model="q" type="search" placeholder="Search title, directory, file..."
 					class="input-textlike px-3 py-2 border border-default rounded-lg bg-default text-default w-72" />
 				<select v-model="typeFilter" class="px-3 py-2 border border-default rounded-lg bg-default">
@@ -38,17 +38,18 @@
 				{{ error }}
 			</div>
 
-			<div class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x flex-1 min-h-0">
-				<table class="manage-table min-w-[1180px] text-sm border-collapse">
+			<div data-tour="manage-links-table" class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x">
+				<table class="manage-table min-w-[1260px] text-sm border-collapse">
 					<colgroup>
-						<col class="w-[22%]" /> <!-- Title -->
-						<col class="w-[8%]" /> <!-- Type -->
-						<col class="w-[18%]" /> <!-- Short Link -->
-						<col class="w-[12%]" /> <!-- Expires -->
+						<col class="w-[20%]" /> <!-- Title -->
+						<col class="w-[7%]" /> <!-- Type -->
+						<col class="w-[7%]" /> <!-- Mode -->
+						<col class="w-[17%]" /> <!-- Short Link -->
+						<col class="w-[11%]" /> <!-- Expires -->
 						<col class="w-[6%]" /> <!-- Status -->
-						<col class="w-[8%]" /> <!-- Access -->
+						<col class="w-[7%]" /> <!-- Access -->
 						<col class="w-[10%]" /> <!-- Created -->
-						<col class="w-[14%]" /> <!-- Actions -->
+						<col class="w-[13%]" /> <!-- Actions -->
 					</colgroup>
 					<thead>
 						<tr class="manage-table-head-row border-b border-default">
@@ -66,6 +67,7 @@
 									<span>{{ sortIndicator('type') }}</span>
 								</span>
 							</th>
+							<th class="text-left p-2 font-semibold border border-default">Mode</th>
 							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
 								@click="setSort('url')">
 								<span class="flex items-center justify-between gap-2 w-full">
@@ -107,7 +109,7 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="loading">
-							<td colspan="8" class="p-0 border border-default">
+							<td colspan="9" class="p-0 border border-default">
 								<div class="w-full min-h-[140px] flex items-center justify-center">
 									<div
 										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
@@ -122,10 +124,80 @@
 							</td>
 						</tr>
 
-						<tr v-else-if="filteredRows.length === 0">
-							<td colspan="8"
+						<tr v-else-if="filteredRows.length === 0 && !showingDemoData">
+							<td colspan="9"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
+							</td>
+						</tr>
+
+						<!-- Demo rows for guided tour -->
+						<tr v-else-if="showingDemoData" v-for="it in DEMO_LINKS" :key="it.id"
+							data-tour-demo
+							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12 opacity-80">
+							<!-- Title -->
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
+								<div class="min-w-0 flex items-center justify-between gap-2">
+									<span class="font-medium block truncate max-w-[28ch] md:max-w-[40ch]">
+										{{ it.title || fallbackTitle(it) }}
+									</span>
+									<span data-tour="manage-links-edit-title" class="text-xs text-blue-500 shrink-0">
+										Edit Title
+									</span>
+								</div>
+							</td>
+							<!-- Type -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
+							</td>
+							<!-- Mode -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span v-if="it.type !== 'upload'"
+									class="px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="it.shareMode === 'original'
+										? 'bg-emerald-500/15 text-emerald-400'
+										: 'bg-default dark:bg-well/75 text-muted'"
+								>{{ it.shareMode === 'original' ? 'Original' : (it.shareMode || 'Proxy') }}</span>
+							</td>
+							<!-- Link -->
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
+								<div class="min-w-0 flex items-center gap-2 justify-between">
+									<span class="block truncate max-w-[28ch] md:max-w-[34ch]">{{ it.url }}</span>
+									<span data-tour="manage-links-copy" class="text-blue-500 text-xs shrink-0">Copy</span>
+								</div>
+							</td>
+							<!-- Expires -->
+							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
+								<div class="min-w-0 flex items-center gap-2">
+									<div class="truncate" :class="expiresClass(it)">{{ expiresLabel(it) }}</div>
+									<span data-tour="manage-links-edit-expiry" class="btn btn-primary text-xs h-fit ml-auto">Edit</span>
+								</div>
+							</td>
+							<!-- Status -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="statusChipClass(statusOf(it))">{{ statusOf(it).toUpperCase() }}</span>
+							</td>
+							<!-- Access -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="accessChipClass(it)">{{ accessLabel(it) }}</span>
+							</td>
+							<!-- Created -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="flex flex-col leading-tight">
+									<div>{{ formatLocal(it.createdAt, { dateStyle: 'medium' }) }}</div>
+									<div class="text-xs text-muted">{{ formatLocal(it.createdAt, { timeStyle: 'short' }) }}</div>
+								</div>
+							</td>
+							<!-- Actions -->
+							<td data-tour="manage-links-actions" class="p-2 border border-default align-middle whitespace-nowrap">
+								<div class="flex flex-nowrap items-center justify-around gap-1">
+									<span class="btn btn-secondary h-fit px-2 rounded-md">Details</span>
+									<span class="btn btn-primary h-fit px-2 rounded-md">Open</span>
+									<span class="btn btn-danger h-fit px-2 rounded-md">Disable</span>
+								</div>
 							</td>
 						</tr>
 
@@ -159,6 +231,16 @@
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
+							</td>
+
+							<!-- Mode -->
+							<td class="p-2 border border-default align-middle whitespace-nowrap">
+								<span v-if="it.type !== 'upload'"
+									class="px-2 py-0.5 rounded-full text-xs font-semibold"
+									:class="it.shareMode === 'original'
+										? 'bg-emerald-500/15 text-emerald-400'
+										: 'bg-default dark:bg-well/75 text-muted'"
+								>{{ it.shareMode === 'original' ? 'Original' : (it.shareMode || 'Proxy') }}</span>
 							</td>
 
 							<!-- Link -->
@@ -260,7 +342,7 @@
 							</td>
 						</tr>
 						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
-							<td colspan="8" class="p-0 bg-well">&nbsp;</td>
+							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
 						</tr>
 					</tbody>
 				</table>
@@ -295,6 +377,57 @@ import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
 type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'created'
 type SortDir = 'asc' | 'desc'
+
+const props = withDefaults(defineProps<{ tourActive?: boolean }>(), { tourActive: false })
+
+/** Demo rows shown during the guided tour when no real links exist */
+const DEMO_LINKS: LinkItem[] = [
+	{
+		id: 'demo-1',
+		type: 'download',
+		title: 'Client Rough Cut v2',
+		url: 'https://flow.example.com/s/abc123',
+		createdAt: Date.now() - 86400e3 * 2,
+		expiresAt: Date.now() + 86400e3 * 5,
+		isDisabled: false,
+		access_mode: 'open',
+		auth_mode: 'none',
+		allow_comments: true,
+		shareMode: 'original',
+		target: { dirRel: '/projects/rough-cut', files: [{ name: 'rough_cut_v2.mov', size: 2_400_000_000, mime: 'video/quicktime' }] },
+	},
+	{
+		id: 'demo-2',
+		type: 'upload',
+		title: 'B-Roll Upload — NYC Shoot',
+		url: 'https://flow.example.com/u/xyz789',
+		createdAt: Date.now() - 86400e3,
+		expiresAt: Date.now() + 86400e3 * 13,
+		isDisabled: false,
+		access_mode: 'restricted',
+		auth_mode: 'none',
+		allow_comments: false,
+		target: { dirRel: '/projects/nyc-shoot/incoming', allowUpload: true },
+	},
+	{
+		id: 'demo-3',
+		type: 'collection',
+		title: 'Final Deliverables — Season 2',
+		url: 'https://flow.example.com/s/def456',
+		createdAt: Date.now() - 86400e3 * 7,
+		expiresAt: null,
+		isDisabled: false,
+		access_mode: 'open',
+		auth_mode: 'password',
+		passwordRequired: true,
+		allow_comments: true,
+		shareMode: 'proxy',
+		proxyQualities: ['1080p', '720p'],
+		target: { dirRel: '/projects/season2', files: [{ name: 'ep01_final.mp4' }, { name: 'ep02_final.mp4' }, { name: 'ep03_final.mp4' }] },
+	},
+]
+
+const showingDemoData = computed(() => props.tourActive && rows.value.length === 0 && !loading.value)
 
 const { apiFetch } = useApi()
 async function refresh() {

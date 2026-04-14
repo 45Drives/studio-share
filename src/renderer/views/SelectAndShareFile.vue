@@ -5,7 +5,7 @@
                 <CardContainer class="w-full bg-well rounded-md shadow-xl min-w-0">
                     <template #header>
                         <!-- ===== Step 1: Project selection ===== -->
-                        <div v-if="!projectSelected" class="ss-toned-panel flex w-full flex-col gap-3 text-left min-w-0 p-4">
+                        <div v-if="!projectSelected" data-tour="share-project-selection" class="ss-toned-panel flex w-full flex-col gap-3 text-left min-w-0 p-4">
                             <h2 class="text-xl font-semibold">Select a project</h2>
 
                             <label class="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
@@ -75,7 +75,7 @@
                         </div>
 
                         <!-- ===== Step 2: select file content (only after project chosen) ===== -->
-                        <div v-else class="ss-toned-panel flex flex-col gap-2 text-left min-w-0 p-3">
+                        <div v-else data-tour="share-file-selection" class="ss-toned-panel flex flex-col gap-2 text-left min-w-0 p-3">
                             <div class="flex flex-col gap-2 text-left min-w-0">
                                 <h2 class="text-xl font-semibold">Share Files</h2>
                                 <div class="text-sm opacity-80 -mt-1">
@@ -90,8 +90,10 @@
                                 </button>
                             </div>
 
-                            <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd" @remove="onExplorerRemove"
-                                :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
+                            <div data-tour="share-file-browser">
+                                <FileExplorer :apiFetch="apiFetch" :modelValue="files" @add="onExplorerAdd" @remove="onExplorerRemove"
+                                    :base="!showEntireTree ? projectBase : ''" :startDir="!showEntireTree ? projectBase : ''" />
+                            </div>
 
                             <!-- Selected files panel -->
                             <div v-if="files.length" class="border border-default p-0.5 rounded bg-accent min-w-0">
@@ -122,11 +124,11 @@
                                 </div>
                             </div>
 
-                            <div class="border-t border-default mt-4 pt-4 min-w-0">
+                            <div data-tour="share-link-options" class="border-t border-default mt-4 pt-4 min-w-0">
                                 <!-- ===== Common link options ===== -->
                                 <CommonLinkControls class="">
                                     <template #expiry>
-                                        <div class="flex flex-col gap-3 min-w-0">
+                                        <div data-tour="share-expiry" class="flex flex-col gap-3 min-w-0">
                                             <!-- Row 1: label + input + select (always one row; inputs stay together) -->
                                             <div class="flex items-center gap-3 min-w-0">
                                                 <label class="font-semibold whitespace-nowrap flex-shrink-0">Expires
@@ -160,7 +162,7 @@
                                     </template>
 
                                     <template #title>
-                                        <div class="flex flex-wrap items-center gap-3 min-w-0">
+                                        <div data-tour="share-link-title" class="flex flex-wrap items-center gap-3 min-w-0">
                                             <label class="font-semibold sm:whitespace-nowrap">Link Title:</label>
                                             <input type="text" v-model.trim="linkTitle"
                                                 class="input-textlike border rounded px-3 py-2 w-full min-w-[12rem]"
@@ -168,7 +170,7 @@
                                         </div>
                                     </template>
                                     <template #access>
-                                        <div class="flex flex-col gap-1 min-w-0">
+                                        <div data-tour="share-network-access" class="flex flex-col gap-1 min-w-0">
                                             <div class="flex flex-wrap items-center gap-3 min-w-0">
                                                 <span class="font-semibold sm:whitespace-nowrap">
                                                     Network Access:
@@ -217,7 +219,7 @@
                                     <!-- Link Access row -->
                                     <template #after class="">
                                         <div class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <div class="ss-toned-panel min-w-0 p-3">
+                                            <div data-tour="share-access-mode" class="ss-toned-panel min-w-0 p-3">
                                                 <div class="font-semibold mb-2">Link Access Mode</div>
                                                 <div class="grid grid-cols-3 gap-2 min-w-0">
                                                     <div>
@@ -343,9 +345,37 @@
                                             </div>
                                         </div>
                                  
+                                        <!-- Share Original Quality -->
+                                        <div v-if="hasVideoSelected || tourSpoofing" data-tour="share-original-toggle" class="border-t border-default mt-2 pt-2 min-w-0">
+                                            <div class="ss-toned-panel rounded-md px-3 py-2.5">
+                                                <div class="flex flex-wrap items-center gap-2 min-w-0">
+                                                    <label class="font-semibold sm:whitespace-nowrap" for="share-original-switch">
+                                                        Share Original Quality:
+                                                    </label>
+                                                    <Switch id="share-original-switch" v-model="shareOriginalQuality"
+                                                        :class="[
+                                                            shareOriginalQuality ? 'bg-secondary' : 'bg-well',
+                                                            'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
+                                                        ]">
+                                                        <span class="sr-only">Share original quality files</span>
+                                                        <span aria-hidden="true" :class="[
+                                                            shareOriginalQuality ? 'translate-x-5' : 'translate-x-0',
+                                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
+                                                        ]" />
+                                                    </Switch>
+                                                    <span class="text-sm truncate min-w-0 flex-1">
+                                                        {{ shareOriginalQuality ? 'Original files streamed with no transcoding — full resolution, color accuracy, and audio fidelity' : 'Use proxy files for faster streaming (some quality reduction)' }}
+                                                    </span>
+                                                </div>
+                                                <p v-if="shareOriginalQuality" class="text-xs text-amber-700 dark:text-amber-300 mt-1.5 px-1">
+                                                    Note: Some formats (e.g. MKV, AVI, HEVC/H.265, ProRes) may not play in all browsers without transcoding. For widest compatibility, use proxy files.
+                                                </p>
+                                            </div>
+                                        </div>
+
                                         <!-- Advanced Video Options -->
-                                        <div v-if="hasVideoSelected" class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled"
+                                        <div v-if="(hasVideoSelected && !shareOriginalQuality) || tourSpoofing" data-tour="share-advanced-video" class="border-t border-default mt-2 pt-2 min-w-0">
+                                            <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled || tourSpoofing"
                                                 class="ss-toned-panel min-w-0">
                                                 <DisclosureButton
                                                     class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left min-w-0 rounded-md">
@@ -409,12 +439,12 @@
                                                                         <input type="checkbox" class="proxy-quality-checkbox" value="original"
                                                                             v-model="proxyQualities"
                                                                             :disabled="!transcodeProxy" />
-                                                                        <span>Original</span>
+                                                                        <span>Full Res</span>
                                                                     </label>
                                                                 </div>
                                                                 <div class="text-xs text-slate-400 mt-2">
-                                                                    These versions are used for shared links instead of original
-                                                                    files.
+                                                                    Proxy versions for streaming. Use 'Share Original Quality' above
+                                                                    to share the raw file instead.
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -537,7 +567,7 @@
                             <button class="btn btn-secondary" :disabled="loading" @click="resetAll">
                                 Reset
                             </button>
-                            <button class="btn btn-primary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
+                            <button data-tour="share-generate-btn" class="btn btn-primary flex-1 min-w-[14rem]" :disabled="!canGenerate || loading"
                                 @click="generateLink" title="Create a Flow link with the selected options">
                                 <span v-if="loading" class="inline-flex items-center gap-2">
                                     <span
@@ -591,12 +621,66 @@ import { ChevronDownIcon, EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid"
 import { useResilientNav } from '../composables/useResilientNav';
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 
 const { to } = useResilientNav()
 useHeader('Select Files to Share');
 const transfer = useTransferProgress()
 const connectionMeta = inject(connectionMetaInjectionKey)!
 const ssh = connectionMeta.value.ssh
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+/** When true, conditionally-hidden tour targets (original quality, advanced video) are forced visible */
+const tourSpoofing = ref(false)
+
+const shareFilesTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="share-project-selection"]',
+		message: 'Welcome to File Sharing!\n\nFirst, select a project — this is a ZFS pool or a configured root directory on your server. It sets the base folder where you\'ll browse for files to share.',
+	},
+	{
+		target: '[data-tour="share-file-browser"]',
+		message: 'After selecting a project, the file browser opens here.\n\nBrowse folders and check the files you want to include in your share link. Selected files appear in a list below.',
+	},
+	{
+		target: '[data-tour="file-browser-view-toggle"]',
+		message: 'Toggle between List and Grid view.\n\nList view shows files in a compact tree layout. Grid view displays larger thumbnails with file type icons — great for browsing media folders.',
+	},
+	{
+		target: '[data-tour="share-expiry"]',
+		message: 'Set how long the link stays active.\n\nChoose a duration with the input fields or use the preset buttons (1 hour, 1 day, 1 week, or Never). After the link expires, it can no longer be accessed.',
+	},
+	{
+		target: '[data-tour="share-link-title"]',
+		message: 'Give your link an optional title.\n\nThis makes it easier to identify in the link management table on the dashboard. If left empty, a title is generated from the file names.',
+	},
+	{
+		target: '[data-tour="share-network-access"]',
+		message: 'Choose how the link is accessed on the network.\n\n"Share Locally" creates a link accessible over your LAN. "Share Externally" creates a public link, but requires port forwarding to be configured on your network.',
+	},
+	{
+		target: '[data-tour="share-access-mode"]',
+		message: 'Control who can access the link.\n\n• "Anyone with the link" — no sign-in needed.\n• "Anyone + password" — one shared password for all visitors.\n• "Only invited users" — each user signs in with their own account. Roles control download and comment permissions.',
+	},
+	{
+		target: '[data-tour="share-original-toggle"]',
+		message: 'This section appears when you select video files.\n\nEnable "Share Original Quality" to stream the original files at full resolution with no transcoding — preserving color accuracy and audio fidelity.\n\nDisable it to generate lighter proxy files for faster streaming (with some quality reduction).',
+		beforeShow: () => { tourSpoofing.value = true },
+		cleanup: () => { tourSpoofing.value = false },
+	},
+	{
+		target: '[data-tour="share-advanced-video"]',
+		message: 'When "Share Original Quality" is off and video files are selected, these advanced options appear.\n\n• Proxy Files — generate 720p, 1080p, or full-res proxy versions for streaming.\n• Watermark — overlay a logo or image on proxy videos to brand or protect your content.\n\nExpand this section to fine-tune proxy qualities and watermark settings.',
+		beforeShow: () => { tourSpoofing.value = true },
+		cleanup: () => { tourSpoofing.value = false },
+	},
+	{
+		target: '[data-tour="share-generate-btn"]',
+		message: 'Once you\'ve selected files and configured options, click here to generate your secure Flow link.\n\nThe link will appear below — you can copy it to your clipboard or open it directly in your browser.',
+	},
+]
 
 const { apiFetch } = useApi()
 const linkContext = { type: 'download' as const }
@@ -942,6 +1026,7 @@ const viewUrl = ref('')
 const downloadUrl = ref('')
 
 const transcodeProxy = ref(false)
+const shareOriginalQuality = ref(false)
 const proxyQualities = ref<string[]>([])
 const watermarkEnabled = ref(false)
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
@@ -1129,6 +1214,13 @@ watch(transcodeProxy, (v) => {
         watermarkEnabled.value = false
         watermarkFile.value = null
         overwriteExisting.value = false
+    }
+})
+
+watch(shareOriginalQuality, (v) => {
+    if (v) {
+        transcodeProxy.value = false
+        watermarkEnabled.value = false
     }
 })
 
@@ -1675,6 +1767,10 @@ async function generateLink() {
     }
 
     body.generateReviewProxy = !!transcodeProxy.value
+    body.hls = !!transcodeProxy.value && !shareOriginalQuality.value
+    if (shareOriginalQuality.value) {
+        body.shareOriginalQuality = true
+    }
     if (transcodeProxy.value) {
         body.proxyQualities = proxyQualities.value.slice()
     }
@@ -1788,7 +1884,7 @@ async function generateLink() {
         // Only apply overwrite for the retry; reset for subsequent requests
         overwriteExisting.value = false
 
-        const wantsHls = hasVideoSelected.value
+        const wantsHls = hasVideoSelected.value && !shareOriginalQuality.value
         if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
             const jobInfo = extractJobInfoByVersion(data)
@@ -2020,6 +2116,13 @@ async function generateLink() {
 }
 
 onMounted(async () => {
+    // Start tour early — don't wait for network fetches
+    if (!onboarding.value.shareFilesTourDone) {
+        setTimeout(() => {
+            requestTour('share-files', shareFilesTourSteps, () => markDone('shareFilesTourDone'))
+        }, 300)
+    }
+
     await loadLinkDefaults();
     await loadProjectChoices();
     await loadExistingWatermarkFiles();

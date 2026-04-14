@@ -1,7 +1,7 @@
 <template>
     <form @submit.prevent="connectToServer" class="connect-page" :class="{ 'is-dark': darkMode }" :aria-busy="anyBusy">
         <div class="connect-shell ss-page-frame">
-            <section class="connect-hero ss-surface">
+            <section data-tour="connect-hero" class="connect-hero ss-surface">
                 <h1>Share files through secure review links</h1>
                 <p>Connect this client to your server, then create and manage links from the dashboard.</p>
                 <p class="connect-note">
@@ -11,7 +11,7 @@
 
             <CardContainer class="connect-main-card rounded-md shadow-xl text-black" :style="{ background: connectMainCardBackground }">
                 <div class="connect-main-grid">
-                    <section class="connect-panel">
+                    <section data-tour="connect-server-selection" class="connect-panel">
                         <div class="connect-section-title">Server Selection</div>
 
                         <div class="flex flex-col text-left">
@@ -32,7 +32,7 @@
                                 class="connect-control h-[2.9rem] text-default input-textlike border px-4 rounded-lg text-lg w-full" />
                         </div>
 
-                        <details class="py-2 gap-3 my-2 text-left group " :open="Boolean(portError || portWarning)">
+                        <details ref="portsDetailsRef" data-tour="connect-ports" class="py-2 gap-3 my-2 text-left group" :open="Boolean(portError || portWarning) || tourPortsOpen">
                             <summary
                                 class="list-none flex w-full items-center justify-between text-left cursor-pointer select-none">
                                 <div class="min-w-0">
@@ -87,7 +87,7 @@
                         </details>
                     </section>
 
-                    <section class="connect-panel connect-panel-auth">
+                    <section data-tour="connect-auth" class="connect-panel connect-panel-auth">
                         <div class="connect-section-title">Authentication</div>
                         <label class="connect-auth-row flex flex-col">
                             <span class="connect-label">Username</span>
@@ -115,7 +115,7 @@
                 </div>
             </CardContainer>
 
-            <section class="connect-warning ss-surface">
+            <section data-tour="connect-port-forwarding" class="connect-warning ss-surface">
                 <p class="text-danger text-sm text-left">
                     <b>External sharing requires port forwarding:</b> HTTPS port 443 (or your custom HTTPS port) must be open/forwarded on your router.
                 </p>
@@ -125,7 +125,7 @@
                 </button>
             </section>
 
-            <div class="connect-submit">
+            <div data-tour="connect-submit" class="connect-submit">
                 <button type="submit"
                     class="btn btn-success connect-submit-btn flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     :disabled="anyBusy">
@@ -172,6 +172,8 @@ import { pushNotification, Notification, CardContainer, useDarkModeState } from 
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
 import { loadLastSession, saveLastSession, clearLastSession, saveManualServer, saveRegistryLicenseId } from '../composables/useSessionPersistence';
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 useHeader('Welcome to 45Flow!');
 
 const { to } = useResilientNav()
@@ -195,6 +197,47 @@ const selectedServer = computed<Server | undefined>(() =>
 const sshPort = ref<number | null>(null);          // SSH port (null means “unspecified → default/detect”)
 const broadcasterPort = ref<number | null>(null);  // internal API, default 9095
 const httpsPort = ref<number | null>(null);        // external HTTPS, default 443
+
+// ================== Guided tour ==================
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+const tourPortsOpen = ref(false)
+const portsDetailsRef = ref<HTMLDetailsElement | null>(null)
+
+const connectTourSteps: TourStep[] = [
+	{
+		target: '[data-tour="connect-hero"]',
+		message: 'Welcome to 45Flow!\n\nThis is your starting point. From here you\'ll connect this client application to your media server — then you can create share links, upload files, and manage access from the dashboard.',
+	},
+	{
+		target: '[data-tour="connect-server-selection"]',
+		message: 'Pick a server to connect to.\n\nServers running houston-broadcaster appear automatically in the dropdown. If your server doesn\'t show up, type its IP address in the manual field below instead.',
+	},
+	{
+		target: '[data-tour="connect-ports"]',
+		message: 'You can customise the connection ports here.\n\n• SSH (default 22) — used for secure file operations and server setup.\n• API / houston-broadcaster (default 9095) — the backend service that powers 45Flow.\n• HTTPS (default 443) — used for external link access.\n\nLeave these blank to use the defaults. Only change them if your server uses non-standard ports.',
+		beforeShow: () => {
+			tourPortsOpen.value = true
+			if (portsDetailsRef.value) portsDetailsRef.value.open = true
+		},
+		cleanup: () => {
+			tourPortsOpen.value = false
+			if (portsDetailsRef.value) portsDetailsRef.value.open = false
+		},
+	},
+	{
+		target: '[data-tour="connect-auth"]',
+		message: 'Enter your server credentials.\n\nUse the same username and password you\'d use to login into the machine. These are used to authenticate the connection and log in to the 45Flow API.',
+	},
+	{
+		target: '[data-tour="connect-port-forwarding"]',
+		message: 'If you plan to share links externally (over the internet), your router must forward HTTPS traffic (port 443 by default) to the server.\n\nClick "How to set this up" for step-by-step instructions. This isn\'t needed for local/LAN sharing.',
+	},
+	{
+		target: '[data-tour="connect-submit"]',
+		message: 'Once you\'ve selected a server and entered credentials, click here to connect.\n\n45Flow will verify the SSH connection, check that houston-broadcaster is installed (and set it up if needed), validate your license, and log you in. You\'ll be taken to the dashboard when everything\'s ready.',
+	},
+]
 
 const DEFAULT_SSH_PORT = 22;
 const DEFAULT_API_PORT = Number((import.meta as any).env?.VITE_API_PORT || 9095);
@@ -906,6 +949,13 @@ async function connectToServer() {
 
 // ─── Auto-login from saved session on mount ─────────────────────
 onMounted(async () => {
+    // Start guided tour for first-time users
+    if (!onboarding.value.connectTourDone) {
+        setTimeout(() => {
+            requestTour('connect', connectTourSteps, () => markDone('connectTourDone'))
+        }, 500)
+    }
+
     const saved = loadLastSession()
     if (!saved) return
 
