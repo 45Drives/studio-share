@@ -2714,8 +2714,9 @@ async function saveAll() {
     label: string
   ) {
     const baseBody = JSON.parse(init.body || '{}')
+    const fetchInit = { ...init, timeoutMs: 5 * 60 * 1000 }
     try {
-      return await props.apiFetch(url, init)
+      return await props.apiFetch(url, fetchInit)
     } catch (e: any) {
       const payload = parseApiConflictPayload(e)
       const errCode = String(payload?.error || '')
@@ -2741,7 +2742,7 @@ async function saveAll() {
         retryBody,
       })
       return await props.apiFetch(url, {
-        ...init,
+        ...fetchInit,
         body: JSON.stringify(retryBody),
       })
     }

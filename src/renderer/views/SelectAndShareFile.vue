@@ -1162,6 +1162,7 @@ async function runPreflight() {
         const data = await apiFetch('/api/magic-link/preflight', {
             method: 'POST',
             body: JSON.stringify(body),
+            timeoutMs: 5 * 60 * 1000,
         })
 
         if (seq !== preflightReqSeq) return
@@ -1831,6 +1832,7 @@ async function generateLink() {
             return apiFetch('/api/magic-link', {
                 method: 'POST',
                 body: JSON.stringify(body),
+                timeoutMs: 5 * 60 * 1000,
             })
         }
         try {
