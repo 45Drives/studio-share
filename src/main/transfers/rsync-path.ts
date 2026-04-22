@@ -11,14 +11,6 @@ function shellQuoteForRemoteSh(v: string): string {
   return `'${String(v || '').replace(/'/g, `'\"'\"'`)}'`;
 }
 
-function shouldEnsureWatermarkDir(destDir: string): boolean {
-  const clean = String(destDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-  return (
-    clean === '/.45flow/watermarks' ||
-    clean.endsWith('/.45flow/watermarks')
-  );
-}
-
 export function findRsyncPath(): { cmd: string; useWSL: boolean } {
   const macCandidates = [
     '/opt/homebrew/bin/rsync',
