@@ -267,17 +267,17 @@ function qualityLabel(q: string) {
 
 function proxyDetailFromProgress(progress: number, qualities?: string[]) {
     const list = normalizeQualityList(qualities)
-    if (!list.length) return 'Tracking proxy'
+    if (!list.length) return 'Tracking review copy'
     const chunk = 100 / list.length
     const p = clampPct(progress)
     const idx = Math.min(list.length - 1, Math.floor(p / chunk))
     const current = qualityLabel(list[idx])
-    return current ? `Tracking proxy (${current})` : 'Tracking proxy'
+    return current ? `Tracking review copy (${current})` : 'Tracking review copy'
 }
 
 function proxyDetailFromActiveQuality(activeQuality?: string, progress?: number, qualities?: string[]) {
     const q = qualityLabel(activeQuality || '')
-    if (q) return `Tracking proxy (${q})`
+    if (q) return `Tracking review copy (${q})`
     return proxyDetailFromProgress(progress ?? 0, qualities)
 }
 
@@ -408,6 +408,7 @@ const _state = reactive({
     open: false,
     minimized: false,
     tasks: [] as TransferTask[],
+    suppressAutoOpen: false,
 })
 
 function upsertTask(task: TransferTask) {
@@ -549,7 +550,7 @@ export function useTransferProgress() {
         () => hasActive.value,
         (active, wasActive) => {
             // rising edge: inactive -> active
-            if (active && !wasActive) {
+            if (active && !wasActive && !_state.suppressAutoOpen) {
                 _state.open = true
             }
             if (!active) {
@@ -1291,7 +1292,7 @@ export function useTransferProgress() {
                     if (hasActiveTranscode({ assetVersionIds: [assetVersionId], file: filePath, jobKind })) continue
 
                     const label = kind === 'hls' ? 'Generating adaptive stream'
-                        : kind === 'proxy_mp4' ? 'Generating proxy files'
+                        : kind === 'proxy_mp4' ? 'Generating review copies'
                         : 'Generating transcodes'
 
                     startAssetVersionTranscodeTask({

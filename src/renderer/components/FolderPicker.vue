@@ -55,8 +55,22 @@
           <FontAwesomeIcon :icon="faArrowLeft" />
         </button>
 
-        <div class="text-xs opacity-75 truncate" :title="browseCwd">
-          {{ browseMode === 'roots' ? 'Pick a ZFS pool…' : (browseCwd || '/') }}
+        <div class="text-xs opacity-75 truncate flex items-center gap-0.5 min-w-0" :title="browseCwd">
+          <template v-if="browseMode === 'roots'">Pick a ZFS pool…</template>
+          <template v-else>
+            <button type="button" class="hover:underline hover:opacity-100 opacity-75 shrink-0"
+              @click="navigateToBreadcrumb('/')">
+              /
+            </button>
+            <template v-for="(seg, i) in breadcrumbSegments" :key="i">
+              <span class="opacity-50 shrink-0">/</span>
+              <button type="button" class="hover:underline hover:opacity-100 truncate"
+                :class="i === breadcrumbSegments.length - 1 ? 'font-semibold opacity-100' : 'opacity-75'"
+                @click="navigateToBreadcrumb(seg.path)">
+                {{ seg.name }}
+              </button>
+            </template>
+          </template>
         </div>
 
         <div class="ml-auto flex items-center" v-if="browseMode !== 'roots'">
@@ -243,6 +257,15 @@ const destAbs = ref<string>('')
 /* Root rel for children (driven by browseCwd) */
 const rootRel = computed(() => (browseCwd.value || '').replace(/^\/+/, '').replace(/\/+$/, ''))
 
+/* Breadcrumb segments derived from browseCwd */
+const breadcrumbSegments = computed(() => {
+  const parts = (browseCwd.value || '/').replace(/^\/+/, '').replace(/\/+$/, '').split('/').filter(Boolean)
+  return parts.map((name, i) => ({
+    name,
+    path: '/' + parts.slice(0, i + 1).join('/'),
+  }))
+})
+
 const internalSelected = ref<Set<string>>(new Set())
 const selectedVersion = ref(0)
 const expandCache = new Map<string, string[]>()
@@ -408,6 +431,18 @@ function onChooseDest(pick: { path: string; isDir: boolean }) {
 function navigateTo(rel: string) {
   const absLike = ensureSlash('/' + rel.replace(/^\/+/, ''))
   const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, absLike)) : absLike
+
+  browseCwd.value = clamped
+  emit('changed-cwd', browseCwd.value)
+
+  destAbs.value = clamped
+  internalDest.value = clamped.replace(/^\/+/, '').replace(/\/+$/, '')
+}
+
+/* Breadcrumb click: navigate to an absolute path */
+function navigateToBreadcrumb(absPath: string) {
+  const target = ensureSlash(absPath || '/')
+  const clamped = clampBase.value ? ensureSlash(toAbsUnder(clampBase.value, target)) : target
 
   browseCwd.value = clamped
   emit('changed-cwd', browseCwd.value)

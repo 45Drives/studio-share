@@ -10,10 +10,10 @@
 
 - **Share files via secure links** — Generate expiring, access-controlled links for viewing, downloading, and commenting on files
 - **Upload portals** — Create links that let external collaborators upload files directly to your server
-- **Local uploads** — Transfer files from your workstation to the server with optional proxy generation and watermarking
+- **Local uploads** — Transfer files from your workstation to the server with optional review copy generation and watermarking
 - **Video review with timecoded comments** — Browser-based HLS player with threaded, frame-accurate commenting
 - **Role-based access control** — System and custom roles (View, Comment, Download, Upload) enforced per link
-- **Proxy generation & watermarking** — Generate 720p/1080p proxies and apply watermark overlays to protect original media
+- **review copy generation & watermarking** — Generate 720p/1080p review copies and apply watermark overlays to protect original media
 - **Link management dashboard** — Search, filter, edit, disable, and monitor all links from one place
 - **Auto-discovery** — Desktop client finds servers automatically via mDNS/Bonjour
 

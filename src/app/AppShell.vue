@@ -17,6 +17,7 @@
           class="flow-logo-gradient mx-auto my-auto"
           role="img"
           aria-label="45Flow"
+          data-tour="flow-logo"
           :style="{ '--flow-logo-src': `url(${flowLogo})` }"
         />
       </div>
@@ -39,6 +40,7 @@
     <main class="flex-1 min-h-0 w-full overflow-hidden">
       <router-view />
     </main>
+    <QuickShareOverlay />
     <GlobalModalConfirm />
     <NotificationView />
     <UpdateBanner />
@@ -62,6 +64,7 @@ import TransferProgressDock from '../renderer/components/TransferProgressDock.vu
 import UpdateBanner from '../renderer/components/UpdateBanner.vue'
 import GlobalMenu from '../renderer/components/GlobalMenu.vue'
 import GuidedTour from '../renderer/components/GuidedTour.vue'
+import QuickShareOverlay from '../renderer/components/QuickShareOverlay.vue'
 import { useTourManager } from '../renderer/composables/useTourManager'
 import flowLogo from '../../assets/logos/45Flow-w.png'
 

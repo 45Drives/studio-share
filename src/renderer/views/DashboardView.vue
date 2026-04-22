@@ -64,6 +64,7 @@ import { useTransferProgress } from '../composables/useTransferProgress'
 import { clearLastSession } from '../composables/useSessionPersistence'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
+import { tourQuickShareOpen, tourQuickShareStep, tourQuickShareShowDone } from '../composables/useQuickShareTour'
 
 useHeader('Dashboard')
 const { to } = useResilientNav()
@@ -75,11 +76,145 @@ const { onboarding, markDone } = useOnboarding()
 /** When true, ManageLinks shows demo rows so the tour can highlight them */
 const tourShowDemoLinks = ref(false)
 
+/** Cleanup helper — reset all Quick Share tour state */
+function cleanupQuickShareTour() {
+	tourQuickShareShowDone.value = false
+	tourQuickShareStep.value = 1
+	tourQuickShareOpen.value = false
+}
+
 const dashboardTourSteps: TourStep[] = [
+	// ── Welcome + Quick Share introduction ──────────────────────
+	{
+		target: '[data-tour="flow-logo"]',
+		message: 'Welcome to 45Flow!\n\nTip: You can drag and drop a file anywhere onto the app to open the Quick Share feature — the fastest way to upload and share files.\n\nLet\'s walk through Quick Share first, then explore the rest of the dashboard.',
+	},
+	// ── Quick Share Step 1: Modal overview ──
+	{
+		target: '[data-tour="qs-modal"]',
+		message: 'This is the Quick Share screen.\n\nWhen you drop files onto 45Flow, this wizard opens automatically. It walks you through uploading files to the server and generating a share link — all in three quick steps.\n\nThe file list at the top shows what you dropped. Here we\'re using a sample file for the tour.',
+		beforeShow: () => {
+			tourQuickShareStep.value = 1
+			tourQuickShareShowDone.value = false
+			tourQuickShareOpen.value = true
+		},
+	},
+	// ── Quick Share Step 1: Step indicator ──
+	{
+		target: '[data-tour="qs-steps"]',
+		message: 'The step indicator shows your progress.\n\nStep 1 is Destination — choose where on the server to upload. Step 2 is Link Options — set expiry, access, and video settings. Step 3 is Upload & Share — monitor the upload and grab your link.',
+		beforeShow: () => {
+			tourQuickShareStep.value = 1
+			tourQuickShareOpen.value = true
+		},
+	},
+	// ── Quick Share Step 1: Destination picker ──
+	{
+		target: '[data-tour="qs-step-destination"]',
+		message: 'In Step 1, you pick a destination folder on the server.\n\nUse the folder browser to navigate your project directories. Once you\'ve selected a folder, click Next to continue.',
+		beforeShow: () => {
+			tourQuickShareStep.value = 1
+			tourQuickShareOpen.value = true
+		},
+	},
+	// ── Quick Share Step 2: Link Options overview ──
+	{
+		target: '[data-tour="qs-step-options"]',
+		message: 'Step 2 is where you configure your share link before uploading.\n\nLet\'s walk through each option.',
+		beforeShow: () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+		},
+	},
+	// ── Quick Share Step 2: Expiry ──
+	{
+		target: '[data-tour="qs-expiry"]',
+		message: 'Set how long the link stays active.\n\nType a custom value or use the quick presets — 1 hour, 1 day, 1 week, or Never for a permanent link.',
+		beforeShow: () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+		},
+	},
+	// ── Quick Share Step 2: Network ──
+	{
+		target: '[data-tour="qs-network"]',
+		message: 'Choose the network for your share link.\n\nLocal (LAN) generates an internal URL for your network. External (Internet) uses your public domain or IP so anyone outside your network can access it.',
+		beforeShow: () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+		},
+	},
+	// ── Quick Share Step 2: Advanced Options ──
+	{
+		target: '[data-tour="qs-advanced-panel"]',
+		message: 'The Advanced Options panel gives you finer control over your link.\n\nLet\'s go through each setting.',
+		beforeShow: async () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+			// Open the disclosure if it's closed
+			await new Promise(r => setTimeout(r, 100))
+			const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+			const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+			if (btn && !panel) btn.click()
+		},
+	},
+	// ── Quick Share Step 2: Link Title ──
+	{
+		target: '[data-tour="qs-link-title"]',
+		message: 'Give your link a descriptive title.\n\nThis is optional but helps you identify the link later in the dashboard.',
+		beforeShow: async () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+			await new Promise(r => setTimeout(r, 100))
+			const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+			const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+			if (btn && !panel) btn.click()
+		},
+	},
+	// ── Quick Share Step 2: Access Mode ──
+	{
+		target: '[data-tour="qs-access-mode"]',
+		message: 'Control who can access your shared files.\n\n• Anyone with the link — no sign-in needed.\n• Password protected — recipients enter a shared password.\n• Invited users only — only specific user accounts can access it.\n\nComments can be toggled for open and password-protected links.',
+		beforeShow: async () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+			await new Promise(r => setTimeout(r, 100))
+			const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+			const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+			if (btn && !panel) btn.click()
+		},
+	},
+	// ── Quick Share Step 2: Video Options ──
+	{
+		target: '[data-tour="qs-video-options"]',
+		message: 'When sharing video files, you can generate streamable review copies at 720p, 1080p, or full resolution.\n\nYou can also overlay a watermark image onto the review copies to protect your content.',
+		beforeShow: async () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 2
+			await new Promise(r => setTimeout(r, 100))
+			const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+			const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+			if (btn && !panel) btn.click()
+		},
+	},
+	// ── Quick Share Step 3: Upload & Share (done state) ──
+	{
+		target: '[data-tour="qs-step-upload"]',
+		message: 'Step 3 handles the upload and link generation.\n\nYou\'ll see a progress bar while files transfer, then your share link appears with Copy and Open buttons. That\'s it — Quick Share in three steps!',
+		beforeShow: () => {
+			tourQuickShareOpen.value = true
+			tourQuickShareStep.value = 3
+			tourQuickShareShowDone.value = true
+		},
+	},
+	// ── Close Quick Share, return to dashboard ──
 	{
 		target: '[data-tour="action-cards"]',
-		message: 'Welcome to 45Flow!\n\nThese are your three main actions. You can create a File Share Link for review, upload files directly from your workstation, or generate an Upload Link for collaborators to send files to you.',
+		message: 'Now let\'s explore the rest of the dashboard.\n\nThese are your three main actions: create a File Share Link for review, upload files directly from your workstation, or generate an Upload Link for collaborators.',
+		beforeShow: () => { cleanupQuickShareTour() },
+		cleanup: () => { cleanupQuickShareTour() },
 	},
+	// ── Normal dashboard tour continues ──────────────────────
 	{
 		target: '[data-tour="new-share-link"]',
 		message: 'Click here to create a new File Share Link.\n\nYou\'ll select files from your server, set an expiry, and choose access controls. Recipients get a secure link to view and download the files.',
@@ -116,7 +251,7 @@ const dashboardTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="manage-links-table"]',
-		message: 'The table shows all your links at a glance.\n\nEach row displays the link\'s title, type, sharing mode (Original or Proxy), a short URL you can copy, expiry countdown, status badge, access mode, creation date, and action buttons.\n\nClick any column header to sort. These are example links for the tour — your real links will appear here.',
+		message: 'The table shows all your links at a glance.\n\nEach row displays the link\'s title, type, sharing mode (Original or Review Copy), a short URL you can copy, expiry countdown, status badge, access mode, creation date, and action buttons.\n\nClick any column header to sort. These are example links for the tour — your real links will appear here.',
 		beforeShow: () => { tourShowDemoLinks.value = true },
 	},
 	{

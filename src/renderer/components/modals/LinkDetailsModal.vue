@@ -46,11 +46,8 @@
               <div>
                 <span class="opacity-70">Sharing Mode</span>
                 <div class="font-semibold">
-                  <span v-if="currentShareOriginalQuality" class="text-emerald-400">Raw File</span>
-                  <template v-else>
-                    {{ currentGenerateReviewProxy ? 'Transcoded' : 'Proxy Disabled' }}
+                    {{ currentGenerateReviewProxy ? 'Transcoded' : 'Review Copies Disabled' }}
                     <span v-if="currentProxyQualities.length" class="opacity-70">({{ currentProxyQualities.join(', ') }})</span>
-                  </template>
                 </div>
               </div>
               <div>
@@ -267,13 +264,13 @@
             <div class="col-span-3 rounded-lg border border-default bg-default/20 p-3 space-y-3">
               <div class="text-default font-semibold">Media Processing</div>
               <div class="flex flex-wrap items-center gap-3 min-w-0">
-                <label class="font-semibold sm:whitespace-nowrap">Generate Proxy Files</label>
+                <label class="font-semibold sm:whitespace-nowrap">Generate Review Copies</label>
                 <template v-if="editMode">
                   <Switch id="link-proxy-switch" v-model="draftGenerateReviewProxy" :class="[
                     draftGenerateReviewProxy ? 'bg-secondary' : 'bg-well',
                     'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
                   ]">
-                    <span class="sr-only">Toggle proxy file generation</span>
+                    <span class="sr-only">Toggle review copy generation</span>
                     <span aria-hidden="true" :class="[
                       draftGenerateReviewProxy ? 'translate-x-5' : 'translate-x-0',
                       'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
@@ -286,7 +283,7 @@
               </div>
 
               <div v-if="editMode && draftGenerateReviewProxy" class="flex flex-wrap items-center gap-3">
-                <span class="text-xs opacity-80">Proxy qualities:</span>
+                <span class="text-xs opacity-80">Review copy qualities:</span>
                 <label v-for="q in proxyQualityChoices" :key="q" class="inline-flex items-center gap-1 text-sm">
                   <input type="checkbox" class="checkbox" :value="q" v-model="draftProxyQualities" />
                   <span>{{ q }}</span>
@@ -534,7 +531,7 @@
           <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
             <div>
               <h4 class="font-semibold">Versions</h4>
-              <div class="text-xs opacity-70">Restore or delete versions, and inspect related proxy/version artifacts.</div>
+              <div class="text-xs opacity-70">Restore or delete versions, and inspect related review copy/version artifacts.</div>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <label class="text-xs opacity-80 inline-flex items-center gap-1 px-2 py-1 rounded border border-default bg-default/20">
@@ -617,7 +614,7 @@
                               @click="deleteVersionArtifacts(v, 'transcodes')"
                               :disabled="isDeletingArtifacts(v, 'transcodes')"
                             >
-                              {{ isDeletingArtifacts(v, 'transcodes') ? 'Deleting…' : 'Delete proxy/HLS' }}
+                              {{ isDeletingArtifacts(v, 'transcodes') ? 'Deleting…' : 'Delete review copy/HLS' }}
                             </button>
                             <button
                               class="btn btn-secondary px-2 py-1 text-xs"
@@ -673,9 +670,9 @@
                             </div>
                           </template>
                           <div class="grid grid-cols-[11rem_1fr_auto] gap-2 items-start pt-1">
-                            <span class="opacity-80">Proxy files</span>
+                            <span class="opacity-80">Review copies</span>
                             <span>{{ proxyPatternRelPath(v) || '—' }}</span>
-                            <button class="btn btn-secondary px-2 py-1 text-[11px]" :disabled="!proxyPatternRelPath(v)" @click="copyExtraPath('Proxy files pattern', proxyPatternRelPath(v))">Copy</button>
+                            <button class="btn btn-secondary px-2 py-1 text-[11px]" :disabled="!proxyPatternRelPath(v)" @click="copyExtraPath('Review copies pattern', proxyPatternRelPath(v))">Copy</button>
                           </div>
                           <div class="grid grid-cols-[11rem_1fr_auto] gap-2 items-start">
                             <span class="opacity-80">HLS folder</span>
@@ -730,7 +727,7 @@ const linkDetailsTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="link-details-config"]',
-		message: 'Link Configuration shows editable settings.\n\nTitle, notes, access mode, password protection, comments, media processing (proxy files, qualities, watermark), and for upload links — the destination directory.',
+		message: 'Link Configuration shows editable settings.\n\nTitle, notes, access mode, password protection, comments, media processing (review copies, qualities, watermark), and for upload links — the destination directory.',
 	},
 	{
 		target: '[data-tour="link-details-files"]',
@@ -745,7 +742,7 @@ const linkDetailsTourSteps: TourStep[] = [
 const linkDetailsEditTourSteps: TourStep[] = [
 	{
 		target: '[data-tour="link-details-config"]',
-		message: 'You\'re now in Edit mode!\n\nAll fields in this section are editable. Change the title, notes, access mode, password, proxy settings, or watermark configuration.\n\nFor upload links, you can also change the destination directory.',
+		message: 'You\'re now in Edit mode!\n\nAll fields in this section are editable. Change the title, notes, access mode, password, review copy settings, or watermark configuration.\n\nFor upload links, you can also change the destination directory.',
 	},
 	{
 		target: '[data-tour="link-details-header"]',
@@ -934,12 +931,6 @@ const currentGenerateReviewProxy = computed(() => !!(props.link?.generateReviewP
 const currentProxyQualities = computed(() => normalizeQualities(props.link?.proxyQualities))
 const currentWatermark = computed(() => !!(props.link?.watermark))
 const currentWatermarkFile = computed(() => String(props.link?.watermarkFile || '').trim())
-const currentShareOriginalQuality = computed(() => {
-  const it: any = props.link
-  if (it?.shareOriginalQuality != null) return !!it.shareOriginalQuality
-  // Infer from media prefs: originalQuality = allow_original_download AND no proxy AND no hls
-  return !currentGenerateReviewProxy.value && !currentWatermark.value
-})
 const mediaSettingsDirty = computed(() => {
   if (!!draftGenerateReviewProxy.value !== currentGenerateReviewProxy.value) return true
   if (!sameValues(normalizeQualities(draftProxyQualities.value), currentProxyQualities.value)) return true
@@ -1010,9 +1001,6 @@ function assignMediaSettingsFromSource(src: any) {
 
   const wmFile = src.watermarkFile ?? src.watermark_file
   if (wmFile != null) target.watermarkFile = String(wmFile || '')
-
-  const soq = src.shareOriginalQuality ?? src.share_original_quality
-  if (typeof soq === 'boolean') target.shareOriginalQuality = soq
 }
 
 const _videoExts = new Set([
@@ -1413,9 +1401,9 @@ function extraPathRows(v: any) {
   return [
     { label: 'Snapshot file', value: snapshotRelPath(v) },
     { label: 'Version folder', value: snapshotDirRelPath(v) },
-    { label: 'Proxy/HLS folder', value: transcodeDirRelPath(v) },
+    { label: 'Review Copy/HLS folder', value: transcodeDirRelPath(v) },
     { label: 'HLS folder', value: hlsFolderRelPath(v) },
-    { label: 'Proxy files pattern', value: proxyPatternRelPath(v) },
+    { label: 'Review copies pattern', value: proxyPatternRelPath(v) },
   ].filter((row) => String(row.value || '').trim())
 }
 
@@ -1460,7 +1448,7 @@ function isDeletingArtifacts(v: any, target: ArtifactDeleteTarget) {
 
 function artifactDeleteTitle(target: ArtifactDeleteTarget) {
   if (target === 'snapshot') return 'Delete Snapshot'
-  if (target === 'transcodes') return 'Delete Proxy/HLS'
+  if (target === 'transcodes') return 'Delete Review Copy/HLS'
   return 'Delete All Extra Files'
 }
 
@@ -1470,9 +1458,9 @@ function artifactDeletePrompt(v: any, target: ArtifactDeleteTarget) {
     return `Delete snapshot files for ${ver}?\n\nThis removes version snapshot files from disk and clears snapshot metadata for this version.`
   }
   if (target === 'transcodes') {
-    return `Delete proxy/HLS artifacts for ${ver}?\n\nThis removes generated proxy/HLS files and clears transcode job state for this version.`
+    return `Delete review copy/HLS artifacts for ${ver}?\n\nThis removes generated review copy/HLS files and clears transcode job state for this version.`
   }
-  return `Delete all extra files for ${ver}?\n\nThis removes both snapshot files and proxy/HLS artifacts for this version.`
+  return `Delete all extra files for ${ver}?\n\nThis removes both snapshot files and review copy/HLS artifacts for this version.`
 }
 
 async function deleteVersionArtifacts(v: any, target: ArtifactDeleteTarget) {
@@ -1938,7 +1926,7 @@ function startLinkTranscodeTracking(opts: {
               const detailLabel = fileLabelById.get(fileId) || fallbackFileLabel(assetVersionId)
               const playbackPath = `/api/token/${encodeURIComponent(detailsToken.value)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
               transfer.startPlaybackTranscodeTask({
-                title: 'Generating proxy files',
+                title: 'Generating review copies',
                 detail: `Tracking ${detailLabel}`,
                 intervalMs: 1500,
                 jobKind: 'proxy_mp4',
@@ -1965,7 +1953,7 @@ function startLinkTranscodeTracking(opts: {
             transfer.startAssetVersionTranscodeTask({
               apiFetch: props.apiFetch,
               assetVersionIds: [assetVersionId],
-              title: 'Generating proxy files',
+              title: 'Generating review copies',
               detail: `Tracking ${fallbackFileLabel(assetVersionId)}`,
               intervalMs: 1500,
               jobKind: 'proxy_mp4',
@@ -1983,8 +1971,8 @@ function startLinkTranscodeTracking(opts: {
       if (proxyInProgressIds.length) {
         pushNotification(
           new Notification(
-            'Proxy Already In Progress',
-            `Proxy generation is already in progress for ${proxyInProgressIds.length} item(s).`,
+            'Review Copies Already In Progress',
+            `Review copy generation is already in progress for ${proxyInProgressIds.length} item(s).`,
             'info',
             6000
           )
@@ -1992,8 +1980,8 @@ function startLinkTranscodeTracking(opts: {
       } else if (proxySplit.skipped.length) {
         pushNotification(
           new Notification(
-            'Proxy Already Available',
-            `Proxy generation was skipped for ${proxySplit.skipped.length} item(s) (already exists).`,
+            'Review Copies Already Available',
+            `Review copy generation was skipped for ${proxySplit.skipped.length} item(s) (already exists).`,
             'info',
             6000
           )
@@ -2136,7 +2124,7 @@ function startLinkTranscodeTracking(opts: {
 
       if (opts.wantsProxy) {
         transfer.startPlaybackTranscodeTask({
-          title: 'Generating proxy files',
+          title: 'Generating review copies',
           detail: filePath ? `Tracking ${filePath}` : `Tracking file ${fileId}`,
           intervalMs: 1500,
           jobKind: 'proxy_mp4',
@@ -2184,7 +2172,7 @@ function startLinkTranscodeTracking(opts: {
     apiFetch: props.apiFetch,
     fileIds,
     title: jobKind === 'proxy_mp4'
-      ? 'Generating proxy files'
+      ? 'Generating review copies'
       : (jobKind === 'hls' ? 'Generating adaptive stream' : 'Generating transcodes'),
     detail: `Tracking ${fileIds.length} file(s)`,
     intervalMs: 1500,
@@ -2825,7 +2813,7 @@ async function saveAll() {
       pushNotification(
         new Notification(
           'Invalid Media Settings',
-          'Enable proxy files before enabling watermark.',
+          'Enable review copies before enabling watermark.',
           'warning',
           8000
         )
@@ -2835,8 +2823,8 @@ async function saveAll() {
     if (draftGenerateReviewProxy.value && nextProxyQualities.length === 0) {
       pushNotification(
         new Notification(
-          'Proxy Quality Required',
-          'Select at least one proxy quality.',
+          'Review Copy Quality Required',
+          'Select at least one review copy quality.',
           'warning',
           8000
         )

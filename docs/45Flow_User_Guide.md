@@ -290,15 +290,15 @@ Choose who can access the link:
 
 When sharing video files, expand the **"Advanced video options"** section for additional controls:
 
-![Advanced video options — proxy and watermark](images/share-video-options.png)
+![Advanced video options — review copy and watermark](images/share-video-options.png)
 
-**Use Proxy Files:**
-- When enabled, the system generates lower-resolution proxy versions of your videos (720p, 1080p).
-- Shared links serve the proxy files instead of the originals, providing faster playback and reduced bandwidth.
+**Use Review Copies:**
+- When enabled, the system generates lower-resolution review copy versions of your videos (720p, 1080p).
+- Shared links serve the review copies instead of the originals, providing faster playback and reduced bandwidth.
 - Select which qualities to generate: **720p**, **1080p**, **Original**, or any combination.
 
 **Watermark Videos:**
-- When proxy files are enabled, you can also apply a watermark overlay.
+- When review copies are enabled, you can also apply a watermark overlay.
 - Click **"Choose Image"** to upload a watermark image, or select an existing one from the dropdown.
 - A preview shows the approximate watermark placement.
 - Useful for protecting intellectual property or branding shared content.
@@ -353,7 +353,7 @@ Click **"Upload Files Locally"** from the Dashboard to begin. A three-step wizar
 
 If you're uploading video files, you can configure **Advanced Video Options** before starting:
 
-- **Use Proxy Files** — Enable to generate proxy versions (720p, 1080p) of your videos during upload. These proxies are used when you share the files later via links.
+- **Use Review Copies** — Enable to generate review copy versions (720p, 1080p) of your videos during upload. These review copies are used when you share the files later via links.
 - **Watermark Videos** — Apply a watermark overlay to uploaded videos for later sharing.
 
 Click **"Start Upload"** to begin transferring files.
@@ -489,7 +489,7 @@ The details view displays:
 |-------|-------------|
 | **Primary Link** | The full URL with a **Copy** button. |
 | **Access** | Current access mode (Open / Password / Users only). |
-| **Proxy** | Whether proxy file generation is enabled or disabled. |
+| **Review Copies** | Whether review copy generation is enabled or disabled. |
 | **Watermark** | Whether watermarking is enabled or disabled. |
 | **Type** | Share (download) or Upload. |
 | **Status** | Active, Expired, or Disabled. |
@@ -548,7 +548,7 @@ You can modify:
 - **Restrict Access to Users** — Toggle between open and restricted access.
 - **Allow Comments** — Enable or disable commenting on shared files.
 - **Password Required** — Enable or disable password protection, and set the password.
-- **Generate Proxy Files** — Enable/disable proxy generation and select qualities (720p, 1080p, Original).
+- **Generate Review Copies** — Enable/disable review copy generation and select qualities (720p, 1080p, Original).
 - **Apply Watermark** — Enable/disable watermark overlay and choose or upload a watermark image.
 - **Files for This Link** — Add or remove files associated with the link using **"Manage Files"**.
 
@@ -577,7 +577,7 @@ The player supports standard media controls:
 
 ### Quality Selection
 
-If proxy files were generated, viewers can choose their preferred quality:
+If review copies were generated, viewers can choose their preferred quality:
 - **Auto** — Automatically adapts to available bandwidth
 - **720p** — Lower resolution, faster loading
 - **1080p** — Full HD
@@ -745,7 +745,7 @@ These defaults are applied automatically when creating new links, but can be cha
 |--------|-------------|
 | **Restrict access to users** | New links default to restricted (invited users only) mode. |
 | **Allow comments on open links** | Enable comments by default on open (unauthenticated) links. |
-| **Generate proxy files by default** | Automatically enable proxy generation for new links. |
+| **Generate review copies by default** | Automatically enable review copy generation for new links. |
 
 ### Maintenance & Cleanup
 
@@ -861,11 +861,11 @@ A: 45Flow supports a wide range of media file types including:
 - **Archives:** ZIP, TAR, GZ, 7Z, RAR
 - **Documents:** PDF, SRT, VTT (subtitles), XML, CSV
 
-**Q: What do proxy files do?**  
-A: Proxy files are lower-resolution versions (720p, 1080p) of your videos. When enabled, shared links stream the proxy instead of the original, resulting in faster playback, reduced bandwidth usage, and protection of your original high-resolution files.
+**Q: What do review copies do?**  
+A: Review copies are lower-resolution versions (720p, 1080p) of your videos. When enabled, shared links stream the review copy instead of the original, resulting in faster playback, reduced bandwidth usage, and protection of your original high-resolution files.
 
 **Q: Can I change a link's settings after creating it?**  
-A: Yes. Open the link's **Details** from the Dashboard and click **"Edit"**. You can change access mode, password, expiration, proxy/watermark settings, and the files attached to the link. Changes take effect immediately.
+A: Yes. Open the link's **Details** from the Dashboard and click **"Edit"**. You can change access mode, password, expiration, review copy/watermark settings, and the files attached to the link. Changes take effect immediately.
 
 **Q: What happens when a link expires?**  
 A: Expired links become inaccessible to anyone who tries to open them. The link remains in your Dashboard with an "Expired" status, so you can view its history or adjust its expiration to reactivate it.

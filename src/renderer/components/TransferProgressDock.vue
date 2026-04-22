@@ -149,17 +149,17 @@ const transferDockTourSteps: TourStep[] = [
 	{
 		target: '[data-tour="transfer-dock-tab"]',
 		message: 'This is the Transfers panel.\n\nClick this tab anytime to open or close the panel. The badge shows how many transfers are currently active.',
-		placement: 'left',
+		placement: 'bottom',
 	},
 	{
 		target: '[data-tour="transfer-dock-header"]',
 		message: 'The header shows overall status — active count and idle/in-progress indicator.\n\nUse "Clear finished" to remove completed transfers, or "Close" to collapse the panel.',
-		placement: 'left',
+		placement: 'bottom',
 	},
 	{
 		target: '[data-tour="transfer-dock-body"]',
 		message: 'Each file shows its upload progress with speed, ETA, and a progress bar.\n\nFiles are grouped by destination. You can cancel individual uploads or dismiss entire groups when finished.',
-		placement: 'left',
+		placement: 'bottom',
 	},
 ]
 
@@ -231,7 +231,7 @@ function taskRowLabel(t: any) {
         const jk = String(t?.jobKind || '').toLowerCase()
         if (jk === 'proxy_mp4') {
             const m = String(t?.detail || '').match(/\(([^)]+)\)/)
-            return m ? `Proxy (${m[1]})` : 'Proxy'
+            return m ? `Review Copy (${m[1]})` : 'Review Copy'
         }
         if (jk === 'hls') return 'Stream'
         return 'Transcode'
@@ -619,18 +619,18 @@ progress {
     overflow: hidden;
 }
 
-/* In-progress: static blue */
+/* In-progress: use primary theme color */
 progress.progress-active {
-    background: rgba(59, 130, 246, 0.18);
+    background: rgba(128, 128, 128, 0.2);
 }
 
 progress.progress-active::-webkit-progress-bar {
-    background: rgba(59, 130, 246, 0.18);
+    background: rgba(128, 128, 128, 0.2);
     border-radius: 999px;
 }
 
 progress.progress-active::-webkit-progress-value {
-    background: #3b82f6;
+    background: var(--btn-primary-fill);
     border-radius: 999px;
 }
 

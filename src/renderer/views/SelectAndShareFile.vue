@@ -345,112 +345,59 @@
                                             </div>
                                         </div>
                                  
-                                        <!-- Share Raw File -->
-                                        <div v-if="hasVideoSelected || tourSpoofing" data-tour="share-original-toggle" class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <div class="ss-toned-panel rounded-md px-3 py-2.5">
-                                                <div class="flex flex-wrap items-center gap-2 min-w-0">
-                                                    <label class="font-semibold sm:whitespace-nowrap" for="share-original-switch">
-                                                        Share Raw File:
-                                                    </label>
-                                                    <Switch id="share-original-switch" v-model="shareOriginalQuality"
-                                                        :class="[
-                                                            shareOriginalQuality ? 'bg-secondary' : 'bg-well',
-                                                            'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                        ]">
-                                                        <span class="sr-only">Share raw file without transcoding</span>
-                                                        <span aria-hidden="true" :class="[
-                                                            shareOriginalQuality ? 'translate-x-5' : 'translate-x-0',
-                                                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                        ]" />
-                                                    </Switch>
-                                                    <span class="text-sm truncate min-w-0 flex-1">
-                                                        {{ shareOriginalQuality ? 'Serves the raw file as-is — full resolution, color accuracy, and audio fidelity preserved' : 'Transcoded to HLS for adaptive streaming — optimized for smooth playback over any connection' }}
-                                                    </span>
-                                                </div>
-                                                <p v-if="shareOriginalQuality" class="text-xs text-amber-700 dark:text-amber-300 mt-1.5 px-1">
-                                                    Raw files are served without transcoding. Large or high-bitrate files (e.g. 4K ProRes, RAW) may buffer or stall on slower connections. Some formats (MKV, AVI, HEVC) may not play in-browser — recipients will be prompted to download instead.
-                                                </p>
-                                            </div>
-                                        </div>
-
                                         <!-- Advanced Video Options -->
-                                        <div v-if="(hasVideoSelected && !shareOriginalQuality) || tourSpoofing" data-tour="share-advanced-video" class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <Disclosure v-slot="{ open }" as="div" :defaultOpen="transcodeProxy || watermarkEnabled || tourSpoofing"
+                                        <div v-if="hasVideoSelected || tourSpoofing" data-tour="share-advanced-video" class="border-t border-default mt-2 pt-2 min-w-0">
+                                            <Disclosure v-slot="{ open }" as="div" :defaultOpen="true"
                                                 class="ss-toned-panel min-w-0">
                                                 <DisclosureButton
                                                     class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left min-w-0 rounded-md">
                                                     <div class="min-w-0">
-                                                        <p class="font-semibold">Advanced video options</p>
+                                                        <p class="font-semibold">Video options</p>
                                                         <p class="text-xs text-muted truncate">
-                                                            {{ transcodeProxy || watermarkEnabled ? 'Proxy/watermark options enabled' : 'Configure proxy qualities and watermarking' }}
+                                                            <span v-if="usingExistingProxy">Existing review copies will be used for streaming.</span>
+                                                            <span v-else>Review copies will be generated for streaming.</span>
+                                                            <span v-if="watermarkEnabled"> · Watermark enabled.</span>
                                                         </p>
                                                     </div>
                                                     <ChevronDownIcon class="h-5 w-5 text-muted transition-transform duration-200"
                                                         :class="open ? 'rotate-180' : ''" />
                                                 </DisclosureButton>
                                                 <DisclosurePanel class="border-t border-default px-3 py-2.5 min-w-0 rounded-b-md">
-                                                    <div class="grid grid-cols-3 gap-2.5 items-start">
+                                                    <div class="grid grid-cols-3 gap-4 items-start">
+                                                        <!-- Review Copies -->
                                                         <div class="rounded-md p-2.5 min-w-0">
-                                                            <div class="flex flex-wrap items-center gap-2 min-w-0">
-                                                                <label class="font-semibold sm:whitespace-nowrap" for="transcode-switch">
-                                                                    Use Proxy Files:
-                                                                </label>
-                                                                <Switch id="transcode-switch" v-model="transcodeProxy"
-                                                                    :disabled="transcodeSwitchDisabled"
-                                                                    :title="transcodeSwitchTitle" :class="[
-                                                                        transcodeProxy ? 'bg-secondary' : 'bg-well',
-                                                                        transcodeSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
-                                                                        'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                                    ]">
-                                                                    <span class="sr-only">Toggle proxy file generation</span>
-                                                                    <span aria-hidden="true" :class="[
-                                                                        transcodeProxy ? 'translate-x-5' : 'translate-x-0',
-                                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                                    ]" />
-                                                                </Switch>
-                                                                <span class="text-sm truncate min-w-0 flex-1" :title="transcodeSwitchTitle">
-                                                                    <template v-if="!canTranscodeSelected">(Only for Videos)</template>
-                                                                    <template v-else>
-                                                                        {{ transcodeProxy ? (usingExistingProxy ? 'Use existing proxy files' : 'Generate and use proxy files') : 'Share original files with streaming' }}
-                                                                    </template>
-                                                                </span>
-                                                            </div>
+                                                            <label class="font-semibold block mb-2">Review Copies</label>
+
                                                             <div v-if="canTranscodeSelected && preflightProxyBlocked"
-                                                                class="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
                                                                 {{ proxyBlockReason }}
                                                             </div>
 
-                                                            <div class="mt-2" :class="!transcodeProxy ? 'opacity-60' : ''">
-                                                                <label class="font-semibold block mb-2">Proxy Qualities</label>
-                                                                <div class="flex flex-wrap gap-x-3 gap-y-2">
-                                                                    <label class="inline-flex items-center gap-2 text-sm">
-                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="720p"
-                                                                            v-model="proxyQualities"
-                                                                            :disabled="!transcodeProxy" />
-                                                                        <span>720p</span>
-                                                                    </label>
-                                                                    <label class="inline-flex items-center gap-2 text-sm">
-                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="1080p"
-                                                                            v-model="proxyQualities"
-                                                                            :disabled="!transcodeProxy" />
-                                                                        <span>1080p</span>
-                                                                    </label>
-                                                                    <label class="inline-flex items-center gap-2 text-sm">
-                                                                        <input type="checkbox" class="proxy-quality-checkbox" value="original"
-                                                                            v-model="proxyQualities"
-                                                                            :disabled="!transcodeProxy" />
-                                                                        <span>Full Res</span>
-                                                                    </label>
-                                                                </div>
-                                                                <div class="text-xs text-slate-400 mt-2">
-                                                                    Proxy versions for streaming. Use 'Share Raw File' above
-                                                                    to serve the original untranscoded file instead.
-                                                                </div>
+                                                            <div class="flex flex-wrap gap-x-3 gap-y-2">
+                                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="720p"
+                                                                        v-model="proxyQualities" />
+                                                                    <span>720p</span>
+                                                                </label>
+                                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="1080p"
+                                                                        v-model="proxyQualities" />
+                                                                    <span>1080p</span>
+                                                                </label>
+                                                                <label class="inline-flex items-center gap-2 text-sm">
+                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="original"
+                                                                        v-model="proxyQualities" />
+                                                                    <span>Full Res</span>
+                                                                </label>
+                                                            </div>
+                                                            <div class="text-xs text-slate-400 mt-2">
+                                                                Streamable copies for review. The original file is always preserved.
                                                             </div>
                                                         </div>
 
-                                                        <div class="rounded-md p-2.5 min-w-0">
-                                                            <div v-if="hasVideoSelected && transcodeProxy"
+                                                        <!-- Watermark Videos -->
+                                                        <div class="col-span-2 rounded-md p-2.5 min-w-0">
+                                                            <div v-if="hasVideoSelected"
                                                                 class="flex flex-wrap items-center gap-2 mb-2">
                                                                 <label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
                                                                 <Switch v-model="watermarkEnabled"
@@ -471,10 +418,10 @@
                                                                 </span>
                                                             </div>
                                                             <div v-else class="text-sm text-muted">
-                                                                Enable proxy files and select a video to use watermark options.
+                                                                Select a video to use watermark options.
                                                             </div>
 
-                                                            <div v-if="hasVideoSelected && transcodeProxy && preflightWatermarkBlocked"
+                                                            <div v-if="hasVideoSelected && preflightWatermarkBlocked"
                                                                 class="text-xs text-amber-700 dark:text-amber-300 mb-2">
                                                                 {{ watermarkBlockReason }}
                                                             </div>
@@ -504,14 +451,12 @@
                                                                 class="text-xs text-amber-700 dark:text-amber-300 mb-2">
                                                                 Select a watermark image to continue.
                                                             </div>
-                                                            
-                                                        </div>
-                                                        <div class="rounded-md p-2.5 min-w-0">
+
+                                                            <!-- Watermark preview -->
                                                             <div v-if="hasVideoSelected && watermarkEnabled && effectiveWatermarkPreviewUrl"
-                                                                class="mt-1">
+                                                                class="mt-2">
                                                                 <div class="flex items-center justify-between gap-2 mb-1">
-                                                                    <div class="text-xs text-slate-400">Preview
-                                                                        (approximate)</div>
+                                                                    <div class="text-xs text-slate-400">Preview (approximate)</div>
                                                                     <button v-if="watermarkFile"
                                                                         class="btn btn-danger"
                                                                         @click="clearWatermark">
@@ -665,14 +610,8 @@ const shareFilesTourSteps: TourStep[] = [
 		message: 'Control who can access the link.\n\n• "Anyone with the link" — no sign-in needed.\n• "Anyone + password" — one shared password for all visitors.\n• "Only invited users" — each user signs in with their own account. Roles control download and comment permissions.',
 	},
 	{
-		target: '[data-tour="share-original-toggle"]',
-		message: 'This section appears when you select video files.\n\nEnable "Share Raw File" to serve the original untranscoded file — preserving full resolution, color accuracy, and audio fidelity. Note: large or high-bitrate files may buffer on slower connections, and some formats may not play in-browser.\n\nDisable it to transcode to HLS for adaptive streaming — optimized for smooth playback over any connection (near-lossless quality at the original resolution).',
-		beforeShow: () => { tourSpoofing.value = true },
-		cleanup: () => { tourSpoofing.value = false },
-	},
-	{
 		target: '[data-tour="share-advanced-video"]',
-		message: 'When "Share Raw File" is off and video files are selected, these advanced options appear.\n\n• Proxy Files — generate 720p, 1080p, or full-res proxy versions for HLS streaming.\n• Watermark — overlay a logo or image on proxy videos to brand or protect your content.\n\nExpand this section to fine-tune proxy qualities and watermark settings.',
+		message: 'When video files are selected, these advanced options appear.\n\n• Review Copies — generate 720p, 1080p, or full-res streamable copies for review.\n• Watermark — overlay a logo or image on review copies to brand or protect your content.\n\nExpand this section to fine-tune quality and watermark settings.',
 		beforeShow: () => { tourSpoofing.value = true },
 		cleanup: () => { tourSpoofing.value = false },
 	},
@@ -746,7 +685,7 @@ function resetAll() {
     error.value = null
     autoRegenerate.value = false
     transcodeProxy.value = false
-    proxyQualities.value = []
+    proxyQualities.value = ['original']
     watermarkEnabled.value = false
     watermarkFile.value = null
     overwriteExisting.value = false
@@ -841,11 +780,11 @@ async function loadLinkDefaults() {
         defaultAllowOpenComments.value =
             typeof s?.defaultAllowComments === 'boolean' ? s.defaultAllowComments : true;
         defaultUseProxyFiles.value =
-            typeof s?.defaultUseProxyFiles === 'boolean' ? s.defaultUseProxyFiles : false;
+            typeof s?.defaultUseProxyFiles === 'boolean' ? s.defaultUseProxyFiles : true;
 
         accessMode.value = defaultAccessMode.value;
         allowOpenComments.value = defaultAllowOpenComments.value;
-        transcodeProxy.value = defaultUseProxyFiles.value;
+        transcodeProxy.value = true;
     } catch {
         // Keep current default if settings can't be loaded
         defaultUsePublicBase.value = true;
@@ -855,7 +794,7 @@ async function loadLinkDefaults() {
         defaultUseProxyFiles.value = false;
         accessMode.value = defaultAccessMode.value;
         allowOpenComments.value = defaultAllowOpenComments.value;
-        transcodeProxy.value = defaultUseProxyFiles.value;
+        transcodeProxy.value = true;
     }
 }
 
@@ -937,7 +876,14 @@ const canTranscodeSelected = computed(() =>
 
 // const canTranscodeSelected = true;
 watch(canTranscodeSelected, (ok) => {
-    if (!ok) transcodeProxy.value = false
+    if (!ok) {
+        transcodeProxy.value = false
+    } else {
+        transcodeProxy.value = true
+        if (!proxyQualities.value.includes('original')) {
+            proxyQualities.value = ['original']
+        }
+    }
 })
 
 watch(showEntireTree, (v) => {
@@ -1026,8 +972,8 @@ const viewUrl = ref('')
 const downloadUrl = ref('')
 
 const transcodeProxy = ref(false)
-const shareOriginalQuality = ref(false)
-const proxyQualities = ref<string[]>([])
+
+const proxyQualities = ref<string[]>(['original'])
 const watermarkEnabled = ref(false)
 type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null }
 const watermarkFile = ref<LocalFile | null>(null)
@@ -1066,7 +1012,7 @@ const proxyBlockReason = computed(() => {
     if (preflightTranscodeInProgressCount.value > 0) {
         return `A transcode is already in progress for ${preflightTranscodeInProgressCount.value} selected video(s). You can decide to overwrite or keep existing outputs when generating the link.`
     }
-    return 'Proxy generation needs attention for this selection.'
+    return 'Review copy generation needs attention for this selection.'
 })
 
 const watermarkBlockReason = computed(() => {
@@ -1188,7 +1134,7 @@ async function runPreflight() {
             const msgParts: string[] = []
             if (preflightTranscodeInProgressCount.value > 0) {
                 msgParts.push(`Transcode already in progress for ${preflightTranscodeInProgressCount.value} selected video(s).`)
-                msgParts.push('You can keep configuring proxy/watermark options and choose overwrite vs keep existing when generating the link.')
+                msgParts.push('You can keep configuring review copy/watermark options and choose overwrite vs keep existing when generating the link.')
             }
             const message = msgParts.length
                 ? msgParts.join(' ')
@@ -1208,7 +1154,7 @@ async function runPreflight() {
 
 watch(transcodeProxy, (v) => {
     if (v && proxyQualities.value.length === 0) {
-        proxyQualities.value = ['720p']
+        proxyQualities.value = ['original']
     }
     if (!v) {
         proxyQualities.value = []
@@ -1218,18 +1164,18 @@ watch(transcodeProxy, (v) => {
     }
 })
 
-watch(shareOriginalQuality, (v) => {
-    if (v) {
-        transcodeProxy.value = false
-        watermarkEnabled.value = false
-    }
-})
+
 
 watch(files, () => {
     if (!hasVideoSelected.value) {
         transcodeProxy.value = false
         watermarkEnabled.value = false
         watermarkFile.value = null
+    } else {
+        transcodeProxy.value = true
+        if (!proxyQualities.value.includes('original')) {
+            proxyQualities.value = ['original']
+        }
     }
 }, { deep: true })
 
@@ -1490,15 +1436,15 @@ const canGenerate = computed(() =>
     expiresValue.value >= 0 && // 0 = never, >=1 = normal
     (!protectWithPassword.value || !!password.value) &&
     accessSatisfied.value &&
-    (!transcodeProxy.value || proxyQualities.value.length > 0) &&
+    (!hasVideoSelected.value || proxyQualities.value.length > 0) &&
     (!watermarkEnabled.value || !!watermarkFile.value || !!selectedExistingWatermark.value || usingExistingWatermark.value) &&
     !hasActiveUploadForSelection.value
 );
 
 function hasRequestedExistingOutputs() {
     if (!hasVideoSelected.value) return false
-    if ((transcodeProxy.value || watermarkEnabled.value) && preflightTranscodeInProgressCount.value > 0) return true
-    if (transcodeProxy.value && preflightProxyExistingCount.value > 0) return true
+    if (watermarkEnabled.value && preflightTranscodeInProgressCount.value > 0) return true
+    if (preflightProxyExistingCount.value > 0) return true
     if (watermarkEnabled.value && preflightWatermarkExistingCount.value > 0) return true
     return false
 }
@@ -1767,13 +1713,10 @@ async function generateLink() {
         })
     }
 
-    body.generateReviewProxy = !!transcodeProxy.value
-    body.hls = hasVideoSelected.value && !shareOriginalQuality.value
-    if (shareOriginalQuality.value) {
-        body.shareOriginalQuality = true
-    }
-    if (transcodeProxy.value) {
-        body.proxyQualities = proxyQualities.value.slice()
+    body.generateReviewProxy = hasVideoSelected.value
+    body.hls = hasVideoSelected.value
+    if (hasVideoSelected.value) {
+        body.proxyQualities = proxyQualities.value.length > 0 ? proxyQualities.value.slice() : ['original']
     }
     if (forceOverwrite || overwriteExisting.value) {
         body.overwrite = true
@@ -1886,7 +1829,7 @@ async function generateLink() {
         // Only apply overwrite for the retry; reset for subsequent requests
         overwriteExisting.value = false
 
-        const wantsHls = hasVideoSelected.value && !shareOriginalQuality.value
+        const wantsHls = hasVideoSelected.value
         if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
             const jobInfo = extractJobInfoByVersion(data)
@@ -1907,7 +1850,7 @@ async function generateLink() {
             const transcodeDetail = (kind: 'hls' | 'proxy_mp4', assetVersionId: number) => {
                 const queuedSet = kind === 'hls' ? hlsQueuedSet : proxyQueuedSet
                 const activeSet = kind === 'hls' ? hlsActiveSet : proxyActiveSet
-                const kindLabel = kind === 'hls' ? 'HLS' : 'proxy'
+                const kindLabel = kind === 'hls' ? 'HLS' : 'review copy'
                 if (activeSet.has(assetVersionId)) return `Tracking ${kindLabel} (already running)`
                 if (queuedSet.has(assetVersionId)) return `Tracking ${kindLabel} (queued now)`
                 return `Tracking ${kindLabel}`

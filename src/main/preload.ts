@@ -1,5 +1,5 @@
 // preload.ts
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron'
 
 const genId = () => Math.random().toString(36).slice(2)
 
@@ -89,6 +89,9 @@ export type ElectronApi = {
   /** Subscribe to progress for an already-running detached rsync */
   listenUploadProgress: (id: string, onProgress: (p: RsyncProgress) => void) => () => void
 
+  /** Get the real filesystem path for a File from drag-and-drop */
+  getPathForFile: (file: File) => string
+
   /** Persist queued upload items so they survive app restart */
   persistUploadQueue: (items: Array<{
     src: string
@@ -169,6 +172,8 @@ const api: ElectronApi = {
     ipcRenderer.on(ch, handler)
     return () => ipcRenderer.removeListener(ch, handler)
   },
+
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }
 
 contextBridge.exposeInMainWorld('electron', api)

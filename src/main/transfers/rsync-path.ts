@@ -111,8 +111,8 @@ export function buildRsyncCmdAndArgs(o: RsyncStartOpts): { cmd: string; args: st
     supportsP2 ? '--info=progress2' : '--progress',
   ];
   const hasRsyncPathArg = Array.isArray(o.extraArgs) && o.extraArgs.some((a) => String(a || '').startsWith('--rsync-path='));
-  if (!hasRsyncPathArg && shouldEnsureWatermarkDir(o.destDir)) {
-    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/.45flow/watermarks';
+  if (!hasRsyncPathArg) {
+    const destForMkdir = String(o.destDir || '').replace(/\\/g, '/').replace(/\/+$/, '') || '/';
     baseArgs.push(`--rsync-path=mkdir -p ${shellQuoteForRemoteSh(destForMkdir)} && rsync`);
   }
   if (o.bwlimitKb && o.bwlimitKb > 0) baseArgs.push(`--bwlimit=${o.bwlimitKb}`);

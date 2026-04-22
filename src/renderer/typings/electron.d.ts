@@ -167,6 +167,9 @@ export interface ElectronApi {
   ) => Promise<{ id: string; done: Promise<RsyncResult> }>
 
   rsyncCancel: (id: string) => void
+
+  /** Get the real filesystem path for a File from drag-and-drop (replaces deprecated File.path) */
+  getPathForFile: (file: File) => string
 }
 
 declare global {

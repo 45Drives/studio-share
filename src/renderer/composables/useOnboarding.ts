@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 export type OnboardingFlag =
   | 'connectTourDone'
   | 'dashboardTourDone'
+  | 'quickShareTourDone'
   | 'shareFilesTourDone'
   | 'localUploadTourDone'
   | 'uploadLinkTourDone'
@@ -17,6 +18,7 @@ export type OnboardingFlag =
 const DEFAULTS: Record<OnboardingFlag, boolean> = {
   connectTourDone: false,
   dashboardTourDone: false,
+  quickShareTourDone: false,
   shareFilesTourDone: false,
   localUploadTourDone: false,
   uploadLinkTourDone: false,

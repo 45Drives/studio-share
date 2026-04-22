@@ -177,7 +177,9 @@ function onFolderToggle(path: string) {
 
 function onFolderClick(ent: Entry) {
     if (modeIsUpload.value) {
-        selectFolderOnly(ent)
+        // Single click navigates into folder AND selects it as destination
+        setSelectedFolder(ent.path)
+        openFolder(ent)
     } else {
         openFolder(ent)
     }

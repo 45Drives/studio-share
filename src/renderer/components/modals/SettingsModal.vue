@@ -177,12 +177,12 @@
                                         ]" />
                                     </Switch>
                                 </SettingRow>
-                                <SettingRow label="Generate proxy files by default" description="Transcode video files to proxy quality when sharing.">
+                                <SettingRow label="Generate review copies by default" description="Create streamable review copies of video files when sharing.">
                                     <Switch v-model="defaultUseProxyFiles" :disabled="busy" :class="[
                                         defaultUseProxyFiles ? 'bg-primary' : 'bg-well',
                                         'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
                                     ]">
-                                        <span class="sr-only">Toggle proxy files</span>
+                                        <span class="sr-only">Toggle review copies</span>
                                         <span :class="[
                                             defaultUseProxyFiles ? 'translate-x-4' : 'translate-x-0',
                                             'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
@@ -195,8 +195,29 @@
                             </p>
                         </template>
 
-                        <!-- ═══ Application ═══════════════════════════════════ -->
+                        <!-- ═══ Application / Preferences ═════════════════════ -->
                         <template v-if="activeSection === 'app'">
+                            <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Display</p>
+                            <div class="divide-y divide-default">
+                                <SettingRow label="Time format" description="How timestamps are displayed throughout the app.">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-sm" :class="!hour12 ? 'font-semibold' : 'opacity-60'">24-hour</span>
+                                        <Switch v-model="hour12" :class="[
+                                            hour12 ? 'bg-primary' : 'bg-well',
+                                            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                        ]">
+                                            <span class="sr-only">Toggle time format</span>
+                                            <span :class="[
+                                                hour12 ? 'translate-x-4' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                            ]" />
+                                        </Switch>
+                                        <span class="text-sm" :class="hour12 ? 'font-semibold' : 'opacity-60'">12-hour</span>
+                                    </div>
+                                </SettingRow>
+                            </div>
+
+                            <p class="text-xs font-semibold text-muted uppercase tracking-wide mt-5 mb-2">Guided Tours</p>
                             <div class="divide-y divide-default">
                                 <SettingRow label="Re-enable guided tours" description="Reset onboarding walkthroughs so they show again on each page.">
                                     <button
@@ -383,6 +404,7 @@ import { useApi } from "../../composables/useApi";
 import { pushNotification, Notification } from '@45drives/houston-common-ui';
 import PathInput from "../PathInput.vue";
 import { useOnboarding } from "../../composables/useOnboarding";
+import { useTimeFormat } from "../../composables/useTimeFormat";
 import { useTourManager, type TourStep } from "../../composables/useTourManager";
 
 const emit = defineEmits<{
@@ -404,6 +426,7 @@ const emit = defineEmits<{
 
 const { apiFetch } = useApi();
 const { onboarding, resetAll: resetOnboarding, markDone } = useOnboarding();
+const { hour12 } = useTimeFormat();
 const { requestTour } = useTourManager();
 
 const settingsTourSteps: TourStep[] = [
@@ -413,7 +436,7 @@ const settingsTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="settings-modal-nav"]',
-		message: 'Use the sidebar to navigate between sections.\n\n• URLs & Access — configure external/internal share URLs.\n• Project Root — set the default directory root.\n• Link Options — default access, comments, and proxy settings.\n• Guided Tours — reset onboarding walkthroughs.\n• Maintenance — clean up orphaned files and metadata.',
+		message: 'Use the sidebar to navigate between sections.\n\n• URLs & Access — configure external/internal share URLs.\n• Project Root — set the default directory root.\n• Link Options — default access, comments, and review copy settings.\n• Preferences — time format and guided tour settings.\n• Maintenance — clean up orphaned files and metadata.',
 	},
 	{
 		target: '[data-tour="settings-modal-urls"]',
@@ -443,7 +466,7 @@ const navGroups = [
     {
         label: 'Application',
         items: [
-            { key: 'app' as Section, label: 'Guided Tours' },
+            { key: 'app' as Section, label: 'Preferences' },
             { key: 'maintenance' as Section, label: 'Maintenance' },
         ],
     },

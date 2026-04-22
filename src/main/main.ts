@@ -2006,9 +2006,11 @@ app.whenReady().then(() => {
   ipcMain.handle("is-dev", async () => process.env.NODE_ENV === 'development');
 
   ipcMain.handle('dialog:openFolder', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'], // Opens folder selection dialog
-    });
+    const parent = (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : undefined;
+    const result = await (parent
+      ? dialog.showOpenDialog(parent, { properties: ['openDirectory'] })
+      : dialog.showOpenDialog({ properties: ['openDirectory'] })
+    );
 
     return result.canceled ? null : result.filePaths[0]; // Return full folder path
   });
@@ -2034,9 +2036,11 @@ app.whenReady().then(() => {
 ipcMain.handle('dialog:pickFiles', async () => {
   jl('debug', 'dialog.pickFiles.open');
 
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections'],
-  });
+  const parent = (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : undefined;
+  const { canceled, filePaths } = await (parent
+    ? dialog.showOpenDialog(parent, { properties: ['openFile', 'multiSelections'] })
+    : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+  );
   if (canceled) return [];
 
   const allowed: { path: string; name: string; size: number }[] = [];
@@ -2076,12 +2080,17 @@ ipcMain.handle('dialog:pickFiles', async () => {
 ipcMain.handle('dialog:pickWatermark', async () => {
   jl('debug', 'dialog.pickWatermark.open');
 
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ['openFile'],
+  const parent = (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : undefined;
+  const opts = {
+    properties: ['openFile' as const],
     filters: [
       { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
     ],
-  });
+  };
+  const { canceled, filePaths } = await (parent
+    ? dialog.showOpenDialog(parent, opts)
+    : dialog.showOpenDialog(opts)
+  );
   if (canceled || !filePaths.length) return null;
 
   const p = filePaths[0];
@@ -2113,9 +2122,11 @@ ipcMain.handle('dialog:pickWatermark', async () => {
 });
 
 ipcMain.handle('dialog:pickFolder', async () => {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ['openDirectory'],
-  });
+  const parent = (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : undefined;
+  const { canceled, filePaths } = await (parent
+    ? dialog.showOpenDialog(parent, { properties: ['openDirectory'] })
+    : dialog.showOpenDialog({ properties: ['openDirectory'] })
+  );
   if (canceled || !filePaths.length) return [];
 
   const dir = filePaths[0];

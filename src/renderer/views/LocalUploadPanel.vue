@@ -221,58 +221,37 @@
 
 							<div v-if="hasVideoSelected" data-tour="upload-advanced-video" class="advanced-video-card ss-toned-panel">
 								<div class="advanced-video-header">
-									<p class="font-semibold">Advanced video options</p>
+									<p class="font-semibold">Video options</p>
 									<p class="text-xs text-muted">
-										{{ transcodeProxyAfterUpload || watermarkAfterUpload ? 'Proxy/watermark options enabled' : 'Configure proxy qualities and watermarking' }}
+										Review copies will be generated for streaming after upload.
+										<span v-if="watermarkAfterUpload"> · Watermark enabled.</span>
 									</p>
 								</div>
 
 								<div class="advanced-video-grid">
 									<div class="advanced-col">
-										<div class="flex flex-wrap items-center gap-2">
-											<label class="font-semibold whitespace-nowrap">Use Proxy Files:</label>
-											<Switch v-model="transcodeProxyAfterUpload" :class="[
-												transcodeProxyAfterUpload ? 'bg-secondary' : 'bg-well',
-												'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-											]">
-												<span class="sr-only">Toggle proxy file generation</span>
-												<span aria-hidden="true" :class="[
-													transcodeProxyAfterUpload ? 'translate-x-5' : 'translate-x-0',
-													'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-												]" />
-											</Switch>
-											<span class="text-sm text-muted">
-												{{ transcodeProxyAfterUpload ? 'Generate and use proxy files' : 'Upload original files with streaming' }}
-											</span>
+										<label class="font-semibold block mb-1">Review Copies</label>
+										<div class="flex flex-wrap gap-x-3 gap-y-2">
+											<label class="inline-flex items-center gap-2 text-sm">
+												<input type="checkbox" class="proxy-quality-checkbox" value="720p" v-model="proxyQualities" />
+												<span>720p</span>
+											</label>
+											<label class="inline-flex items-center gap-2 text-sm">
+												<input type="checkbox" class="proxy-quality-checkbox" value="1080p" v-model="proxyQualities" />
+												<span>1080p</span>
+											</label>
+											<label class="inline-flex items-center gap-2 text-sm">
+												<input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities" />
+												<span>Full Res</span>
+											</label>
 										</div>
-
-										<div class="mt-2" :class="!transcodeProxyAfterUpload ? 'opacity-60' : ''">
-											<label class="font-semibold block mb-1">Proxy Qualities</label>
-											<div class="flex flex-wrap gap-x-3 gap-y-2">
-												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="proxy-quality-checkbox" value="720p" v-model="proxyQualities"
-														:disabled="!transcodeProxyAfterUpload" />
-													<span>720p</span>
-												</label>
-												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="proxy-quality-checkbox" value="1080p" v-model="proxyQualities"
-														:disabled="!transcodeProxyAfterUpload" />
-													<span>1080p</span>
-												</label>
-												<label class="inline-flex items-center gap-2 text-sm">
-													<input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities"
-														:disabled="!transcodeProxyAfterUpload" />
-													<span>Full Res</span>
-												</label>
-											</div>
-											<div class="text-xs text-slate-400 mt-2">
-												Proxy versions for streaming. The raw file is always preserved.
-											</div>
+										<div class="text-xs text-slate-400 mt-2">
+											Streamable copies for review. The original file is always preserved.
 										</div>
 									</div>
 
-									<div class="advanced-col">
-										<div v-if="transcodeProxyAfterUpload" class="space-y-2">
+									<div class="advanced-col col-span-2">
+										<div class="space-y-2">
 											<div class="flex flex-wrap items-center gap-2">
 												<label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
 												<Switch v-model="watermarkAfterUpload" :class="[
@@ -308,26 +287,19 @@
 											<div v-if="watermarkAfterUpload && !watermarkFile && !selectedExistingWatermark" class="watermark-warning">
 												Select a watermark image to continue.
 											</div>
-										</div>
-										<div v-else class="text-sm text-muted">
-											Enable proxy files to use watermark options.
-										</div>
-									</div>
 
-									<div class="advanced-col">
-										<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl" class="space-y-2">
-											<div class="flex items-center justify-between gap-2">
-												<div class="text-xs text-slate-400">Preview (approximate)</div>
-												<button v-if="watermarkFile" class="btn btn-danger" @click="clearWatermark">Clear Image</button>
+											<!-- Watermark preview -->
+											<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl" class="mt-2">
+												<div class="flex items-center justify-between gap-2 mb-1">
+													<div class="text-xs text-slate-400">Preview (approximate)</div>
+													<button v-if="watermarkFile" class="btn btn-danger" @click="clearWatermark">Clear Image</button>
+												</div>
+												<div class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
+													<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
+													<img :src="watermarkFile.dataUrl" alt="Watermark preview"
+														class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
+												</div>
 											</div>
-											<div class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
-												<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
-												<img :src="watermarkFile.dataUrl" alt="Watermark preview"
-													class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
-											</div>
-										</div>
-										<div v-else class="text-xs text-muted">
-											Preview appears after selecting an image.
 										</div>
 									</div>
 								</div>
@@ -411,7 +383,7 @@ const localUploadTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="upload-next-btn"]',
-		message: 'When you\'re ready, click "Start Upload" to begin transferring files to the server.\n\nYou can cancel individual uploads while they\'re in progress. If you selected video files, configure proxy and watermark options above before starting.',
+		message: 'When you\'re ready, click "Start Upload" to begin transferring files to the server.\n\nYou can cancel individual uploads while they\'re in progress. If you selected video files, configure review copy and watermark options above before starting.',
 		placement: 'top',
 	},
 ]
@@ -737,7 +709,7 @@ function waitForIngestAndStartTranscode(opts: {
 					apiFetch,
 					assetVersionIds: [assetVersionId],
 					title: `Transcoding: ${opts.rowName}`,
-					detail: 'Generating proxy…',
+					detail: 'Generating review copy…',
 					intervalMs: 1500,
 					jobKind: 'proxy_mp4',
 					context: {
@@ -753,7 +725,7 @@ function waitForIngestAndStartTranscode(opts: {
 					apiFetch,
 					fileIds: [fileId],
 					title: `Transcoding: ${opts.rowName}`,
-					detail: 'Generating proxy…',
+					detail: 'Generating review copy…',
 					intervalMs: 1500,
 					jobKind: 'proxy_mp4',
 					context: {
@@ -806,7 +778,7 @@ function waitForIngestAndStartTranscode(opts: {
 							pushNotification(
 								new Notification(
 									'Overwrite Canceled',
-									'Existing proxy outputs were kept.',
+									'Existing review copy outputs were kept.',
 									'info',
 									6000
 								)
@@ -895,6 +867,11 @@ watch(selected, () => {
 		transcodeProxyAfterUpload.value = false
 		watermarkAfterUpload.value = false
 		watermarkFile.value = null
+	} else {
+		transcodeProxyAfterUpload.value = true
+		if (!proxyQualities.value.includes('original')) {
+			proxyQualities.value = ['original']
+		}
 	}
 }, { deep: true })
 
@@ -957,8 +934,8 @@ function hasAlreadyUploaded(path: string, dest: string) {
 }
 
 /** ── Step 3: upload & progress ─────────────────────────── */
-const transcodeProxyAfterUpload = ref(false)
-const proxyQualities = ref<string[]>([])
+const transcodeProxyAfterUpload = ref(true)
+const proxyQualities = ref<string[]>(['original'])
 const watermarkAfterUpload = ref(false)
 const watermarkFile = ref<LocalFile | null>(null)
 const existingWatermarkFiles = ref<string[]>([])
@@ -967,7 +944,7 @@ const adaptiveHls = ref(false);
 
 watch(transcodeProxyAfterUpload, (v) => {
 	if (v && proxyQualities.value.length === 0) {
-		proxyQualities.value = ['720p']
+		proxyQualities.value = ['original']
 	}
 	if (!v) {
 		proxyQualities.value = []

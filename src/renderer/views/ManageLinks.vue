@@ -43,7 +43,6 @@
 					<colgroup>
 						<col class="w-[20%]" /> <!-- Title -->
 						<col class="w-[7%]" /> <!-- Type -->
-						<col class="w-[7%]" /> <!-- Mode -->
 						<col class="w-[17%]" /> <!-- Short Link -->
 						<col class="w-[11%]" /> <!-- Expires -->
 						<col class="w-[6%]" /> <!-- Status -->
@@ -67,7 +66,6 @@
 									<span>{{ sortIndicator('type') }}</span>
 								</span>
 							</th>
-							<th class="text-left p-2 font-semibold border border-default">Mode</th>
 							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
 								@click="setSort('url')">
 								<span class="flex items-center justify-between gap-2 w-full">
@@ -109,7 +107,7 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="loading">
-							<td colspan="9" class="p-0 border border-default">
+							<td colspan="8" class="p-0 border border-default">
 								<div class="w-full min-h-[140px] flex items-center justify-center">
 									<div
 										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
@@ -125,7 +123,7 @@
 						</tr>
 
 						<tr v-else-if="filteredRows.length === 0 && !showingDemoData">
-							<td colspan="9"
+							<td colspan="8"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
@@ -150,15 +148,6 @@
 							<td class="p-2 border border-default align-middle whitespace-nowrap">
 								<span class="bg-default dark:bg-well/75 px-2 py-0.5 rounded-full text-xs font-semibold"
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
-							</td>
-							<!-- Mode -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
-								<span v-if="it.type !== 'upload'"
-									class="px-2 py-0.5 rounded-full text-xs font-semibold"
-									:class="it.shareMode === 'original'
-										? 'bg-emerald-500/15 text-emerald-400'
-										: 'bg-default dark:bg-well/75 text-muted'"
-								>{{ it.shareMode === 'original' ? 'Original' : (it.shareMode || 'Proxy') }}</span>
 							</td>
 							<!-- Link -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
@@ -233,15 +222,6 @@
 									:class="badgeClass(it.type)">{{ typeLabel(it.type) }}</span>
 							</td>
 
-							<!-- Mode -->
-							<td class="p-2 border border-default align-middle whitespace-nowrap">
-								<span v-if="it.type !== 'upload'"
-									class="px-2 py-0.5 rounded-full text-xs font-semibold"
-									:class="it.shareMode === 'original'
-										? 'bg-emerald-500/15 text-emerald-400'
-										: 'bg-default dark:bg-well/75 text-muted'"
-								>{{ it.shareMode === 'original' ? 'Original' : (it.shareMode || 'Proxy') }}</span>
-							</td>
 
 							<!-- Link -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
@@ -342,7 +322,7 @@
 							</td>
 						</tr>
 						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
-							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
+							<td colspan="8" class="p-0 bg-well">&nbsp;</td>
 						</tr>
 					</tbody>
 				</table>
@@ -371,10 +351,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
+import { useLinkRefreshSignal } from '../composables/useLinkRefresh'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
+import { useTimeFormat } from '../composables/useTimeFormat'
 type SortKey = 'title' | 'type' | 'url' | 'expires' | 'status' | 'access' | 'created'
 type SortDir = 'asc' | 'desc'
 
@@ -393,7 +375,7 @@ const DEMO_LINKS: LinkItem[] = [
 		access_mode: 'open',
 		auth_mode: 'none',
 		allow_comments: true,
-		shareMode: 'original',
+		shareMode: 'Review Copy',
 		target: { dirRel: '/projects/rough-cut', files: [{ name: 'rough_cut_v2.mov', size: 2_400_000_000, mime: 'video/quicktime' }] },
 	},
 	{
@@ -421,7 +403,7 @@ const DEMO_LINKS: LinkItem[] = [
 		auth_mode: 'password',
 		passwordRequired: true,
 		allow_comments: true,
-		shareMode: 'proxy',
+		shareMode: 'Review Copy',
 		proxyQualities: ['1080p', '720p'],
 		target: { dirRel: '/projects/season2', files: [{ name: 'ep01_final.mp4' }, { name: 'ep02_final.mp4' }, { name: 'ep03_final.mp4' }] },
 	},
@@ -451,6 +433,7 @@ async function refresh() {
 const showModal = ref(false)
 const expEditor = ref<Record<string | number, { days: number; hours: number; open: boolean }>>({})
 const { formatEpochMs } = useTime();
+const { hour12 } = useTimeFormat();
 
 const headingTitle = computed(() => {
 	let label: string
@@ -491,6 +474,9 @@ const linkSummary = computed(() => {
 })
 
 onMounted(refresh);
+
+const { linkVersion } = useLinkRefreshSignal()
+watch(linkVersion, () => refresh())
 
 /* ----------- fetch/list endpoints ----------- */
 async function listLinks(params: { q?: string; type?: '' | LinkType; status?: '' | Status; limit?: number; offset?: number }) {
@@ -1002,7 +988,9 @@ const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 	const d = toDateUTC(ts);
 	if (!d) return '—';
-	return new Intl.DateTimeFormat(undefined, { timeZone: userTZ, ...opts }).format(d);
+	const merged = { timeZone: userTZ, ...opts };
+	if (opts.timeStyle) merged.hour12 = hour12.value;
+	return new Intl.DateTimeFormat(undefined, merged).format(d);
 }
 
 </script>
