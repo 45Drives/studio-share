@@ -353,6 +353,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import { useLinkRefreshSignal } from '../composables/useLinkRefresh'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { appLog } from '../composables/useLog'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
 import { useTime } from '../composables/useTime'
@@ -611,6 +612,7 @@ function expiresClass(it: LinkItem) {
 async function copy(txt?: string | null) {
 	if (!txt) return
 	await navigator.clipboard.writeText(txt)
+	appLog.info('link.copied')
 	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 
@@ -620,6 +622,7 @@ async function toggleDisable(it: LinkItem) {
 	try {
 		await patchLink(it.id, { isDisabled: disable })
 		it.isDisabled = disable
+		appLog.info('link.toggled', { linkId: it.id, disabled: disable })
 
 		pushNotification(
 			new Notification(

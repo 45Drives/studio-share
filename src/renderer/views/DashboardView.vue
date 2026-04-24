@@ -87,12 +87,12 @@ const dashboardTourSteps: TourStep[] = [
 	// ── Welcome + Quick Share introduction ──────────────────────
 	{
 		target: '[data-tour="flow-logo"]',
-		message: 'Welcome to 45Flow!\n\nTip: You can drag and drop a file anywhere onto the app to open the Quick Share feature — the fastest way to upload and share files.\n\nLet\'s walk through Quick Share first, then explore the rest of the dashboard.',
+		message: 'Welcome to 45Flow!\n\nTip: You can drag and drop files anywhere onto the app to open Quick Share — the fastest way to upload and share files. (Drag-and-drop is disabled while the Local Upload Wizard is open — drop files directly into its file table instead.)\n\nLet\'s walk through Quick Share first, then explore the rest of the dashboard.',
 	},
 	// ── Quick Share Step 1: Modal overview ──
 	{
 		target: '[data-tour="qs-modal"]',
-		message: 'This is the Quick Share screen.\n\nWhen you drop files onto 45Flow, this wizard opens automatically. It walks you through uploading files to the server and generating a share link — all in three quick steps.\n\nThe file list at the top shows what you dropped. Here we\'re using a sample file for the tour.',
+		message: 'This is the Quick Share screen.\n\nWhen you drop files onto 45Flow from most screens, this wizard opens automatically. It walks you through uploading files to the server and generating a share link — all in three quick steps.\n\nThe file list at the top shows what you dropped. Here we\'re using a sample file for the tour.',
 		beforeShow: () => {
 			tourQuickShareStep.value = 1
 			tourQuickShareShowDone.value = false
@@ -200,7 +200,7 @@ const dashboardTourSteps: TourStep[] = [
 	// ── Quick Share Step 3: Upload & Share (done state) ──
 	{
 		target: '[data-tour="qs-step-upload"]',
-		message: 'Step 3 handles the upload and link generation.\n\nYou\'ll see a progress bar while files transfer, then your share link appears with Copy and Open buttons. That\'s it — Quick Share in three steps!',
+		message: 'Step 3 handles the upload and link generation.\n\nYou\'ll see per-file progress bars while files transfer, then your share link appears with Copy and Open buttons. That\'s it — Quick Share in three steps!',
 		beforeShow: () => {
 			tourQuickShareOpen.value = true
 			tourQuickShareStep.value = 3
@@ -221,7 +221,7 @@ const dashboardTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="upload-files"]',
-		message: 'Upload Files Locally lets you transfer files from this computer directly to the server.\n\nA step-by-step wizard walks you through selecting files, choosing a destination folder, and monitoring the upload.',
+		message: 'Upload Files Locally lets you transfer files from this computer directly to the server.\n\nA step-by-step wizard walks you through selecting files (or drag-and-drop them), choosing a destination folder, and monitoring the upload.',
 	},
 	{
 		target: '[data-tour="new-upload-link"]',

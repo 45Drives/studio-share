@@ -1012,6 +1012,20 @@ export function useTransferProgress() {
         context?: TransferContext
         fetchSnapshot: () => Promise<PlaybackProgressSnapshot | null>
     }) {
+        // Dedup: skip if an active transcode task already exists for this file+jobKind
+        const file = opts.context?.file || ''
+        const jobKind = opts.jobKind ?? 'any'
+        if (file) {
+            const alreadyActive = _state.tasks.some(t => {
+                if (t.kind !== 'transcode') return false
+                if (!isActiveTask(t)) return false
+                if (!jobKindMatches(t.jobKind, jobKind)) return false
+                if (taskHasFile(t, file)) return true
+                return false
+            })
+            if (alreadyActive) return null
+        }
+
         const taskId = makeId('trnP')
         const t: TransferTask = {
             taskId,
@@ -1039,7 +1053,8 @@ export function useTransferProgress() {
             const s = String(v || '').toLowerCase()
             if (s === 'done' || s === 'completed' || s === 'success' || s === 'ready') return 'done'
             if (s === 'failed' || s === 'error' || s === 'missing_output') return 'failed'
-            if (s === 'queued' || s === 'pending' || s === 'running' || s === 'processing' || s === 'started') return 'running'
+            if (s === 'queued' || s === 'pending') return 'queued'
+            if (s === 'running' || s === 'processing' || s === 'started') return 'running'
             return 'unknown'
         }
 
@@ -1061,6 +1076,19 @@ export function useTransferProgress() {
                 cur.items = Array.isArray(snap.items) ? (snap.items as any) : cur.items
                 cur.status = normalizePlaybackStatus(snap.status)
                 cur.progress = normalizeProgressPercent(snap.progress)
+
+                // ETA & speed from server snapshot
+                if (cur.status === 'running') {
+                    const serverEta = formatEta((snap as any)?.etaSeconds ?? null)
+                    const elapsedMs = Math.max(0, now() - Number(cur.startedAt || now()))
+                    const localEta = formatEta(estimateEtaFromProgress(cur.progress, elapsedMs))
+                    cur.eta = serverEta || localEta
+                    cur.speed = formatSpeed((snap as any)?.speedX ?? null)
+                } else {
+                    cur.eta = null
+                    cur.speed = null
+                }
+
                 if (cur.status === 'failed') {
                     const snapError = String((snap as any)?.error || '').trim()
                     cur.error = snapError || cur.error || 'transcode failed'
@@ -1272,7 +1300,10 @@ export function useTransferProgress() {
                 const relDir = String(item.relDir || '').trim()
                 const filename = String(item.filename || '').trim()
                 const absPath = String(item.absPath || '').trim()
-                const filePath = absPath || (relDir ? `${relDir}/${filename}` : filename)
+                // Normalize: strip leading '/' so paths match the relative form
+                // used by link responses (e.g. "tank/..." not "/tank/...")
+                const rawPath = absPath || (relDir ? `${relDir}/${filename}` : filename)
+                const filePath = rawPath.startsWith('/') ? rawPath.slice(1) : rawPath
 
                 const jobs: any[] = Array.isArray(item.jobs) ? item.jobs : []
 

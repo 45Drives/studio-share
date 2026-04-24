@@ -57,7 +57,12 @@
 						</div>
 
 							<div class="wizard-table-shell"
-								:class="selected.length ? 'wizard-table-shell--filled' : 'wizard-table-shell--empty'">
+								:class="[selected.length ? 'wizard-table-shell--filled' : 'wizard-table-shell--empty', tableDragOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : '']"
+								@dragenter="onTableDragEnter"
+								@dragover="onTableDragOver"
+								@dragleave="onTableDragLeave"
+								@drop="onTableDrop"
+							>
 							<table class="wizard-table">
 								<thead>
 									<tr class="wizard-thead-row">
@@ -69,7 +74,7 @@
 								<tbody class="bg-accent">
 									<tr v-if="!selected.length">
 										<td colspan="3" class="wizard-td text-center text-muted">
-											No files selected. Click <span class="font-bold">Choose Files</span> (you
+											No files selected. Drag files here, click <span class="font-bold">Choose Files</span> (you
 											can
 											select multiple),
 											or <span class="font-bold">Choose Folder</span> to add its contents.
@@ -202,7 +207,7 @@
 												</td>
 											</tr>
 
-											<tr v-if="u.status === 'uploading'">
+											<tr v-if="u.status === 'uploading' && uploads.length > 1">
 												<td colspan="5" class="px-4 py-2 border border-default">
 													<progress class="w-full h-2 rounded-lg overflow-hidden" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
 													</progress>
@@ -360,7 +365,7 @@ const localUploadTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="upload-step-1"]',
-		message: 'Step 1: Select files or folders from your local machine.\n\nClick "Choose Files" to pick individual files (multi-select supported) or "Choose Folder" to add an entire directory. Selected files appear in the table below.\n\nGo ahead and select some files — when you\'re ready, the tour will continue.',
+		message: 'Step 1: Select files or folders from your local machine.\n\nDrag and drop files directly onto the table, or click "Choose Files" to pick individual files (multi-select supported) or "Choose Folder" to add an entire directory. Selected files appear in the table below.\n\nGo ahead and select some files — when you\'re ready, the tour will continue.',
 	},
 	{
 		target: '[data-tour="upload-next-btn"]',
@@ -378,7 +383,7 @@ const localUploadTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="upload-step-3"]',
-		message: 'Step 3: Review your files and start the upload.\n\nThe table shows every file queued for upload with its name, size, and status. Once uploaded, you\'ll see speed, ETA, and completion time for each file.',
+		message: 'Step 3: Review your files and start the upload.\n\nThe overall progress bar at the top tracks all files. When uploading multiple files, each file also shows its own inline progress bar with speed and ETA.',
 		placement: 'top',
 	},
 	{
@@ -822,6 +827,37 @@ function pickFiles() { window.electron.pickFiles().then(addToSelection) }
 function pickFolder() { window.electron.pickFolder().then(addToSelection) }
 function removeSelected(file: LocalFile) { selected.value = selected.value.filter(f => f.path !== file.path) }
 function clearSelected() { selected.value = [] }
+
+// ── Drag-and-drop onto the file table ──
+const tableDragOver = ref(false)
+let tableDragCounter = 0
+function onTableDragEnter(e: DragEvent) {
+	if (!e.dataTransfer?.types.includes('Files')) return
+	e.preventDefault()
+	tableDragCounter++
+	tableDragOver.value = true
+}
+function onTableDragOver(e: DragEvent) {
+	if (!e.dataTransfer?.types.includes('Files')) return
+	e.preventDefault()
+	if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+}
+function onTableDragLeave() {
+	tableDragCounter--
+	if (tableDragCounter <= 0) { tableDragCounter = 0; tableDragOver.value = false }
+}
+function onTableDrop(e: DragEvent) {
+	e.preventDefault()
+	tableDragOver.value = false
+	tableDragCounter = 0
+	if (!e.dataTransfer?.files?.length) return
+	const files: LocalFile[] = []
+	for (const f of Array.from(e.dataTransfer.files)) {
+		const filePath = window.electron?.getPathForFile?.(f) || (f as any).path || ''
+		if (filePath) files.push({ path: filePath, name: f.name, size: f.size })
+	}
+	if (files.length) addToSelection(files)
+}
 function pickWatermark() {
 	window.electron.pickWatermark().then(f => {
 		if (f) {

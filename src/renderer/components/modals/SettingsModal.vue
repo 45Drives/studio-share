@@ -406,6 +406,7 @@ import PathInput from "../PathInput.vue";
 import { useOnboarding } from "../../composables/useOnboarding";
 import { useTimeFormat } from "../../composables/useTimeFormat";
 import { useTourManager, type TourStep } from "../../composables/useTourManager";
+import { appLog } from "../../composables/useLog";
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -523,6 +524,9 @@ const externalBase = ref<string>("");
 const internalBase = ref<string>("");
 
 const externalHttpsPort = ref<number>(443);
+const savedHttpsPort = ref<number>(443);
+const savedExternalAuto = ref(false);
+const savedExternalBase = ref("");
 
 const defaultRestrictAccess = ref(false);
 const defaultAllowComments = ref(true);
@@ -673,11 +677,13 @@ async function reload() {
         const data = await apiFetch("/api/settings");
 
         externalHttpsPort.value = Number(data.externalHttpsPort ?? 443);
+        savedHttpsPort.value = externalHttpsPort.value;
 
         defaultLinkAccess.value = (data.defaultLinkAccess === "internal" ? "internal" : "external");
 
         const mode: "auto" | "custom" = (data.externalMode === "custom" ? "custom" : "auto");
         externalAuto.value = (mode === "auto");
+        savedExternalAuto.value = externalAuto.value;
 
         // internalBase: null means "auto" on server side; keep the existing UI switch behavior
         internalAuto.value = !data.internalBase;
@@ -688,6 +694,7 @@ async function reload() {
 
         // For UI editing, externalBase is the CUSTOM base (only meaningful when mode=custom)
         externalBase.value = data.externalBaseCustom ?? "";
+        savedExternalBase.value = externalBase.value;
 
         defaultRestrictAccess.value =
             typeof data.defaultRestrictAccess === "boolean" ? data.defaultRestrictAccess : false;
@@ -736,6 +743,68 @@ async function save() {
             body: JSON.stringify(payload),
         });
 
+        appLog.info('settings.saved', { changed: Object.keys(payload) });
+
+        // If the HTTPS port changed, apply to nginx + firewall on the server
+        const portChanged = externalHttpsPort.value !== savedHttpsPort.value;
+        if (portChanged) {
+            try {
+                const applyResult = await apiFetch("/api/settings/apply-port", { method: "POST" });
+                if (applyResult?.changed) {
+                    appLog.info('settings.port_applied', { port: externalHttpsPort.value });
+                    pushNotification(
+                        new Notification(
+                            'Port Reconfigured',
+                            `HTTPS port changed to ${externalHttpsPort.value}. Nginx and firewall updated.`,
+                            'success',
+                            8000
+                        )
+                    );
+                }
+            } catch (applyErr: any) {
+                appLog.error('settings.port_apply_failed', { error: applyErr?.message });
+                pushNotification(
+                    new Notification(
+                        'Port Apply Failed',
+                        `Port saved to settings but failed to reconfigure server: ${applyErr?.message || 'unknown error'}. You may need to re-run bootstrap.`,
+                        'warning',
+                        12000
+                    )
+                );
+            }
+        }
+
+        // If external base URL changed (mode or custom domain), regenerate SSL cert
+        const externalBaseChanged =
+            externalAuto.value !== savedExternalAuto.value ||
+            (!externalAuto.value && (externalBase.value || "").trim() !== savedExternalBase.value);
+        if (externalBaseChanged) {
+            try {
+                const certResult = await apiFetch("/api/settings/apply-cert", { method: "POST" });
+                if (certResult?.ok) {
+                    appLog.info('settings.cert_applied', { changed: certResult.changed, cn: certResult.cn });
+                    pushNotification(
+                        new Notification(
+                            'SSL Certificate Updated',
+                            certResult.message || 'Certificate regenerated with updated SANs.',
+                            'success',
+                            8000
+                        )
+                    );
+                }
+            } catch (certErr: any) {
+                appLog.error('settings.cert_apply_failed', { error: certErr?.message });
+                pushNotification(
+                    new Notification(
+                        'SSL Certificate Update Failed',
+                        `Settings saved but certificate regeneration failed: ${certErr?.message || 'unknown error'}. You may need to re-run bootstrap.`,
+                        'warning',
+                        12000
+                    )
+                );
+            }
+        }
+
         await reload();
 
         saveOk.value = true;
@@ -762,6 +831,7 @@ async function save() {
         });
         emit("close")
     } catch (e: any) {
+        appLog.error('settings.save_failed', { error: e?.message });
         saveError.value = e?.message || "Failed to save settings.";
     } finally {
         busy.value = false;

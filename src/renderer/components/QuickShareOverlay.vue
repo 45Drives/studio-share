@@ -291,9 +291,9 @@
           <div v-for="f in droppedFiles" :key="f.path" class="flex flex-col gap-1">
             <div class="flex items-center justify-between text-sm">
               <span class="truncate min-w-0 flex-1">{{ f.name }}</span>
-              <span class="text-muted ml-2 flex-shrink-0">{{ uploadProgress.toFixed(0) }}%</span>
+              <span class="text-muted ml-2 shrink-0">{{ (perFileProgress[f.path] ?? 0).toFixed(0) }}%</span>
             </div>
-            <progress class="w-full h-2 rounded-lg overflow-hidden" :value="uploadProgress" max="100"></progress>
+            <progress class="w-full h-2 rounded-lg overflow-hidden" :value="perFileProgress[f.path] ?? 0" max="100"></progress>
           </div>
         </div>
 
@@ -347,6 +347,7 @@ import { ArrowUpTrayIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/20/solid'
 import { Switch, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { appLog } from '../composables/useLog'
 import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
 import { useApi } from '../composables/useApi'
 import { useTransferProgress } from '../composables/useTransferProgress'
@@ -373,7 +374,7 @@ const dragging = ref(false)
 let dragCounter = 0
 
 function isConnected() {
-  return !!currentServer.value && route.name !== 'server-selection'
+  return !!currentServer.value && route.name !== 'server-selection' && route.name !== 'upload-file'
 }
 
 // All four drag events live on `document` so the enter/leave counter stays
@@ -494,7 +495,8 @@ const projectBase = ref('')
 const expiresValue = ref(1)
 const expiresUnit = ref<'hours' | 'days' | 'weeks'>('days')
 const linkTitle = ref('')
-const usePublicBase = ref(true)
+const usePublicBase = ref(false)
+const externalHttpsPort = ref(443)
 type AccessMode = 'open' | 'open_password' | 'restricted'
 const accessMode = ref<AccessMode>('open')
 const password = ref('')
@@ -518,7 +520,7 @@ const existingWatermarkPreviewUrl = ref<string | null>(null)
 // Step 3: Progress
 type UploadPhase = 'idle' | 'uploading' | 'generating' | 'done' | 'error'
 const uploadPhase = ref<UploadPhase>('idle')
-const uploadProgress = ref(0)
+const perFileProgress = ref<Record<string, number>>({})
 const viewUrl = ref('')
 const errorMsg = ref('')
 
@@ -569,7 +571,8 @@ function resetWizard() {
   expiresValue.value = 1
   expiresUnit.value = 'days'
   linkTitle.value = ''
-  usePublicBase.value = true
+  linkDefaultsLoaded = false
+  usePublicBase.value = false
   accessMode.value = 'open'
   password.value = ''
   showPassword.value = false
@@ -583,7 +586,7 @@ function resetWizard() {
   existingWatermarkFiles.value = []
   existingWatermarkPreviewUrl.value = null
   uploadPhase.value = 'idle'
-  uploadProgress.value = 0
+  perFileProgress.value = {}
   viewUrl.value = ''
   errorMsg.value = ''
   busy.value = false
@@ -756,15 +759,33 @@ async function uploadWatermarkToProject() {
   return { ok: true, relPath: resolveWatermarkRelPath() }
 }
 
+let linkDefaultsLoaded = false
+
 async function loadLinkDefaults() {
   try {
     const s = await apiFetch('/api/settings', { method: 'GET' })
     const isInternal = s?.defaultLinkAccess === 'internal'
     usePublicBase.value = !isInternal
+    externalHttpsPort.value = Number(s?.externalHttpsPort ?? 443)
   } catch {
-    usePublicBase.value = true
+    usePublicBase.value = false
   }
+  linkDefaultsLoaded = true
 }
+
+watch(usePublicBase, (isExternal) => {
+  if (isExternal && linkDefaultsLoaded) {
+    const port = externalHttpsPort.value || 443
+    pushNotification(
+      new Notification(
+        'Port Forwarding Required',
+        `External sharing requires port forwarding to your configured HTTPS port (${port}). You can change this port in Settings → URLs & Access.`,
+        'info',
+        8000
+      )
+    )
+  }
+})
 
 function formatSize(bytes: number) {
   if (bytes === 0) return '0 B'
@@ -786,7 +807,7 @@ async function startUploadAndShare() {
   busy.value = true
   wizardStep.value = 3
   uploadPhase.value = 'uploading'
-  uploadProgress.value = 0
+  perFileProgress.value = Object.fromEntries(droppedFiles.value.map(f => [f.path, 0]))
 
   const host = ssh.value?.server
   const user = ssh.value?.username
@@ -812,8 +833,7 @@ async function startUploadAndShare() {
       const fileDestAbs = joinPath(destDir, f.name)
       serverPaths.push(fileDestAbs)
 
-      const baseProgress = (i / droppedFiles.value.length) * 100
-      const fileWeight = 100 / droppedFiles.value.length
+      perFileProgress.value[f.path] = 0
 
       const taskId = transfer.createUploadTask({
         title: `Quick share: ${f.name}`,
@@ -845,7 +865,7 @@ async function startUploadAndShare() {
             if (m) pct = parseFloat(m[1])
           }
           const filePct = pct ?? 0
-          uploadProgress.value = baseProgress + (filePct / 100) * fileWeight
+          perFileProgress.value[f.path] = filePct
           transfer.updateUpload(taskId, {
             status: 'uploading',
             progress: filePct,
@@ -861,9 +881,8 @@ async function startUploadAndShare() {
         throw new Error(res?.error || `Upload failed for ${f.name}`)
       }
       transfer.finishUpload(taskId, true)
+      perFileProgress.value[f.path] = 100
     }
-
-    uploadProgress.value = 100
 
     // Upload watermark if needed
     let watermarkRelPath = ''
@@ -932,6 +951,10 @@ async function startUploadAndShare() {
       body.watermarkProxyQualities = proxyQualities.value.slice()
     }
 
+    // Reuse existing transcodes instead of failing with outputs_exist;
+    // the server will still queue any missing quality variants.
+    body.keepExistingOutputs = true
+
     const data = await apiFetch('/api/magic-link', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -971,12 +994,24 @@ async function startUploadAndShare() {
         const playbackPath = canUsePlayback
           ? `/api/token/${encodeURIComponent(token)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
           : ''
-        const label = rec?.name || rec?.path || 'File'
-        const context = { source: 'upload' as const, linkUrl: data.viewUrl, file: label }
+        const filePath = rec?.path || rec?.name || 'File'
+        const displayName = rec?.name || rec?.path || 'File'
+        const context = { source: 'upload' as const, linkUrl: data.viewUrl, file: filePath }
 
-        if (hlsActive && canUsePlayback) {
+        const alreadyTrackingHls = transfer.hasActiveTranscode({
+          assetVersionIds: [assetVersionId],
+          file: filePath,
+          jobKind: 'hls',
+        })
+        const alreadyTrackingProxy = transfer.hasActiveTranscode({
+          assetVersionIds: [assetVersionId],
+          file: filePath,
+          jobKind: 'proxy_mp4',
+        })
+
+        if (hlsActive && canUsePlayback && !alreadyTrackingHls) {
           transfer.startPlaybackTranscodeTask({
-            title: `Transcoding: ${label}`,
+            title: `Transcoding: ${displayName}`,
             detail: 'HLS stream',
             intervalMs: 1500,
             jobKind: 'hls',
@@ -987,14 +1022,16 @@ async function startUploadAndShare() {
               return {
                 status: j?.status ?? payload?.hlsStatus ?? payload?.status,
                 progress: j?.progress ?? payload?.hlsProgress ?? 0,
+                etaSeconds: j?.eta_seconds ?? null,
+                speedX: j?.speed_x ?? null,
               }
             }
           })
         }
 
-        if (proxyActive && canUsePlayback) {
+        if (proxyActive && canUsePlayback && !alreadyTrackingProxy) {
           transfer.startPlaybackTranscodeTask({
-            title: `Transcoding: ${label}`,
+            title: `Transcoding: ${displayName}`,
             detail: 'Review copy',
             intervalMs: 1500,
             jobKind: 'proxy_mp4',
@@ -1005,6 +1042,8 @@ async function startUploadAndShare() {
               return {
                 status: j?.status ?? payload?.proxyStatus ?? payload?.status,
                 progress: j?.progress ?? payload?.proxyProgress ?? 0,
+                etaSeconds: j?.eta_seconds ?? null,
+                speedX: j?.speed_x ?? null,
                 qualityOrder: j?.quality_order ?? j?.qualityOrder,
                 activeQuality: j?.active_quality ?? j?.activeQuality,
                 perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress,
@@ -1023,9 +1062,11 @@ async function startUploadAndShare() {
         6000
       )
     )
+    appLog.info('quick_share.completed', { fileCount: droppedFiles.value.length, mode: usePublicBase.value ? 'external' : 'local' })
   } catch (e: any) {
     uploadPhase.value = 'error'
     errorMsg.value = e?.message || 'Upload or link generation failed.'
+    appLog.error('quick_share.failed', { error: errorMsg.value })
     pushNotification(
       new Notification('Quick Share Failed', errorMsg.value, 'error', 8000)
     )

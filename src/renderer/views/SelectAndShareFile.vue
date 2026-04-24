@@ -766,8 +766,9 @@ function clearAll() {
     invalidateLink()
 }
 
-const usePublicBase = ref(true);
-const defaultUsePublicBase = ref(true);
+const usePublicBase = ref(false);
+const defaultUsePublicBase = ref(false);
+const externalHttpsPort = ref(443);
 
 async function loadLinkDefaults() {
     try {
@@ -775,6 +776,7 @@ async function loadLinkDefaults() {
         const isInternal = (s?.defaultLinkAccess === "internal");
         defaultUsePublicBase.value = !isInternal;
         usePublicBase.value = defaultUsePublicBase.value;
+        externalHttpsPort.value = Number(s?.externalHttpsPort ?? 443);
         const defaultRestrict = typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false;
         defaultAccessMode.value = defaultRestrict ? 'restricted' : 'open';
         defaultAllowOpenComments.value =
@@ -787,8 +789,8 @@ async function loadLinkDefaults() {
         transcodeProxy.value = true;
     } catch {
         // Keep current default if settings can't be loaded
-        defaultUsePublicBase.value = true;
-        usePublicBase.value = true;
+        defaultUsePublicBase.value = false;
+        usePublicBase.value = false;
         defaultAccessMode.value = 'open';
         defaultAllowOpenComments.value = true;
         defaultUseProxyFiles.value = false;
@@ -797,6 +799,21 @@ async function loadLinkDefaults() {
         transcodeProxy.value = true;
     }
 }
+
+let linkDefaultsLoaded = false;
+watch(usePublicBase, (isExternal) => {
+    if (isExternal && linkDefaultsLoaded) {
+        const port = externalHttpsPort.value || 443;
+        pushNotification(
+            new Notification(
+                'Port Forwarding Required',
+                `External sharing requires port forwarding to your configured HTTPS port (${port}). You can change this port in Settings → URLs & Access.`,
+                'info',
+                8000
+            )
+        );
+    }
+});
 
 function toAbsUnder(base: string, p: string) {
     // base: e.g. "/tank"
@@ -2069,6 +2086,7 @@ onMounted(async () => {
     }
 
     await loadLinkDefaults();
+    linkDefaultsLoaded = true;
     await loadProjectChoices();
     await loadExistingWatermarkFiles();
     if (useConfiguredProjectRoot.value && currentRoot.value) {
@@ -2079,6 +2097,7 @@ onMounted(async () => {
 async function copyLink() {
     if (!viewUrl.value) return
     await navigator.clipboard.writeText(viewUrl.value)
+    window.appLog?.info('share.link.copied')
     pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 

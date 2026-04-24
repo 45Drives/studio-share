@@ -563,7 +563,7 @@ function dismissGroup(groupKey: string) {
     position: relative;
     width: 100%;
     height: 100%;
-    background: var(--ui-panel-bg);
+    background: linear-gradient(to right, var(--ui-panel-bg) calc(100% - 1rem), transparent calc(100% - 1rem));
     border-left: 1px solid var(--ui-panel-border);
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
 }
@@ -576,7 +576,7 @@ function dismissGroup(groupKey: string) {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
-    background: var(--ui-panel-bg);
+    background: transparent;
     color: #111827;
 }
 

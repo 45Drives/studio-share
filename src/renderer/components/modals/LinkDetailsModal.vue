@@ -285,7 +285,7 @@
               <div v-if="editMode && draftGenerateReviewProxy" class="flex flex-wrap items-center gap-3">
                 <span class="text-xs opacity-80">Review copy qualities:</span>
                 <label v-for="q in proxyQualityChoices" :key="q" class="inline-flex items-center gap-1 text-sm">
-                  <input type="checkbox" class="checkbox" :value="q" v-model="draftProxyQualities" />
+                  <input type="checkbox" class="proxy-quality-checkbox" :value="q" v-model="draftProxyQualities" />
                   <span>{{ q }}</span>
                 </label>
               </div>

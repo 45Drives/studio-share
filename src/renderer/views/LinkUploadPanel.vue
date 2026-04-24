@@ -307,6 +307,7 @@ import CheckPortForwarding from '../components/CheckPortForwarding.vue'
 import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import { useHeader } from '../composables/useHeader'
 import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui'
+import { appLog } from '../composables/useLog'
 import { useResilientNav } from '../composables/useResilientNav'
 import { Switch } from '@headlessui/vue'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/20/solid'
@@ -362,8 +363,9 @@ const password = ref('')
 const showPassword = ref(false)
 const linkTitle = ref('')
 const accessUsers = ref<Commenter[]>([])
-const usePublicBase = ref(true)
-const defaultUsePublicBase = ref(true)
+const usePublicBase = ref(false)
+const defaultUsePublicBase = ref(false)
+const externalHttpsPort = ref(443)
 
 type AccessMode = 'open' | 'open_password' | 'restricted'
 const accessMode = ref<AccessMode>('open')
@@ -401,21 +403,38 @@ async function loadLinkDefaults() {
 		const isInternal = s?.defaultLinkAccess === 'internal'
 		defaultUsePublicBase.value = !isInternal
 		usePublicBase.value = defaultUsePublicBase.value
+		externalHttpsPort.value = Number(s?.externalHttpsPort ?? 443)
 
 		const defaultRestrict = typeof s?.defaultRestrictAccess === 'boolean' ? s.defaultRestrictAccess : false
 		defaultAccessMode.value = defaultRestrict ? 'restricted' : 'open'
 
 		accessMode.value = defaultAccessMode.value
 	} catch {
-		defaultUsePublicBase.value = true
-		usePublicBase.value = true
+		defaultUsePublicBase.value = false
+		usePublicBase.value = false
 		defaultAccessMode.value = 'open'
 		accessMode.value = defaultAccessMode.value
 	}
 }
 
+let linkDefaultsLoaded = false
+watch(usePublicBase, (isExternal) => {
+	if (isExternal && linkDefaultsLoaded) {
+		const port = externalHttpsPort.value || 443
+		pushNotification(
+			new Notification(
+				'Port Forwarding Required',
+				`External sharing requires port forwarding to your configured HTTPS port (${port}). You can change this port in Settings → URLs & Access.`,
+				'info',
+				8000
+			)
+		)
+	}
+})
+
 onMounted(async () => {
 	await loadLinkDefaults()
+	linkDefaultsLoaded = true
 	if (!onboarding.value.uploadLinkTourDone) {
 		setTimeout(() => {
 			requestTour('upload-link', uploadLinkTourSteps, () => markDone('uploadLinkTourDone'))
@@ -506,6 +525,8 @@ async function generateLink() {
 			expiresAt: resp.expiresAt,
 		}
 
+		appLog.info('upload_link.created', { dest: destFolderRel.value, mode: usePublicBase.value ? 'external' : 'local', accessMode: accessMode.value })
+
 		const modeLabel = usePublicBase.value ? 'external (Internet)' : 'local (LAN)'
 
 		pushNotification(
@@ -520,6 +541,7 @@ async function generateLink() {
 		const msg = e?.message || e?.error || String(e)
 		const level: 'error' | 'denied' = /forbidden|denied|permission/i.test(msg) ? 'denied' : 'error'
 		error.value = msg
+		appLog.error('upload_link.create_failed', { error: msg })
 		pushNotification(new Notification('Failed to Create Upload Link', msg, level, 8000))
 	} finally {
 		loading.value = false
@@ -543,6 +565,7 @@ function resetAll() {
 async function copyLink() {
 	if (!result.value) return
 	await navigator.clipboard.writeText(result.value.url)
+	appLog.info('upload_link.copied')
 	pushNotification(new Notification('Copied!', 'Link copied to clipboard', 'success', 8000, 'clipboard-copy'))
 }
 
