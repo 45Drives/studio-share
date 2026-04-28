@@ -43,7 +43,6 @@
     <QuickShareOverlay />
     <GlobalModalConfirm />
     <NotificationView />
-    <UpdateBanner />
     <TransferProgressDock v-if="!hideTransfers" />
     <GuidedTour v-if="ENABLE_TOUR && activeTour" :steps="activeTour.steps" :active="true" @done="finishTour" @skip="finishTour" />
   </div>
@@ -61,7 +60,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useHeaderTitle } from '../renderer/composables/useHeaderTitle'
 import { registerIpcActionListener } from "../renderer/composables/registerIpcActionListener";
 import TransferProgressDock from '../renderer/components/TransferProgressDock.vue'
-import UpdateBanner from '../renderer/components/UpdateBanner.vue'
 import GlobalMenu from '../renderer/components/GlobalMenu.vue'
 import GuidedTour from '../renderer/components/GuidedTour.vue'
 import QuickShareOverlay from '../renderer/components/QuickShareOverlay.vue'
