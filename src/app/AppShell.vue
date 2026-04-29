@@ -3,23 +3,19 @@
     class="w-screen h-screen overflow-hidden flex flex-col text-default bg-default app-bg-textured">
     <header
       v-if="!hideHeader"
-      class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"       :class="(divisionCode !== 'studio' ? 'py-2' : '')"
+      class="grid grid-cols-3 items-center w-full h-16 px-4 bg-accent"       :class="''"
     >
       <!-- Left (logo) -->
       <div class="justify-self-start">
-        <DynamicBrandingLogo :division="divisionCode" :height="(divisionCode === 'studio' ? 16 : 12)"/>
+        <DynamicBrandingLogo :division="divisionCode" :height="12"/>
       </div>
 
       <!-- Center (title) -->
       <div class="justify-self-center text-center items-center text-2xl font-semibold whitespace-nowrap">
         <!-- {{ headerTitle || (route.meta.title as string) || '45Flow' }} -->
-        <div
-          class="flow-logo-gradient mx-auto my-auto"
-          role="img"
-          aria-label="45Flow"
-          data-tour="flow-logo"
-          :style="{ '--flow-logo-src': `url(${flowLogo})` }"
-        />
+        <div class="flow-logo-gradient mx-auto my-auto" role="img" aria-label="45Flow" data-tour="flow-logo" :style="{
+          '--flow-logo-src': `url(${flowLogo})`,
+        }" />
       </div>
 
       <!-- Right (menu) -->
@@ -105,7 +101,7 @@ provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
 provide(connectionMetaInjectionKey, connectionMeta)
 
-const { currentDivision, setThemeControlsUnlocked } = useThemeFromAlias()
+const { currentDivision, currentTheme, setThemeControlsUnlocked } = useThemeFromAlias()
 
 watch(currentDivision, (d) => { divisionCode.value = d as DivisionType }, { immediate: true })
 
@@ -174,17 +170,22 @@ onBeforeUnmount(() => {
 }
 
 .flow-logo-gradient {
-  width: clamp(9.5rem, 17vw, 12.25rem);
-  aspect-ratio: 841 / 210;
-  background: var(--btn-primary-fill);
-  background-size: cover;
-  -webkit-mask-image: var(--flow-logo-src);
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: var(--flow-logo-src);
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-}
+   height: clamp(3rem, 6vw, 3.45rem);
+   width: clamp(3rem, 6vw, 3.45rem);
+
+   background: var(--flow-logo-theme-fill, var(--btn-primary-fill));
+   background-size: var(--flow-logo-bg-size, 100% 100%);
+   background-position: var(--flow-logo-bg-position, center);
+   background-repeat: no-repeat;
+
+   -webkit-mask-image: var(--flow-logo-src);
+   -webkit-mask-size: contain;
+   -webkit-mask-repeat: no-repeat;
+   -webkit-mask-position: center;
+
+   mask-image: var(--flow-logo-src);
+   mask-size: contain;
+   mask-repeat: no-repeat;
+   mask-position: center;
+ }
 </style>
