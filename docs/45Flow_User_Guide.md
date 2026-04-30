@@ -61,12 +61,16 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
     - [Project Root](#project-root)
     - [Default Link Options](#default-link-options)
     - [Maintenance & Cleanup](#maintenance--cleanup)
-16. [View Logs (Client Log Viewer)](#16-view-logs-client-log-viewer)
+16. [Upgrade to Pro Edition](#16-upgrade-to-pro-edition)
+    - [Purchasing a License](#purchasing-a-license)
+    - [Activating Your License](#activating-your-license)
+    - [Downloading & Installing Pro Edition](#downloading--installing-pro-edition)
+17. [View Logs (Client Log Viewer)](#17-view-logs-client-log-viewer)
     - [Log Summary](#log-summary)
     - [Searching & Filtering Logs](#searching--filtering-logs)
     - [Log Entry Details](#log-entry-details)
-17. [Port Forwarding for External Sharing](#17-port-forwarding-for-external-sharing)
-18. [Frequently Asked Questions](#18-frequently-asked-questions)
+18. [Port Forwarding for External Sharing](#18-port-forwarding-for-external-sharing)
+19. [Frequently Asked Questions](#19-frequently-asked-questions)
 
 ---
 
@@ -797,7 +801,49 @@ For administrators to manage server health:
 
 ---
 
-## 16. View Logs (Client Log Viewer)
+## 16. Upgrade to Pro Edition
+
+45Flow Community Edition can be upgraded in-app to **45Flow Pro Edition**, which includes automatic updates, cross-subnet server discovery via the 45Drives registry, and priority support.
+
+### Purchasing a License
+
+To upgrade, you need a valid 45Flow Pro license key. Contact your 45Drives representative to purchase a license.
+
+Your license key will look like: `STUDIO-XXXX-XXXX-XXXX-XXXX`
+
+### Activating Your License
+
+1. Open 45Flow and connect to your server.
+2. On the Dashboard, click **"Settings"**.
+3. In the Settings sidebar, under **Upgrade**, click **"Go Pro"**.
+4. Enter your license key in the field provided.
+5. Click **"Activate"**.
+
+45Flow will:
+- **Validate** your key with the 45Drives license server.
+- **Activate** the license on your connected server (houston-broadcaster).
+
+If validation succeeds, you'll see a confirmation message showing your license details (perpetual or expiration date).
+
+> **Note:** You must be connected to a server to activate. The license is tied to the server, not the client app. If you have multiple servers, repeat the activation on each one after upgrading.
+
+### Downloading & Installing Pro Edition
+
+After successful activation:
+
+1. Click **"Download & Install Pro Edition"**.
+2. A progress bar shows the download status.
+3. Once complete, click **"Restart & Install"**.
+4. The app will close and reopen as **45Flow Pro Edition**.
+5. Reconnect to your server — it's already licensed, so you'll go straight to the Dashboard.
+
+> **Important:** The upgrade replaces the Community Edition. Your settings, saved servers, and session data are preserved since both editions share the same application identity.
+
+> **Troubleshooting:** If the download fails, check your internet connection and try again. The license activation on your server is already complete — you can also manually download Pro Edition from your 45Drives account and install it directly.
+
+---
+
+## 17. View Logs (Client Log Viewer)
 
 The Client Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
 
@@ -846,7 +892,7 @@ Click on any entry to expand its **Details** section, which shows the full event
 
 ---
 
-## 17. Port Forwarding for External Sharing
+## 18. Port Forwarding for External Sharing
 
 To share files externally (over the internet), HTTPS port **443** (or your custom HTTPS port) must be forwarded from your router to your server.
 
@@ -870,7 +916,7 @@ Port forwarding tells your router to direct incoming traffic on a specific port 
 
 ---
 
-## 18. Frequently Asked Questions
+## 19. Frequently Asked Questions
 
 **Q: My server doesn't appear in the auto-discovery dropdown. What do I do?**  
 A: The `houston-broadcaster` service must be running on the server. Try connecting manually using the server's IP address via the **"Connect manually via IP"** field.
