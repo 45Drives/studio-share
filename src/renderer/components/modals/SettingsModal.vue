@@ -463,6 +463,86 @@
                             </div>
                         </template>
 
+                        <!-- ═══ Upgrade to Premium ══════════════════════════════ -->
+                        <template v-if="activeSection === 'upgrade'">
+                            <div class="rounded-lg border border-default bg-default/40 p-4 mb-4">
+                                <div class="text-sm font-semibold text-default mb-1">45Flow Pro Edition</div>
+                                <p class="text-sm text-accent leading-relaxed">
+                                    Upgrade to Pro for automatic updates, cross-subnet server discovery,
+                                    and priority support. Enter your license key below to activate.
+                                </p>
+                            </div>
+
+                            <div class="divide-y divide-default">
+                                <div class="py-3">
+                                    <label class="block text-sm font-medium text-default mb-1">License Key</label>
+                                    <div class="flex gap-2">
+                                        <input
+                                            v-model="upgradeKey"
+                                            type="text"
+                                            class="input-textlike border border-default px-3 py-2 rounded text-sm flex-1"
+                                            placeholder="STUDIO-XXXX-XXXX-XXXX-XXXX"
+                                            :disabled="upgradeBusy"
+                                            @keydown.enter.prevent="handleUpgradeValidate"
+                                        />
+                                        <button
+                                            class="btn btn-primary text-sm px-4"
+                                            type="button"
+                                            :disabled="upgradeBusy || !upgradeKey.trim()"
+                                            @click="handleUpgradeValidate"
+                                        >
+                                            {{ upgradeBusy && upgradeStep === 'validating' ? 'Validating…' : 'Activate' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Validated — show upgrade button -->
+                            <div v-if="upgradeValidated" class="mt-4 rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-3">
+                                <div class="text-sm font-semibold text-green-800 dark:text-green-400 mb-1">License Valid</div>
+                                <p class="text-sm text-green-700 dark:text-green-400 mb-3">
+                                    {{ upgradeLicenseInfo }}
+                                </p>
+                                <button
+                                    class="btn btn-success text-sm px-4"
+                                    type="button"
+                                    :disabled="upgradeBusy"
+                                    @click="handleUpgradeStart"
+                                >
+                                    {{ upgradeBusy && upgradeStep === 'downloading' ? 'Downloading…' : 'Download & Install Pro Edition' }}
+                                </button>
+                            </div>
+
+                            <!-- Download progress -->
+                            <div v-if="upgradeStep === 'downloading'" class="mt-4">
+                                <div class="h-3 w-full bg-well rounded overflow-hidden">
+                                    <div
+                                        class="h-full bg-primary transition-all duration-300"
+                                        :style="{ width: `${Math.max(0, Math.min(upgradePercent, 100))}%` }"
+                                    />
+                                </div>
+                                <div class="text-xs text-accent mt-1">{{ upgradePercent.toFixed(1) }}%</div>
+                            </div>
+
+                            <!-- Downloaded — ready to install -->
+                            <div v-if="upgradeStep === 'ready'" class="mt-4 rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-3">
+                                <div class="text-sm font-semibold text-green-800 dark:text-green-400 mb-1">Download Complete</div>
+                                <p class="text-sm text-green-700 dark:text-green-400 mb-3">
+                                    Pro Edition is ready to install. The app will restart.
+                                </p>
+                                <button
+                                    class="btn btn-success text-sm px-4"
+                                    type="button"
+                                    @click="handleUpgradeInstall"
+                                >
+                                    Restart & Install
+                                </button>
+                            </div>
+
+                            <!-- Error -->
+                            <div v-if="upgradeError" class="text-danger text-sm mt-3">{{ upgradeError }}</div>
+                        </template>
+
                     </div>
                 </div>
 
@@ -560,7 +640,7 @@ const settingsTourSteps: TourStep[] = [
 ]
 
 // ── Section navigation ──────────────────────────────────────────────────
-type Section = 'sharing' | 'project' | 'app' | 'maintenance' | 'help' | 'certificate' | 'linkOptions';
+type Section = 'sharing' | 'project' | 'app' | 'maintenance' | 'help' | 'certificate' | 'linkOptions' | 'upgrade';
 const activeSection = ref<Section>('sharing');
 
 const navGroups = [
@@ -586,6 +666,12 @@ const navGroups = [
             { key: 'help' as Section, label: 'User Guide' },
         ],
     },
+    {
+        label: 'Upgrade',
+        items: [
+            { key: 'upgrade' as Section, label: 'Go Pro' },
+        ],
+    },
 ];
 
 onMounted(() => {
@@ -609,6 +695,109 @@ function handleResetOnboarding() {
 
 function openUserGuide() {
     window.open('https://github.com/45Drives/studio-share/blob/main/docs/45Flow_User_Guide.md', '_blank', 'noopener,noreferrer');
+}
+
+// ── Premium Upgrade ─────────────────────────────────────────────────────
+const upgradeKey = ref('')
+const upgradeBusy = ref(false)
+const upgradeStep = ref<'idle' | 'validating' | 'downloading' | 'ready'>('idle')
+const upgradeValidated = ref(false)
+const upgradeError = ref('')
+const upgradePercent = ref(0)
+const upgradeLicenseInfo = ref('')
+
+async function handleUpgradeValidate() {
+    const key = upgradeKey.value.trim()
+    if (!key) return
+
+    upgradeBusy.value = true
+    upgradeStep.value = 'validating'
+    upgradeError.value = ''
+    upgradeValidated.value = false
+
+    try {
+        // Step 1: Validate key with license server (VPS)
+        const result = await window.electron?.ipcRenderer.invoke('upgrade:validate', key)
+        if (!result?.ok) {
+            upgradeError.value = result?.error || 'Validation failed.'
+            return
+        }
+
+        // Step 2: Activate key on the connected broadcaster server
+        try {
+            const activateResult = await apiFetch('/api/license/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ licenseKey: key }),
+                suppressAuthRedirect: true,
+            })
+            if (!activateResult?.ok) {
+                upgradeError.value = activateResult?.error || 'Server license activation failed.'
+                return
+            }
+        } catch (activateErr: any) {
+            // If broadcaster doesn't have the license endpoint (older version), skip
+            // The user can activate from Premium after upgrade
+            console.warn('[upgrade] Broadcaster activation skipped:', activateErr?.message)
+        }
+
+        upgradeValidated.value = true
+        upgradeLicenseInfo.value = result.perpetual
+            ? 'Perpetual license — never expires. Server has been activated.'
+            : `License valid until ${result.expiresAt ? new Date(result.expiresAt).toLocaleDateString() : 'N/A'}. Server has been activated.`
+    } catch (err: any) {
+        upgradeError.value = err?.message || 'Validation failed.'
+    } finally {
+        upgradeBusy.value = false
+        upgradeStep.value = 'idle'
+    }
+}
+
+async function handleUpgradeStart() {
+    upgradeBusy.value = true
+    upgradeStep.value = 'downloading'
+    upgradeError.value = ''
+    upgradePercent.value = 0
+
+    const ipc = window.electron?.ipcRenderer
+
+    const onProgress = (_event: any, p: any) => {
+        if (typeof p?.percent === 'number') upgradePercent.value = p.percent
+    }
+    const onDownloaded = () => {
+        upgradeStep.value = 'ready'
+        upgradeBusy.value = false
+    }
+    const onError = (_event: any, payload: any) => {
+        upgradeError.value = payload?.message || 'Download failed.'
+        upgradeStep.value = 'idle'
+        upgradeBusy.value = false
+    }
+
+    ipc?.on('upgrade:progress', onProgress)
+    ipc?.on('upgrade:downloaded', onDownloaded)
+    ipc?.on('upgrade:error', onError)
+
+    try {
+        const result = await ipc?.invoke('upgrade:start')
+        if (!result?.ok) {
+            upgradeError.value = result?.error || 'Upgrade failed.'
+            upgradeStep.value = 'idle'
+            upgradeBusy.value = false
+        }
+    } catch (err: any) {
+        upgradeError.value = err?.message || 'Upgrade failed.'
+        upgradeStep.value = 'idle'
+        upgradeBusy.value = false
+    }
+}
+
+async function handleUpgradeInstall() {
+    try {
+        await window.electron?.ipcRenderer.invoke('upgrade:install')
+    } catch {
+        // App is restarting
+    }
 }
 
 const busy = ref(false);
