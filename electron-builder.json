@@ -121,6 +121,7 @@
   "asar": true,
   "asarUnpack": [
     "**/*.node",
-    "**/*.dylib"
+    "**/*.dylib",
+    "**/node_modules/@ffmpeg-installer/**/*"
   ]
 }
