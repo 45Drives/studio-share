@@ -42,9 +42,61 @@ export type RsyncOpts = {
   noIngest?: boolean
   /** JWT token for authenticated ingest/register calls */
   apiToken?: string
+  /** file was transcoded on client side, skip server transcode */
+  clientTranscoded?: boolean
+  clientWatermarked?: boolean
 }
 
 export type RsyncResult = { ok?: boolean; error?: string }
+
+export type TranscodeOptions = {
+  inputPath: string
+  quality: 'original' | '1080p' | '720p'
+  outputFormat: 'mp4' | 'hevc'
+  useHardwareAccel: boolean
+  preset?: 'fast' | 'balanced' | 'quality'
+  watermarkPath?: string
+}
+
+export type TranscodeProgress = {
+  percent: number
+  fps: number
+  speed: string
+  eta: string
+  message: string
+}
+
+export type TranscodeResult = { ok?: boolean; outputPath?: string; error?: string }
+
+export type FullTranscodeOptions = {
+  inputPath: string
+  proxyQualities: ('720p' | '1080p' | 'original')[]
+  generateHls: boolean
+  watermarkPath?: string
+  useHardwareAccel: boolean
+  preset?: 'fast' | 'balanced' | 'quality'
+}
+
+export type FullTranscodeProgress = {
+  phase: 'probe' | 'proxy' | 'hls'
+  activeQuality?: string
+  perQualityProgress: Record<string, number>
+  overallPercent: number
+  fps: number
+  speed: string
+  eta: string
+  message: string
+  encoder?: string
+}
+
+export type FullTranscodeResult = {
+  ok?: boolean
+  outputDir?: string
+  proxyFiles?: Record<string, string>
+  hlsDir?: string | null
+  hlsMaster?: string | null
+  error?: string
+}
 
 /** Shape exposed on window.electron */
 export type ElectronApi = {
@@ -88,6 +140,44 @@ export type ElectronApi = {
 
   /** Subscribe to progress for an already-running detached rsync */
   listenUploadProgress: (id: string, onProgress: (p: RsyncProgress) => void) => () => void
+
+  /** ========== Client-side Transcoding ========== */
+  /** Transcode a video file on the client machine (using local hardware acceleration) */
+  transcodeStart: (
+    options: TranscodeOptions,
+    onProgress?: (p: TranscodeProgress) => void
+  ) => Promise<{ jobId: string; done: Promise<TranscodeResult> }>
+
+  /** Cancel an active transcode job */
+  transcodeCancel: (jobId: string) => void
+
+  /** Full transcode: generate all proxy variants + HLS from one source */
+  fullTranscodeStart: (
+    options: FullTranscodeOptions,
+    onProgress?: (p: FullTranscodeProgress) => void
+  ) => Promise<{ jobId: string; done: Promise<FullTranscodeResult> }>
+
+  /** Cancel an active full transcode */
+  fullTranscodeCancel: (jobId: string) => void
+
+  /** Remove a transcode temp directory after rsync */
+  cleanupTranscodeTemp: (dirPath: string) => Promise<{ ok: boolean; error?: string }>
+  /** Remove a downloaded watermark temp file */
+  cleanupWatermarkTemp: (filePath: string) => Promise<{ ok: boolean; error?: string }>
+
+  /** Download a watermark image from the server to a local temp file */
+  downloadWatermark: (opts: { apiBase: string; token: string; relPath: string }) => Promise<string | null>
+
+  /** Get hardware acceleration capabilities for transcode */
+  getTranscodeCapabilities: () => Promise<{
+    hasHardwareAccel: boolean
+    bestCodecH264: string
+    bestCodecHevc: string
+    hardwareDescription: string
+    ffmpegSource: 'system' | 'bundled'
+    ffmpegVersion: string
+    probeResults: Record<string, boolean>
+  }>
 
   /** Get the real filesystem path for a File from drag-and-drop */
   getPathForFile: (file: File) => string
@@ -172,6 +262,87 @@ const api: ElectronApi = {
     ipcRenderer.on(ch, handler)
     return () => ipcRenderer.removeListener(ch, handler)
   },
+
+  /** ========== Client-side Transcoding ========== */
+  transcodeStart: (options: TranscodeOptions, onProgress?: (p: TranscodeProgress) => void) => {
+    const jobId = genId()
+    const pch = `transcode:progress:${jobId}`
+    const dch = `transcode:done:${jobId}`
+    const fch = `transcode:failed:${jobId}`
+
+    if (onProgress) {
+      const ph = (_: IpcRendererEvent, payload: TranscodeProgress) => {
+        try { onProgress(payload) } catch {}
+      }
+      ipcRenderer.on(pch, ph)
+    }
+
+    const done: Promise<TranscodeResult> = new Promise((resolve) => {
+      ipcRenderer.once(dch, (_ev, res: TranscodeResult) => {
+        ipcRenderer.removeAllListeners(pch)
+        ipcRenderer.removeAllListeners(fch)
+        resolve(res)
+      })
+      ipcRenderer.once(fch, (_ev, res: TranscodeResult) => {
+        ipcRenderer.removeAllListeners(pch)
+        ipcRenderer.removeAllListeners(dch)
+        resolve(res)
+      })
+    })
+
+    ipcRenderer.invoke('transcode:start', { jobId, options }).catch((err: any) => {
+      // If invoke rejects AND the failed event wasn't already sent,
+      // resolve done with the error so the caller handles it.
+      console.error('[transcode] invoke rejected:', err?.message || err)
+    })
+
+    return Promise.resolve({ jobId, done })
+  },
+
+  transcodeCancel: (jobId: string) => ipcRenderer.invoke('transcode:cancel', { jobId }),
+
+  fullTranscodeStart: (options: FullTranscodeOptions, onProgress?: (p: FullTranscodeProgress) => void) => {
+    const jobId = genId()
+    const pch = `transcode:full-progress:${jobId}`
+    const dch = `transcode:full-done:${jobId}`
+    const fch = `transcode:full-failed:${jobId}`
+
+    if (onProgress) {
+      const ph = (_: IpcRendererEvent, payload: FullTranscodeProgress) => {
+        try { onProgress(payload) } catch {}
+      }
+      ipcRenderer.on(pch, ph)
+    }
+
+    const done: Promise<FullTranscodeResult> = new Promise((resolve) => {
+      ipcRenderer.once(dch, (_ev, res: FullTranscodeResult) => {
+        ipcRenderer.removeAllListeners(pch)
+        ipcRenderer.removeAllListeners(fch)
+        resolve(res)
+      })
+      ipcRenderer.once(fch, (_ev, res: FullTranscodeResult) => {
+        ipcRenderer.removeAllListeners(pch)
+        ipcRenderer.removeAllListeners(dch)
+        resolve(res)
+      })
+    })
+
+    ipcRenderer.invoke('transcode:full-start', { jobId, options }).catch((err: any) => {
+      console.error('[full-transcode] invoke rejected:', err?.message || err)
+    })
+
+    return Promise.resolve({ jobId, done })
+  },
+
+  fullTranscodeCancel: (jobId: string) => ipcRenderer.invoke('transcode:full-cancel', { jobId }),
+
+  cleanupTranscodeTemp: (dirPath: string) => ipcRenderer.invoke('transcode:cleanup-temp', { dirPath }),
+  cleanupWatermarkTemp: (filePath: string) => ipcRenderer.invoke('transcode:cleanup-watermark', { filePath }),
+
+  downloadWatermark: (opts: { apiBase: string; token: string; relPath: string }) =>
+    ipcRenderer.invoke('watermark:download', opts),
+
+  getTranscodeCapabilities: () => ipcRenderer.invoke('transcode:get-capabilities'),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }

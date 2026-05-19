@@ -9,8 +9,22 @@
     </div>
   </Transition>
 
+  <!-- Minimized floating bar -->
+  <Transition name="qs-fade">
+    <div v-if="showModal && minimized" class="fixed bottom-4 right-4 z-[2200] flex items-center gap-3 bg-accent border border-default rounded-lg shadow-xl px-4 py-3 cursor-pointer select-none hover:bg-well/40 transition" @click="minimized = false">
+      <ArrowUpTrayIcon class="w-5 h-5 text-primary shrink-0" />
+      <div class="flex flex-col min-w-0">
+        <span class="text-sm font-semibold truncate">Quick Share</span>
+        <span class="text-xs text-muted truncate">
+          {{ uploadPhase === 'uploading' ? 'Uploading…' : uploadPhase === 'generating' ? 'Generating link…' : uploadPhase === 'done' ? 'Done — click to view link' : uploadPhase === 'error' ? 'Error' : `${droppedFiles.length} file(s)` }}
+        </span>
+      </div>
+      <progress v-if="uploadPhase === 'uploading'" class="w-24 h-1.5 rounded-lg overflow-hidden [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary" :value="overallProgress" max="100" />
+    </div>
+  </Transition>
+
   <!-- Modal: shown after files are dropped -->
-  <div v-if="showModal" class="fixed inset-0 z-[2100] flex items-center justify-center">
+  <div v-if="showModal && !minimized" class="fixed inset-0 z-[2100] flex items-center justify-center">
     <div class="absolute inset-0 bg-black/50" @click="cancel" />
     <div
       class="relative w-full max-w-6xl h-[85vh] flex flex-col bg-accent rounded-lg shadow-xl p-5"
@@ -24,7 +38,12 @@
         <h2 class="text-lg font-semibold">
           Upload {{ droppedFiles.length === 1 ? `"${droppedFiles[0].name}"` : `${droppedFiles.length} files` }} to server?
         </h2>
-        <button class="btn btn-secondary" @click="cancel" :disabled="busy">Close</button>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-secondary flex items-center gap-1" @click="minimized = true" title="Minimize">
+            <MinusIcon class="w-4 h-4" />
+          </button>
+          <button class="btn btn-secondary" @click="cancel" :disabled="busy">Close</button>
+        </div>
       </div>
 
       <!-- Step indicator -->
@@ -114,7 +133,7 @@
 
         <!-- ── Summary of current settings ── -->
         <div class="text-xs text-muted flex flex-wrap gap-x-4 gap-y-1">
-          <span>Access: {{ accessMode === 'open' ? 'Anyone' : accessMode === 'open_password' ? 'Password' : `${accessUsers.length} invited user(s)` }}</span>
+          <span>Access: {{ accessMode === 'open' ? 'Anyone' : accessMode === 'open_password' ? 'Password' : `${accessUsers.length} user(s)${accessGroups.length ? `, ${accessGroups.length} group(s)` : ''}` }}</span>
           <span v-if="hasVideo">Review Copies: {{ proxyQualities.join(', ') || 'none' }}</span>
           <span v-if="hasVideo">Watermark: {{ watermarkEnabled ? 'on' : 'off' }}</span>
         </div>
@@ -139,136 +158,38 @@
             </div>
 
             <!-- Access mode -->
-            <div class="flex flex-col gap-2" data-tour="qs-access-mode">
-              <span class="font-semibold text-sm">Link Access Mode</span>
-              <div class="grid grid-cols-3 gap-2 min-w-0">
-                <div class="flex flex-col gap-1">
-                  <label class="flex items-start gap-2 p-1.5 rounded-md border border-default cursor-pointer">
-                    <input type="radio" name="qs-access-mode" value="open" v-model="accessMode" class="mt-0.5" />
-                    <span class="min-w-0">
-                      <span class="font-semibold block text-sm">Anyone with the link</span>
-                      <span class="text-xs text-muted block">No sign-in required.</span>
-                    </span>
-                  </label>
-                  <label class="flex items-start gap-2 p-1.5 rounded-md border border-default cursor-pointer">
-                    <input type="radio" name="qs-access-mode" value="open_password" v-model="accessMode" class="mt-0.5" />
-                    <span class="min-w-0">
-                      <span class="font-semibold block text-sm">Password protected</span>
-                      <span class="text-xs text-muted block">One shared password.</span>
-                    </span>
-                  </label>
-                  <label class="flex items-start gap-2 p-1.5 rounded-md border border-default cursor-pointer">
-                    <input type="radio" name="qs-access-mode" value="restricted" v-model="accessMode" class="mt-0.5" />
-                    <span class="min-w-0">
-                      <span class="font-semibold block text-sm">Invited users only</span>
-                      <span class="text-xs text-muted block">Sign in with user account.</span>
-                    </span>
-                  </label>
-                </div>
-
-                <div class="col-span-2 border border-default rounded-md p-3 min-w-0">
-                  <div v-if="accessMode !== 'restricted'" class="flex flex-wrap items-center gap-3 min-w-0">
-                    <label class="font-semibold text-sm whitespace-nowrap">Allow comments</label>
-                    <Switch id="qs-allow-comments-switch" v-model="allowOpenComments" :class="[
-                      allowOpenComments ? 'bg-secondary' : 'bg-well',
-                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                    ]">
-                      <span class="sr-only">Toggle comments</span>
-                      <span aria-hidden="true" :class="[
-                        allowOpenComments ? 'translate-x-5' : 'translate-x-0',
-                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                      ]" />
-                    </Switch>
-                    <span class="text-xs text-muted">{{ allowOpenComments ? 'Visitors can comment.' : 'Comments disabled.' }}</span>
-                  </div>
-
-                  <div v-if="accessMode === 'open_password'" class="flex flex-col gap-2 min-w-0 mt-2">
-                    <div class="relative flex items-center min-w-0 w-full">
-                      <input :type="showPassword ? 'text' : 'password'" v-model.trim="password"
-                        placeholder="Enter a password"
-                        class="input-textlike border rounded px-3 py-2 w-full pr-10 min-w-0" />
-                      <button type="button" @click="showPassword = !showPassword"
-                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                        <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                        <EyeSlashIcon v-else class="w-5 h-5" />
-                      </button>
-                    </div>
-                    <p v-if="!password" class="text-sm text-red-500">Password is required.</p>
-                  </div>
-
-                  <div v-if="accessMode === 'restricted'" class="flex flex-col gap-2 min-w-0">
-                    <p class="text-xs text-muted">Users sign in with their own credentials. Roles control permissions.</p>
-                    <button type="button" class="btn btn-primary" @click="userModalOpen = true">
-                      {{ accessUsers.length ? 'Manage invited users' : 'Invite users…' }}
-                      <span v-if="accessUsers.length"
-                        class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default text-default">
-                        {{ accessUsers.length }}
-                      </span>
-                    </button>
-                    <p v-if="!accessUsers.length" class="text-sm text-red-500">Add at least one user.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <LinkAccessMode
+              v-model="accessMode"
+              v-model:password="password"
+              v-model:showPassword="showPassword"
+              v-model:allowOpenComments="allowOpenComments"
+              :accessCount="accessUsers.length"
+              :accessSatisfied="accessUsers.length > 0"
+              dataTour="qs-access-mode"
+              radioName="qs-access-mode"
+              :compact="true"
+              :showSummary="false"
+              @openUserModal="userModalOpen = true"
+            />
 
             <!-- Video options (only shown for video files) -->
-            <div v-if="hasVideo" class="flex flex-col gap-3" data-tour="qs-video-options">
-              <span class="font-semibold text-sm">Video Options</span>
-              <div class="grid grid-cols-3 gap-4 items-start">
-                <div class="min-w-0">
-                  <label class="font-semibold text-sm block mb-1">Review Copies</label>
-                  <div class="flex flex-wrap gap-x-3 gap-y-1">
-                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" class="proxy-quality-checkbox" value="720p" v-model="proxyQualities" /> 720p</label>
-                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" class="proxy-quality-checkbox" value="1080p" v-model="proxyQualities" /> 1080p</label>
-                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities" /> Full Res</label>
-                  </div>
-                  <p class="text-xs text-slate-400 mt-1">Streamable copies for review.</p>
-                </div>
-
-                <div class="col-span-2 min-w-0">
-                  <div class="flex items-center gap-2 mb-2">
-                    <label class="font-semibold text-sm whitespace-nowrap">Watermark:</label>
-                    <Switch v-model="watermarkEnabled" :class="[
-                      watermarkEnabled ? 'bg-secondary' : 'bg-well',
-                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                    ]">
-                      <span class="sr-only">Toggle watermark</span>
-                      <span aria-hidden="true" :class="[
-                        watermarkEnabled ? 'translate-x-5' : 'translate-x-0',
-                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                      ]" />
-                    </Switch>
-                    <span class="text-xs text-muted">{{ watermarkEnabled ? 'On' : 'Off' }}</span>
-                  </div>
-
-                  <div v-if="watermarkEnabled" class="flex flex-wrap items-center gap-2 mb-2">
-                    <button class="btn btn-secondary text-xs" @click="pickWatermark">Choose Image</button>
-                    <span class="text-sm truncate min-w-0" :title="watermarkFile ? watermarkFile.name : 'No image'">
-                      {{ watermarkFile ? watermarkFile.name : (selectedExistingWatermark ? selectedExistingWatermark.split('/').pop() : 'No image') }}
-                    </span>
-                    <select v-model="selectedExistingWatermark" class="input-textlike border rounded px-2 py-1 text-xs min-w-[14rem]">
-                      <option value="">Existing watermark…</option>
-                      <option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">{{ wm }}</option>
-                    </select>
-                    <button class="btn btn-secondary px-2 py-0.5 text-xs" @click="loadExistingWatermarkFiles">Refresh</button>
-                  </div>
-                  <p v-if="watermarkEnabled && !watermarkFile && !selectedExistingWatermark"
-                    class="text-xs text-amber-700 dark:text-amber-300">Select a watermark image to continue.</p>
-
-                  <div v-if="watermarkEnabled && watermarkPreviewUrl" class="mt-2">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                      <span class="text-xs text-slate-400">Preview</span>
-                      <button v-if="watermarkFile" class="btn btn-danger text-xs px-2 py-0.5" @click="clearWatermark">Clear</button>
-                    </div>
-                    <div class="relative aspect-video w-full max-w-[14rem] rounded-md border border-default bg-default/60 overflow-hidden">
-                      <div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
-                      <img :src="watermarkPreviewUrl" alt="Watermark preview"
-                        class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <VideoOptionsPanel
+              v-if="hasVideo"
+              v-model:proxyQualities="proxyQualities"
+              v-model:watermarkEnabled="watermarkEnabled"
+              v-model:selectedExistingWatermark="selectedExistingWatermark"
+              :watermarkFile="watermarkFile"
+              :existingWatermarkFiles="existingWatermarkFiles"
+              :effectiveWatermarkPreviewUrl="watermarkPreviewUrl"
+              :effectiveWatermarkName="watermarkFile ? watermarkFile.name : (selectedExistingWatermark ? selectedExistingWatermark.split('/').pop() || '' : '')"
+              dataTour="qs-video-options"
+              :compact="true"
+              watermarkLabel="Watermark"
+              :watermarkStatusText="watermarkEnabled ? 'On' : 'Off'"
+              @pickWatermark="pickWatermark"
+              @clearWatermark="clearWatermark"
+              @refreshWatermarks="loadExistingWatermarkFiles"
+            />
           </DisclosurePanel>
         </Disclosure>
 
@@ -281,19 +202,29 @@
             display_color: c.display_color,
             role_id: c.role_id ?? undefined,
             role_name: c.role_name ?? undefined,
-          }))" @apply="onApplyUsers" />
+          }))"
+          :preselectedGroups="accessGroups"
+          @apply="onApplyUsers" />
       </section>
 
       <!-- ===== STEP 3: Upload & Share Progress ===== -->
       <section v-show="wizardStep === 3" data-tour="qs-step-upload">
         <div v-if="uploadPhase === 'uploading'" class="flex flex-col gap-3">
-          <div class="text-sm font-semibold">Uploading files…</div>
+          <div class="text-sm font-semibold">{{ currentPhaseLabel }}</div>
           <div v-for="f in droppedFiles" :key="f.path" class="flex flex-col gap-1">
             <div class="flex items-center justify-between text-sm">
               <span class="truncate min-w-0 flex-1">{{ f.name }}</span>
               <span class="text-muted ml-2 shrink-0">{{ (perFileProgress[f.path] ?? 0).toFixed(0) }}%</span>
             </div>
-            <progress class="w-full h-2 rounded-lg overflow-hidden" :value="perFileProgress[f.path] ?? 0" max="100"></progress>
+            <div v-if="perFileDetail[f.path]" class="text-xs text-muted">{{ perFileDetail[f.path] }}</div>
+            <progress
+              class="w-full h-2 rounded-lg overflow-hidden"
+              :class="{
+                '[&::-webkit-progress-value]:bg-amber-500 [&::-moz-progress-bar]:bg-amber-500': perFileStatus[f.path] === 'transcoding',
+                '[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary': perFileStatus[f.path] === 'uploading',
+              }"
+              :value="perFileProgress[f.path] ?? 0" max="100"
+            ></progress>
           </div>
         </div>
 
@@ -343,18 +274,23 @@
 <script setup lang="ts">
 import { ref, computed, inject, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowUpTrayIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
-import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/20/solid'
-import { Switch, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { ArrowUpTrayIcon, ChevronDownIcon, MinusIcon } from '@heroicons/vue/24/outline'
+import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import { pushNotification, Notification } from '@45drives/houston-common-ui'
 import { appLog } from '../composables/useLog'
 import { connectionMetaInjectionKey, currentServerInjectionKey } from '../keys/injection-keys'
 import { useApi } from '../composables/useApi'
 import { useTransferProgress } from '../composables/useTransferProgress'
+import { useClientTranscode } from '../composables/useClientTranscode'
+import { useUploadTranscode } from '../composables/useUploadTranscode'
 import { signalLinkCreated } from '../composables/useLinkRefresh'
 import { tourQuickShareOpen, tourQuickShareStep, tourQuickShareShowDone } from '../composables/useQuickShareTour'
+import { useTourManager, type TourStep } from '../composables/useTourManager'
+import { useOnboarding } from '../composables/useOnboarding'
 import FolderPicker from './FolderPicker.vue'
 import AddUsersModal from './modals/AddUsersModal.vue'
+import LinkAccessMode from './LinkAccessMode.vue'
+import VideoOptionsPanel from './VideoOptionsPanel.vue'
 import type { Commenter, RsyncProgress } from '../typings/electron'
 
 // Cast to avoid TS plugin resolution issues with global Window augmentation
@@ -368,6 +304,140 @@ const transfer = useTransferProgress()
 const currentServer = inject(currentServerInjectionKey)!
 const connectionMeta = inject(connectionMetaInjectionKey)!
 const ssh = computed(() => connectionMeta.value.ssh)
+
+// ── Tour ──
+const { requestTour } = useTourManager()
+const { onboarding, markDone } = useOnboarding()
+
+/** Cleanup helper — reset all Quick Share tour state */
+function cleanupQuickShareTour() {
+  tourQuickShareShowDone.value = false
+  tourQuickShareStep.value = 1
+  tourQuickShareOpen.value = false
+}
+
+const quickShareTourSteps: TourStep[] = [
+  // ── Quick Share Step 1: Modal overview ──
+  {
+    target: '[data-tour="qs-modal"]',
+    message: 'This is the Quick Share screen.\n\nWhen you drop files onto 45Flow from most screens, this wizard opens automatically. It walks you through uploading files to the server and generating a share link — all in three quick steps.\n\nThe file list at the top shows what you dropped. Here we\'re using a sample file for the tour.',
+    beforeShow: () => {
+      tourQuickShareStep.value = 1
+      tourQuickShareShowDone.value = false
+      tourQuickShareOpen.value = true
+    },
+  },
+  // ── Quick Share Step 1: Step indicator ──
+  {
+    target: '[data-tour="qs-steps"]',
+    message: 'The step indicator shows your progress.\n\nStep 1 is Destination — choose where on the server to upload. Step 2 is Link Options — set expiry, access, and video settings. Step 3 is Upload & Share — monitor the upload and grab your link.',
+    beforeShow: () => {
+      tourQuickShareStep.value = 1
+      tourQuickShareOpen.value = true
+    },
+  },
+  // ── Quick Share Step 1: Destination picker ──
+  {
+    target: '[data-tour="qs-step-destination"]',
+    message: 'In Step 1, you pick a destination folder on the server.\n\nUse the folder browser to navigate your project directories. Once you\'ve selected a folder, click Next to continue.',
+    beforeShow: () => {
+      tourQuickShareStep.value = 1
+      tourQuickShareOpen.value = true
+    },
+  },
+  // ── Quick Share Step 2: Link Options overview ──
+  {
+    target: '[data-tour="qs-step-options"]',
+    message: 'Step 2 is where you configure your share link before uploading.\n\nLet\'s walk through each option.',
+    beforeShow: () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+    },
+  },
+  // ── Quick Share Step 2: Expiry ──
+  {
+    target: '[data-tour="qs-expiry"]',
+    message: 'Set how long the link stays active.\n\nType a custom value or use the quick presets — 1 hour, 1 day, 1 week, or Never for a permanent link.',
+    beforeShow: () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+    },
+  },
+  // ── Quick Share Step 2: Network ──
+  {
+    target: '[data-tour="qs-network"]',
+    message: 'Choose the network for your share link.\n\nLocal (LAN) generates an internal URL for your network. External (Internet) uses your public domain or IP so anyone outside your network can access it.',
+    beforeShow: () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+    },
+  },
+  // ── Quick Share Step 2: Advanced Options ──
+  {
+    target: '[data-tour="qs-advanced-panel"]',
+    message: 'The Advanced Options panel gives you finer control over your link.\n\nLet\'s go through each setting.',
+    beforeShow: async () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+      await new Promise(r => setTimeout(r, 100))
+      const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+      const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+      if (btn && !panel) btn.click()
+    },
+  },
+  // ── Quick Share Step 2: Link Title ──
+  {
+    target: '[data-tour="qs-link-title"]',
+    message: 'Give your link a descriptive title.\n\nThis is optional but helps you identify the link later in the dashboard.',
+    beforeShow: async () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+      await new Promise(r => setTimeout(r, 100))
+      const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+      const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+      if (btn && !panel) btn.click()
+    },
+  },
+  // ── Quick Share Step 2: Access Mode ──
+  {
+    target: '[data-tour="qs-access-mode"]',
+    message: 'Control who can access your shared files.\n\n• Anyone with the link — no sign-in needed.\n• Password protected — recipients enter a shared password.\n• Invited users and groups only — only specific user accounts and groups can access it.\n\nComments can be toggled for open and password-protected links.',
+    beforeShow: async () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+      await new Promise(r => setTimeout(r, 100))
+      const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+      const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+      if (btn && !panel) btn.click()
+    },
+  },
+  // ── Quick Share Step 2: Video Options ──
+  {
+    target: '[data-tour="qs-video-options"]',
+    message: 'When sharing video files, two things happen automatically:\n\n• A browser stream is created so recipients can watch immediately — no download needed.\n• Review copies (720p, 1080p, or full-res MP4s) are generated for offline download and editing.\n\nWith client-side transcoding enabled (Settings → Performance), video processing happens on your machine before upload — using your local CPU or GPU. This is faster for most workstations and reduces server load. If disabled, the server processes videos after upload.\n\nYou can also overlay a watermark on review copies to protect your content.',
+    beforeShow: async () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 2
+      await new Promise(r => setTimeout(r, 100))
+      const btn = document.querySelector<HTMLElement>('[data-tour="qs-advanced-btn"]')
+      const panel = document.querySelector('[data-tour="qs-advanced-panel"]')
+      if (btn && !panel) btn.click()
+    },
+  },
+  // ── Quick Share Step 3: Upload & Share (done state) ──
+  {
+    target: '[data-tour="qs-step-upload"]',
+    message: 'Step 3 handles the upload and link generation.\n\nYou\'ll see per-file progress bars while files transfer, then your share link appears with Copy and Open buttons. That\'s it — Quick Share in three steps!',
+    beforeShow: () => {
+      tourQuickShareOpen.value = true
+      tourQuickShareStep.value = 3
+      tourQuickShareShowDone.value = true
+    },
+  },
+]
+
+/** Pending real files to open after the tour finishes */
+let pendingDropFiles: DroppedFile[] = []
 
 // ── Drag state ──
 const dragging = ref(false)
@@ -423,6 +493,28 @@ function onDocDrop(e: DragEvent) {
   }
 
   if (!files.length) return
+
+  if (!onboarding.value.quickShareTourDone) {
+    // First drop — run the Quick Share tour first, then open the real modal
+    pendingDropFiles = files
+    requestTour('quickShare', quickShareTourSteps, () => {
+      markDone('quickShareTourDone')
+      // Restore the user's real files before exiting tour mode
+      // so the watcher doesn't blank the modal.
+      const realFiles = pendingDropFiles
+      pendingDropFiles = []
+      tourQuickShareShowDone.value = false
+      tourQuickShareStep.value = 1
+      droppedFiles.value = realFiles.length ? realFiles : []
+      wizardStep.value = 1
+      uploadPhase.value = 'idle'
+      viewUrl.value = ''
+      tourQuickShareOpen.value = false
+      showModal.value = realFiles.length > 0
+    })
+    return
+  }
+
   droppedFiles.value = files
   resetWizard()
   showModal.value = true
@@ -444,6 +536,7 @@ onBeforeUnmount(() => {
 
 // ── Modal state ──
 const showModal = ref(false)
+const minimized = ref(false)
 const droppedFiles = ref<DroppedFile[]>([])
 const wizardStep = ref<1 | 2 | 3>(1)
 const busy = ref(false)
@@ -462,9 +555,9 @@ watch(tourQuickShareOpen, (open) => {
     droppedFiles.value = MOCK_FILES
     wizardStep.value = tourQuickShareStep.value
     showModal.value = true
-  } else {
+  } else if (!droppedFiles.value.length) {
+    // Only reset if no real files were loaded (i.e. tour was cancelled, not completed)
     showModal.value = false
-    droppedFiles.value = []
     wizardStep.value = 1
     uploadPhase.value = 'idle'
   }
@@ -507,6 +600,7 @@ const proxyQualities = ref<string[]>(['original'])
 // Restricted users
 const userModalOpen = ref(false)
 const accessUsers = ref<Commenter[]>([])
+const accessGroups = ref<{ id: number; name: string; member_count?: number; display_color?: string | null; role_id: number | null; role_name: string | null }[]>([])
 const linkContext = { type: 'download' as const }
 
 // Watermark
@@ -521,8 +615,23 @@ const existingWatermarkPreviewUrl = ref<string | null>(null)
 type UploadPhase = 'idle' | 'uploading' | 'generating' | 'done' | 'error'
 const uploadPhase = ref<UploadPhase>('idle')
 const perFileProgress = ref<Record<string, number>>({})
+const perFileStatus = ref<Record<string, 'waiting' | 'transcoding' | 'uploading' | 'done' | 'error'>>({})
+const perFileDetail = ref<Record<string, string>>({})
 const viewUrl = ref('')
 const errorMsg = ref('')
+
+const currentPhaseLabel = computed(() => {
+  const statuses = Object.values(perFileStatus.value)
+  if (statuses.includes('transcoding')) return 'Transcoding on your machine…'
+  if (statuses.includes('uploading')) return 'Uploading files…'
+  return 'Processing files…'
+})
+
+const overallProgress = computed(() => {
+  const vals = Object.values(perFileProgress.value)
+  if (!vals.length) return 0
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+})
 
 const videoExts = new Set([
   'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'wmv', 'flv',
@@ -548,7 +657,7 @@ const expiresSec = computed(() => {
 
 const canProceed = computed(() => {
   if (accessMode.value === 'open_password' && !password.value) return false
-  if (accessMode.value === 'restricted' && !accessUsers.value.length) return false
+  if (accessMode.value === 'restricted' && !accessUsers.value.length && !accessGroups.value.length) return false
   if (hasVideo.value && proxyQualities.value.length === 0) return false
   if (watermarkEnabled.value && !watermarkFile.value && !selectedExistingWatermark.value) return false
   return true
@@ -566,6 +675,7 @@ function setNever() {
 
 function resetWizard() {
   wizardStep.value = 1
+  minimized.value = false
   destFolder.value = ''
   projectBase.value = ''
   expiresValue.value = 1
@@ -578,6 +688,7 @@ function resetWizard() {
   showPassword.value = false
   allowOpenComments.value = true
   accessUsers.value = []
+  accessGroups.value = []
   userModalOpen.value = false
   proxyQualities.value = ['original']
   watermarkEnabled.value = false
@@ -587,6 +698,8 @@ function resetWizard() {
   existingWatermarkPreviewUrl.value = null
   uploadPhase.value = 'idle'
   perFileProgress.value = {}
+  perFileStatus.value = {}
+  perFileDetail.value = {}
   viewUrl.value = ''
   errorMsg.value = ''
   busy.value = false
@@ -597,6 +710,7 @@ function cancel() {
   if (isTourMode.value) return // don't close during guided tour
   if (busy.value && uploadPhase.value === 'uploading') return // don't close during upload
   showModal.value = false
+  minimized.value = false
   droppedFiles.value = []
 }
 
@@ -626,7 +740,7 @@ const watermarkPreviewUrl = computed(() =>
   watermarkFile.value?.dataUrl || existingWatermarkPreviewUrl.value || null
 )
 
-function onApplyUsers(users: any[]) {
+function onApplyUsers(users: any[], groups?: any[]) {
   const next = users.map((u: any) => {
     const username = (u.username || '').trim()
     const name = (u.name || username).trim()
@@ -643,6 +757,7 @@ function onApplyUsers(users: any[]) {
     dedup.push(c)
   }
   accessUsers.value = dedup
+  accessGroups.value = groups || []
 }
 
 function pickWatermark() {
@@ -801,6 +916,19 @@ function joinPath(dir: string, name: string) {
   return (d || '/') + '/' + n
 }
 
+function parseEtaToSeconds(eta: string): number | null {
+  if (!eta || eta === 'N/A' || eta === '—') return null
+  const hms = eta.match(/^(\d+):(\d+):(\d+)$/)
+  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3])
+  const ms = eta.match(/^(\d+):(\d+)$/)
+  if (ms) return Number(ms[1]) * 60 + Number(ms[2])
+  let secs = 0
+  const hm = eta.match(/(\d+)\s*h/); if (hm) secs += Number(hm[1]) * 3600
+  const mm = eta.match(/(\d+)\s*m/); if (mm) secs += Number(mm[1]) * 60
+  const sm = eta.match(/(\d+)\s*s/); if (sm) secs += Number(sm[1])
+  return secs > 0 ? secs : null
+}
+
 // ── Upload & Share ──
 async function startUploadAndShare() {
   if (!canProceed.value) return
@@ -808,6 +936,8 @@ async function startUploadAndShare() {
   wizardStep.value = 3
   uploadPhase.value = 'uploading'
   perFileProgress.value = Object.fromEntries(droppedFiles.value.map(f => [f.path, 0]))
+  perFileStatus.value = Object.fromEntries(droppedFiles.value.map(f => [f.path, 'waiting']))
+  perFileDetail.value = {}
 
   const host = ssh.value?.server
   const user = ssh.value?.username
@@ -828,31 +958,140 @@ async function startUploadAndShare() {
 
     // Upload all files sequentially
     const serverPaths: string[] = []
+    let anyClientTranscoded = false
+    let clientAppliedWatermark = false
+    const { enabled: clientTranscodeEnabled, preset: transcodePreset, hwAccel: hwAccelSetting } = useClientTranscode()
+    
+    // Resolve watermark image path for client-side transcoding
+    let localWatermarkPath: string | null = null
+    if (watermarkEnabled.value && clientTranscodeEnabled.value) {
+      if (watermarkFile.value?.path) {
+        // User picked a local watermark image
+        localWatermarkPath = watermarkFile.value.path
+      } else if (selectedExistingWatermark.value) {
+        // Download the server-side watermark to a local temp file
+        const downloaded = await window.electron.downloadWatermark({
+          apiBase: connectionMeta.value.apiBase || '',
+          token: connectionMeta.value.token || '',
+          relPath: selectedExistingWatermark.value,
+        })
+        localWatermarkPath = downloaded || null
+      }
+    }
+
+    // Shared groupId ensures upload + transcode tasks render in one dock section
+    const groupId = crypto.randomUUID?.() || Math.random().toString(36).slice(2)
+
     for (let i = 0; i < droppedFiles.value.length; i++) {
       const f = droppedFiles.value[i]
+      let uploadedFileName = f.name  // Track actual uploaded filename
       const fileDestAbs = joinPath(destDir, f.name)
-      serverPaths.push(fileDestAbs)
 
       perFileProgress.value[f.path] = 0
+      perFileStatus.value[f.path] = 'waiting'
+      perFileDetail.value[f.path] = ''
 
       const taskId = transfer.createUploadTask({
         title: `Quick share: ${f.name}`,
         detail: destDir,
         cancel: () => {},
-        context: { source: 'upload', destDir, file: fileDestAbs },
+        context: { source: 'upload', groupId, destDir, file: fileDestAbs },
       })
+
+      // Determine if this is a video file and if we should transcode client-side
+      const videoExts = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'mxf', 'mts', 'm2ts', 'mod', 'tod', 'vob', 'f4v', 'asf', 'rm', 'rmvb', 'ts', 'ogv', '3gp', '3g2', 'mj2', 'm4v', 'qt', 'dv', 'divx', 'hevc', 'h264', 'h265', 'vp8', 'vp9', 'av1', 'dnxhd', 'prores', 'r3d', 'braw', 'ari', 'cine', 'dav'])
+      const fileExt = String(f.name || '').toLowerCase().split('.').pop() || ''
+      const isVideo = videoExts.has(fileExt)
+      // Old single-quality client transcode replaced by full multi-output post-upload transcode
+      const shouldTranscodeClient = false
+
+      let fileToUpload = f.path
+      let clientTranscoded = false
+
+      // Transcode if needed
+      if (shouldTranscodeClient) {
+        const transcodeQuality = proxyQualities.value.includes('original') ? 'original' : proxyQualities.value[0] || '720p'
+        perFileStatus.value[f.path] = 'transcoding'
+        perFileDetail.value[f.path] = 'Preparing transcode…'
+        
+        try {
+          transfer.updateUpload(taskId, {
+            detail: 'Transcoding locally…',
+          })
+
+          const { jobId, done } = await window.electron.transcodeStart(
+            {
+              inputPath: f.path,
+              quality: transcodeQuality as 'original' | '1080p' | '720p',
+              outputFormat: 'mp4',
+              useHardwareAccel: hwAccelSetting.value,
+              preset: transcodePreset.value,
+              watermarkPath: localWatermarkPath || undefined,
+            },
+            (progress: { percent: number; fps: any; speed: any; eta: any }) => {
+              perFileProgress.value[f.path] = progress.percent
+              perFileDetail.value[f.path] = `Transcoding: ${progress.fps} fps @ ${progress.speed} — ETA ${progress.eta}`
+              transfer.updateUpload(taskId, {
+                progress: progress.percent,
+                detail: `Transcoding: ${progress.fps}fps @ ${progress.speed} - ETA ${progress.eta}`,
+              })
+            }
+          )
+
+          const result = await done
+          if (result?.ok && result?.outputPath) {
+            fileToUpload = result.outputPath
+            clientTranscoded = true
+            anyClientTranscoded = true
+            if (localWatermarkPath) clientAppliedWatermark = true
+            // Update filename to match transcoded output (always .mp4)
+            uploadedFileName = f.name.replace(/\.[^.]+$/, '.mp4')
+            perFileProgress.value[f.path] = 0
+            perFileStatus.value[f.path] = 'uploading'
+            perFileDetail.value[f.path] = 'Uploading…'
+            transfer.updateUpload(taskId, {
+              detail: 'Uploading…',
+              progress: 0,
+            })
+          } else {
+            const errorMsg = result?.error || 'Transcode failed — try disabling client-side transcoding in Settings to let the server handle it.'
+            perFileStatus.value[f.path] = 'error'
+            perFileDetail.value[f.path] = `Error: ${errorMsg}`
+            transfer.finishUpload(taskId, false, `Transcode error: ${errorMsg}`)
+            throw new Error(errorMsg)
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          perFileStatus.value[f.path] = 'error'
+          perFileDetail.value[f.path] = `Error: ${errorMsg}`
+          pushNotification(
+            new Notification(
+              'Transcode Failed',
+              `${f.name}: ${errorMsg}\n\nTip: You can disable client-side transcoding in Settings → Performance to let the server handle it instead.`,
+              'error',
+              12000
+            )
+          )
+          throw err
+        }
+      } else {
+        perFileStatus.value[f.path] = 'uploading'
+        perFileDetail.value[f.path] = 'Uploading…'
+      }
 
       const { done } = await electron.rsyncStart(
         {
           host,
           user,
-          src: f.path,
+          src: fileToUpload,
           destDir,
           port,
           keyPath: undefined,
           transcodeProxy: hasVideo.value,
           proxyQualities: hasVideo.value ? proxyQualities.value.slice() : undefined,
           apiToken: connectionMeta.value.token || undefined,
+          clientTranscoded,
+          clientWatermarked: clientAppliedWatermark,
         },
         (p: { percent?: number; bytesTransferred?: number; raw?: string; rate?: string; eta?: string }) => {
           let pct: number | undefined =
@@ -866,6 +1105,7 @@ async function startUploadAndShare() {
           }
           const filePct = pct ?? 0
           perFileProgress.value[f.path] = filePct
+          perFileDetail.value[f.path] = p.rate ? `Uploading: ${p.rate}${p.eta ? ' — ETA ' + p.eta : ''}` : 'Uploading…'
           transfer.updateUpload(taskId, {
             status: 'uploading',
             progress: filePct,
@@ -877,11 +1117,18 @@ async function startUploadAndShare() {
 
       const res = await done
       if (!res?.ok) {
+        perFileStatus.value[f.path] = 'error'
+        perFileDetail.value[f.path] = res?.error || 'Upload failed'
         transfer.finishUpload(taskId, false, res?.error || 'Upload failed')
         throw new Error(res?.error || `Upload failed for ${f.name}`)
       }
       transfer.finishUpload(taskId, true)
       perFileProgress.value[f.path] = 100
+      perFileStatus.value[f.path] = 'done'
+      perFileDetail.value[f.path] = 'Complete'
+
+      // Add server path using the actual uploaded filename
+      serverPaths.push(joinPath(destDir, uploadedFileName))
     }
 
     // Upload watermark if needed
@@ -910,8 +1157,9 @@ async function startUploadAndShare() {
       projectBase: projectBase.value || undefined,
       baseMode: usePublicBase.value ? 'externalPreferred' : 'local',
       title: linkTitle.value || undefined,
-      generateReviewProxy: hasVideo.value,
+      generateReviewProxy: hasVideo.value, // Server generates proxy variants even when client transcoded
       hls: hasVideo.value,
+      clientTranscoded: anyClientTranscoded || undefined,
     }
 
     if (serverPaths.length === 1) body.filePath = serverPaths[0]
@@ -941,6 +1189,14 @@ async function startUploadAndShare() {
       })
     }
 
+    if (accessMode.value === 'restricted' && accessGroups.value.length) {
+      body.groups = accessGroups.value.map(g => ({
+        groupId: g.id,
+        roleId: g.role_id,
+        roleName: g.role_name,
+      }))
+    }
+
     if (hasVideo.value) {
       body.proxyQualities = proxyQualities.value.length > 0 ? proxyQualities.value.slice() : ['original']
     }
@@ -949,6 +1205,17 @@ async function startUploadAndShare() {
       body.watermark = true
       body.watermarkFile = watermarkRelPath
       body.watermarkProxyQualities = proxyQualities.value.slice()
+    }
+
+    // If client applied the watermark, tell the server so it doesn't re-watermark
+    if (clientAppliedWatermark) {
+      body.clientWatermarked = true
+    }
+
+    // Tell the server to pre-claim transcode jobs so the server worker
+    // doesn't pick them up before the client can start transcoding.
+    if (hasVideo.value && clientTranscodeEnabled.value) {
+      body.clientTranscode = true
     }
 
     // Reuse existing transcodes instead of failing with outputs_exist;
@@ -966,7 +1233,11 @@ async function startUploadAndShare() {
     signalLinkCreated()
 
     // ── Start transcode tracking in the TransferDock ──
-    if (hasVideo.value) {
+    // When client transcoding is enabled, the FFmpeg onProgress callback
+    // updates the TransferDock directly — polling tasks would fight it
+    // and cause progress oscillation.  Only create polling tasks for
+    // server-side transcoding.
+    if (hasVideo.value && !clientTranscodeEnabled.value) {
       const token = extractLinkToken(data)
       const fileRecords: any[] = Array.isArray(data?.files) ? data.files : []
       const transcodeRecords: any[] = Array.isArray(data?.transcodes) ? data.transcodes : []
@@ -996,7 +1267,7 @@ async function startUploadAndShare() {
           : ''
         const filePath = rec?.path || rec?.name || 'File'
         const displayName = rec?.name || rec?.path || 'File'
-        const context = { source: 'upload' as const, linkUrl: data.viewUrl, file: filePath }
+        const context = { source: 'upload' as const, groupId, file: filePath }
 
         const alreadyTrackingHls = transfer.hasActiveTranscode({
           assetVersionIds: [assetVersionId],
@@ -1051,6 +1322,73 @@ async function startUploadAndShare() {
             }
           })
         }
+      }
+    }
+
+    // ── Client-side full transcode for video files ───────────────────────────
+    console.log('[quick-share] client transcode decision:', {
+      hasVideo: hasVideo.value,
+      clientTranscodeEnabled: clientTranscodeEnabled.value,
+      hwAccel: hwAccelSetting.value,
+      preset: transcodePreset.value,
+    })
+    if (hasVideo.value && clientTranscodeEnabled.value) {
+      const { createTranscodePollingTasks, runClientTranscode } = useUploadTranscode()
+      const fileRecordsForTranscode: any[] = Array.isArray(data?.files) ? data.files : []
+      const videoExtsSet = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'mxf', 'mts', 'm2ts', 'mod', 'tod', 'vob', 'f4v', 'asf', 'rm', 'rmvb', 'ts', 'ogv', '3gp', '3g2', 'mj2', 'm4v', 'qt', 'dv', 'divx', 'hevc', 'h264', 'h265', 'vp8', 'vp9', 'av1', 'dnxhd', 'prores', 'r3d', 'braw', 'ari', 'cine', 'dav'])
+
+      for (let fi = 0; fi < fileRecordsForTranscode.length; fi++) {
+        const rec = fileRecordsForTranscode[fi]
+        const avId = Number(rec?.assetVersionId ?? 0)
+        if (!Number.isFinite(avId) || avId <= 0) continue
+
+        const localFile = droppedFiles.value[fi]
+        if (!localFile) continue
+
+        const ext = String(localFile.name || '').toLowerCase().split('.').pop() || ''
+        if (!videoExtsSet.has(ext)) continue
+
+        const filePath = rec?.path || rec?.name || localFile.name
+        const pQualities = proxyQualities.value.length > 0 ? proxyQualities.value.slice() : ['original']
+
+        // Create polling tasks — same composable as LocalUploadPanel
+        createTranscodePollingTasks({
+          assetVersionId: avId,
+          filename: localFile.name,
+          proxyQualities: pQualities,
+          generateHls: true,
+          apiFetch,
+          context: {
+            source: 'upload' as const,
+            groupId,
+            file: filePath,
+            proxyQualities: pQualities,
+          },
+        })
+
+        // Run transcode async — same composable as LocalUploadPanel
+        ;(async () => {
+          const result = await runClientTranscode({
+            assetVersionId: avId,
+            sourceFilePath: localFile.path,
+            filename: localFile.name,
+            proxyQualities: pQualities,
+            generateHls: true,
+            watermarkPath: localWatermarkPath,
+            ssh: {
+              host: host || '',
+              user: user || '',
+              port,
+              keyPath: undefined,
+            },
+            apiFetch,
+          })
+          if (result.ok) {
+            console.log(`[quick-share] ✓ client transcode done: ${localFile.name}`)
+          } else {
+            console.warn(`[quick-share] client transcode failed for ${localFile.name}: ${result.error}`)
+          }
+        })()
       }
     }
 

@@ -134,6 +134,98 @@ export type ExistingUser = {
   default_role?: Role | null
 }
 
+export type Group = {
+  id: number
+  name: string
+  description?: string | null
+  display_color?: string | null
+  member_count?: number
+  members?: GroupMember[]
+  created_at?: string
+  updated_at?: string
+}
+
+export type GroupMember = {
+  membership_id?: number
+  user_id: number
+  user_name?: string
+  name?: string
+  user_email?: string
+  display_color?: string | null
+  company?: string | null
+  tags_json?: string | null
+  joined_at?: string
+}
+
+export type GroupAccessRow = {
+  group_id: number
+  group_name: string
+  group_description?: string | null
+  group_color?: string | null
+  member_count?: number
+  role_id?: number | null
+  role_name?: string | null
+  role?: {
+    id: number
+    name: string
+    permissions: {
+      view: boolean
+      comment: boolean
+      download: boolean
+      upload: boolean
+    }
+  } | null
+  granted_at?: string | null
+}
+
+export type TranscodeOptions = {
+  inputPath: string
+  quality: 'original' | '1080p' | '720p'
+  outputFormat: 'mp4' | 'hevc'
+  useHardwareAccel: boolean
+  preset?: 'fast' | 'balanced' | 'quality'
+  watermarkPath?: string
+}
+
+export type TranscodeProgress = {
+  percent: number
+  fps: number
+  speed: string
+  eta: string
+  message: string
+}
+
+export type TranscodeResult = { ok?: boolean; outputPath?: string; error?: string }
+
+export type FullTranscodeOptions = {
+  inputPath: string
+  proxyQualities: ('720p' | '1080p' | 'original')[]
+  generateHls: boolean
+  watermarkPath?: string
+  useHardwareAccel: boolean
+  preset?: 'fast' | 'balanced' | 'quality'
+}
+
+export type FullTranscodeProgress = {
+  phase: 'probe' | 'proxy' | 'hls'
+  activeQuality?: string
+  perQualityProgress: Record<string, number>
+  overallPercent: number
+  fps: number
+  speed: string
+  eta: string
+  message: string
+}
+
+export type FullTranscodeResult = {
+  ok?: boolean
+  outputDir?: string
+  proxyFiles?: Record<string, string>
+  hlsDir?: string | null
+  hlsMaster?: string | null
+  error?: string
+}
+
 export interface ElectronApi {
   ipcRenderer: {
     send: (channel: string, data?: any) => void
@@ -167,6 +259,44 @@ export interface ElectronApi {
   ) => Promise<{ id: string; done: Promise<RsyncResult> }>
 
   rsyncCancel: (id: string) => void
+
+  /** -------- Client-side Transcoding -------- */
+  transcodeStart: (
+    options: TranscodeOptions,
+    onProgress?: (p: TranscodeProgress) => void
+  ) => Promise<{ jobId: string; done: Promise<TranscodeResult> }>
+
+  transcodeCancel: (jobId: string) => void
+
+  /** Full multi-output transcode (proxies + HLS) */
+  fullTranscodeStart: (
+    options: FullTranscodeOptions,
+    onProgress?: (p: FullTranscodeProgress) => void
+  ) => Promise<{ jobId: string; done: Promise<FullTranscodeResult> }>
+
+  fullTranscodeCancel: (jobId: string) => void
+
+  /** Remove a transcode temp directory after rsync */
+  cleanupTranscodeTemp: (dirPath: string) => Promise<{ ok: boolean; error?: string }>
+  /** Remove a downloaded watermark temp file */
+  cleanupWatermarkTemp: (filePath: string) => Promise<{ ok: boolean; error?: string }>
+
+  /** Download a watermark image from the server to a local temp file */
+  downloadWatermark: (opts: { apiBase: string; token: string; relPath: string }) => Promise<string | null>
+
+  /** Get hardware acceleration capabilities */
+  getTranscodeCapabilities: () => Promise<{
+    hasHardwareAccel: boolean
+    bestCodecH264: string
+    bestCodecHevc: string
+    hardwareDescription: string
+    ffmpegSource: 'system' | 'bundled'
+    ffmpegVersion: string
+    probeResults: Record<string, boolean>
+  }>
+
+  /** Persist the upload queue for crash recovery */
+  persistUploadQueue: (items: any[]) => Promise<void>
 
   /** Get the real filesystem path for a File from drag-and-drop (replaces deprecated File.path) */
   getPathForFile: (file: File) => string

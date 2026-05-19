@@ -394,6 +394,9 @@ import {
   pruneOldTransfers, isPidAlive, removeLogFile, makeLogPath, getAllTransfers,
   type PersistedTransfer,
 } from './transfers/transfer-store';
+import { TranscodeManager } from './transcoding/TranscodeManager';
+import { FullTranscodeManager } from './transcoding/FullTranscodeManager';
+import { initPremiumUpgrade } from './premium-upgrade';
 
 let discoveredServers: Server[] = [];
 export let jsonLogger: ReturnType<typeof createLogger>;
@@ -626,7 +629,7 @@ async function tryAttach(ip: string) {
     // We cannot reliably get HTTP status from EventSource errors.
     // We rely on preflight to catch 404s before we open.
     s.lastErr = normalizeErrorText(err) || 'EventSource connection error';
-    jl('warn', 'sse.error', {
+    jl('debug', 'sse.error', {
       ip,
       error: s.lastErr,
       errorType: err?.type || err?.name || err?.constructor?.name || undefined,
@@ -1920,6 +1923,23 @@ function createWindow() {
     }
     setupStreams.clear();
 
+    // Sweep leftover 45flow temp directories
+    try {
+      const tempBase = app.getPath('temp');
+      const entries = fs.readdirSync(tempBase);
+      for (const entry of entries) {
+        if (entry.startsWith('45flow-')) {
+          const fullPath = path.join(tempBase, entry);
+          try {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+          } catch {}
+        }
+      }
+      jl('info', 'app.temp-cleanup.done');
+    } catch (err: any) {
+      jl('warn', 'app.temp-cleanup.error', { error: err?.message || String(err) });
+    }
+
     jl('info', 'app.window-all-closed', { platform: process.platform });
 
     if (process.platform !== 'darwin') {
@@ -2024,6 +2044,8 @@ app.whenReady().then(() => {
     jl('info', 'app.activate', { openWindows: BrowserWindow.getAllWindows().length });
   });
   jl('info', 'window.created');
+
+  initPremiumUpgrade(() => (mainWindowRef && !mainWindowRef.isDestroyed()) ? mainWindowRef : null);
 
   // ── Resume detached transfers from previous session ──────────────────────
   pruneOldTransfers()       // remove old completed/failed entries (>7 days)
@@ -2188,6 +2210,8 @@ export type RsyncStartOpts = {
   watermarkProxyQualities?: string[]
   noIngest?: boolean
   apiToken?: string
+  clientTranscoded?: boolean  // file was transcoded on client side
+  clientWatermarked?: boolean  // watermark was applied on client side
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -2905,6 +2929,8 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
             params.set('watermarkProxyQualities', watermarkProxyQualities.join(','))
           }
         }
+        if (opts.clientTranscoded) params.set('clientTranscoded', '1')
+        if (opts.clientWatermarked) params.set('clientWatermarked', '1')
 
         const url = `${base}/api/ingest/register?${params.toString()}`
         const ingestHeaders: Record<string, string> = {}
@@ -3026,3 +3052,156 @@ ipcMain.on('upload:cancel', (_event, { id }) => {
     jl('info', 'upload.cancel.queued', { id })
   }
 })
+
+// ── Client-side transcoding ──────────────────────────────────────────────────
+const transcodeManager = new TranscodeManager();
+
+ipcMain.handle('transcode:start', async (event, { jobId, options }) => {
+  jl('info', 'transcode.start', { jobId, options });
+  
+  try {
+    const outputPath = await transcodeManager.transcode(
+      jobId,
+      options,
+      (progress) => {
+        event.sender.send(`transcode:progress:${jobId}`, progress);
+      }
+    );
+    
+    event.sender.send(`transcode:done:${jobId}`, { ok: true, outputPath });
+    return { ok: true, outputPath };
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    jl('error', 'transcode.failed', { jobId, error: errorMsg });
+    event.sender.send(`transcode:failed:${jobId}`, { error: errorMsg });
+    throw error;
+  }
+});
+
+ipcMain.handle('transcode:cancel', async (_event, { jobId }) => {
+  const canceled = transcodeManager.cancel(jobId);
+  jl('info', 'transcode.cancel', { jobId, canceled });
+  return { canceled };
+});
+
+ipcMain.handle('transcode:get-capabilities', async () => {
+  const { detectHardwareCapabilities, hasHardwareAcceleration, describeHardware } = await import('./transcoding/hardware-detect');
+  const caps = detectHardwareCapabilities();
+  return {
+    hasHardwareAccel: hasHardwareAcceleration(),
+    bestCodecH264: caps.bestCodecH264,
+    bestCodecHevc: caps.bestCodecHevc,
+    hardwareDescription: describeHardware(),
+    ffmpegSource: caps.ffmpegSource,
+    ffmpegVersion: caps.ffmpegVersion,
+    probeResults: caps.probeResults,
+  };
+});
+
+// ── Full client-side transcoding (proxies + HLS) ─────────────────────────────
+const fullTranscodeManager = new FullTranscodeManager();
+
+ipcMain.handle('transcode:full-start', async (event, { jobId, options }) => {
+  jl('info', 'transcode.full.start', {
+    jobId,
+    inputPath: options.inputPath,
+    proxyQualities: options.proxyQualities,
+    hls: options.generateHls,
+    watermark: options.watermarkPath || 'none',
+    hwAccel: options.useHardwareAccel,
+    preset: options.preset,
+  });
+  console.log(`[transcode:full-start] jobId=${jobId} input=${options.inputPath} qualities=${options.proxyQualities} hls=${options.generateHls} watermark=${options.watermarkPath || 'none'} hwAccel=${options.useHardwareAccel} preset=${options.preset}`);
+
+  try {
+    const result = await fullTranscodeManager.transcode(
+      jobId,
+      options,
+      (progress) => {
+        event.sender.send(`transcode:full-progress:${jobId}`, progress);
+      }
+    );
+
+    jl('info', 'transcode.full.done', { jobId, outputDir: result.outputDir, proxyFiles: Object.keys(result.proxyFiles || {}), hlsDir: result.hlsDir || null });
+    console.log(`[transcode:full-done] jobId=${jobId} outputDir=${result.outputDir} proxies=${Object.keys(result.proxyFiles || {}).join(',')} hlsDir=${result.hlsDir || 'none'}`);
+    event.sender.send(`transcode:full-done:${jobId}`, { ok: true, ...result });
+    return { ok: true, ...result };
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    jl('error', 'transcode.full.failed', { jobId, error: errorMsg });
+    console.error(`[transcode:full-failed] jobId=${jobId} error=${errorMsg}`);
+    event.sender.send(`transcode:full-failed:${jobId}`, { error: errorMsg });
+    throw error;
+  }
+});
+
+ipcMain.handle('transcode:full-cancel', async (_event, { jobId }) => {
+  fullTranscodeManager.cancel();
+  jl('info', 'transcode.full.cancel', { jobId });
+  return { canceled: true };
+});
+
+// ── Download watermark from server to local temp file ────────────────────────
+ipcMain.handle('watermark:download', async (_event, opts: { apiBase: string; token: string; relPath: string }) => {
+  const { apiBase, token, relPath } = opts;
+  if (!apiBase || !relPath) return null;
+  try {
+    const url = `${apiBase}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      jl('warn', 'watermark.download.failed', { status: res.status, relPath });
+      return null;
+    }
+    const arrayBuf = await res.arrayBuffer();
+    const ext = path.extname(relPath) || '.png';
+    const tmpDir = path.join(app.getPath('temp'), '45flow-watermarks');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `watermark-${Date.now()}${ext}`);
+    fs.writeFileSync(tmpFile, Buffer.from(arrayBuf));
+    jl('info', 'watermark.download.ok', { relPath, tmpFile });
+    return tmpFile;
+  } catch (err: any) {
+    jl('error', 'watermark.download.error', { relPath, error: err?.message || String(err) });
+    return null;
+  }
+});
+
+// ── Cleanup: remove a specific temp directory (called after rsync) ───────────
+ipcMain.handle('transcode:cleanup-temp', async (_event, { dirPath }) => {
+  if (!dirPath || typeof dirPath !== 'string') return { ok: false, error: 'invalid path' };
+  const tempBase = app.getPath('temp');
+  const resolved = path.resolve(dirPath);
+  // Safety: only allow deletion within the OS temp directory and matching our prefix
+  if (!resolved.startsWith(tempBase) || !path.basename(resolved).startsWith('45flow-')) {
+    jl('warn', 'transcode.cleanup.rejected', { dirPath: resolved });
+    return { ok: false, error: 'path not within temp or missing prefix' };
+  }
+  try {
+    fs.rmSync(resolved, { recursive: true, force: true });
+    jl('info', 'transcode.cleanup.ok', { dirPath: resolved });
+    return { ok: true };
+  } catch (err: any) {
+    jl('error', 'transcode.cleanup.error', { dirPath: resolved, error: err?.message || String(err) });
+    return { ok: false, error: err?.message };
+  }
+});
+
+// ── Cleanup: remove a single watermark temp file ─────────────────────────────
+ipcMain.handle('transcode:cleanup-watermark', async (_event, { filePath: wmPath }) => {
+  if (!wmPath || typeof wmPath !== 'string') return { ok: false };
+  const tempBase = app.getPath('temp');
+  const resolved = path.resolve(wmPath);
+  if (!resolved.startsWith(path.join(tempBase, '45flow-watermarks'))) {
+    return { ok: false, error: 'path not within watermarks temp' };
+  }
+  try {
+    fs.unlinkSync(resolved);
+    jl('info', 'watermark.cleanup.ok', { filePath: resolved });
+    return { ok: true };
+  } catch (err: any) {
+    jl('error', 'watermark.cleanup.error', { filePath: resolved, error: err?.message || String(err) });
+    return { ok: false, error: err?.message };
+  }
+});

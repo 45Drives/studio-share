@@ -181,13 +181,17 @@
 														class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
 														:class="{
 															'bg-default dark:bg-well/75 text-zinc-600 dark:text-zinc-300': u.status === 'queued',
+															'bg-default dark:bg-well/75 text-purple-600 dark:text-purple-300': u.status === 'transcoding',
 															'bg-default dark:bg-well/75 text-blue-600 dark:text-blue-300': u.status === 'uploading',
 															'bg-default dark:bg-well/75 text-green-600 dark:text-green-300': u.status === 'done',
 															'bg-default dark:bg-well/75 text-amber-600 dark:text-amber-300': u.status === 'canceled',
 															'bg-default dark:bg-well/75 text-red-600 dark:text-red-300': u.status === 'error',
 														}">
-														<template v-if="u.status === 'uploading'">
-															{{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+														<template v-if="u.status === 'transcoding'">
+															Transcode {{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
+														</template>
+														<template v-else-if="u.status === 'uploading'">
+															Upload {{ Number.isFinite(u.progress) ? u.progress.toFixed(0) : 0 }}%
 														</template>
 														<template v-else>
 															<span v-if="u.alreadyUploaded && u.status === 'done'">
@@ -200,14 +204,14 @@
 												<td class="px-4 py-2 border border-default">
 													<div class="flex justify-end">
 														<button class="btn btn-secondary" @click="cancelOne(u)"
-															:disabled="u.status !== 'uploading'" title="Cancel this upload">
+															:disabled="u.status !== 'uploading' && u.status !== 'transcoding'" title="Cancel this upload">
 															Cancel
 														</button>
 													</div>
 												</td>
 											</tr>
 
-											<tr v-if="u.status === 'uploading' && uploads.length > 1">
+											<tr v-if="(u.status === 'uploading' || u.status === 'transcoding') && uploads.length > 1">
 												<td colspan="5" class="px-4 py-2 border border-default">
 													<progress class="w-full h-2 rounded-lg overflow-hidden" :value="Number.isFinite(u.progress) ? u.progress : 0" max="100">
 													</progress>
@@ -233,81 +237,22 @@
 									</p>
 								</div>
 
-								<div class="advanced-video-grid">
-									<div class="advanced-col">
-										<label class="font-semibold block mb-1">Review Copies</label>
-										<div class="flex flex-wrap gap-x-3 gap-y-2">
-											<label class="inline-flex items-center gap-2 text-sm">
-												<input type="checkbox" class="proxy-quality-checkbox" value="720p" v-model="proxyQualities" />
-												<span>720p</span>
-											</label>
-											<label class="inline-flex items-center gap-2 text-sm">
-												<input type="checkbox" class="proxy-quality-checkbox" value="1080p" v-model="proxyQualities" />
-												<span>1080p</span>
-											</label>
-											<label class="inline-flex items-center gap-2 text-sm">
-												<input type="checkbox" class="proxy-quality-checkbox" value="original" v-model="proxyQualities" />
-												<span>Full Res</span>
-											</label>
-										</div>
-										<div class="text-xs text-slate-400 mt-2">
-											Streamable copies for review. The original file is always preserved.
-										</div>
-									</div>
-
-									<div class="advanced-col col-span-2">
-										<div class="space-y-2">
-											<div class="flex flex-wrap items-center gap-2">
-												<label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
-												<Switch v-model="watermarkAfterUpload" :class="[
-													watermarkAfterUpload ? 'bg-secondary' : 'bg-well',
-													'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-												]">
-													<span class="sr-only">Toggle video watermarking</span>
-													<span aria-hidden="true" :class="[
-														watermarkAfterUpload ? 'translate-x-5' : 'translate-x-0',
-														'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-													]" />
-												</Switch>
-												<span class="text-sm text-muted">{{ watermarkAfterUpload ? 'Apply watermark' : 'No watermark' }}</span>
-											</div>
-
-											<div v-if="watermarkAfterUpload" class="flex flex-wrap items-center gap-2">
-												<button class="btn btn-secondary" @click="pickWatermark">Choose Image</button>
-												<span class="text-sm truncate min-w-0" :title="watermarkFile ? watermarkFile.name : 'No image selected'">
-													{{ watermarkFile ? watermarkFile.name : 'No image selected' }}
-												</span>
-												<select
-													v-model="selectedExistingWatermark"
-													class="input-textlike border rounded px-2 py-1 text-sm min-w-[16rem]"
-												>
-													<option value="">Select existing watermark file…</option>
-													<option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">
-														{{ wm }}
-													</option>
-												</select>
-												<button class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFiles">Refresh</button>
-											</div>
-
-											<div v-if="watermarkAfterUpload && !watermarkFile && !selectedExistingWatermark" class="watermark-warning">
-												Select a watermark image to continue.
-											</div>
-
-											<!-- Watermark preview -->
-											<div v-if="watermarkAfterUpload && watermarkFile?.dataUrl" class="mt-2">
-												<div class="flex items-center justify-between gap-2 mb-1">
-													<div class="text-xs text-slate-400">Preview (approximate)</div>
-													<button v-if="watermarkFile" class="btn btn-danger" @click="clearWatermark">Clear Image</button>
-												</div>
-												<div class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
-													<div class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60"></div>
-													<img :src="watermarkFile.dataUrl" alt="Watermark preview"
-														class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>
+								<VideoOptionsPanel
+									v-model:proxyQualities="proxyQualities"
+									v-model:watermarkEnabled="watermarkAfterUpload"
+									v-model:selectedExistingWatermark="selectedExistingWatermark"
+									:watermarkFile="watermarkFile"
+									:existingWatermarkFiles="existingWatermarkFiles"
+									:effectiveWatermarkPreviewUrl="watermarkFile?.dataUrl || existingWatermarkPreviewUrl || null"
+									:effectiveWatermarkName="watermarkFile ? watermarkFile.name : (selectedExistingWatermark ? selectedExistingWatermark.split('/').pop() || '' : '')"
+									:showHeading="false"
+									watermarkLabel="Watermark Videos"
+									:watermarkStatusText="watermarkAfterUpload ? 'Apply watermark' : 'No watermark'"
+									reviewCopyHelpText="Streamable copies for review. The original file is always preserved."
+									@pickWatermark="pickWatermark"
+									@clearWatermark="clearWatermark"
+									@refreshWatermarks="loadExistingWatermarkFiles"
+								/>
 							</div>
 						</div>
 					</section>
@@ -343,7 +288,7 @@
 import { ref, computed, inject, watch, onMounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi'
 import FolderPicker from '../components/FolderPicker.vue'
-import { Switch } from '@headlessui/vue';
+import VideoOptionsPanel from '../components/VideoOptionsPanel.vue'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
@@ -352,6 +297,8 @@ import { pushNotification, Notification, CardContainer } from '@45drives/houston
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
+import { useClientTranscode } from '../composables/useClientTranscode'
+import { useUploadTranscode } from '../composables/useUploadTranscode'
 const { to } = useResilientNav()
 useHeader('Upload Files')
 const transfer = useTransferProgress()
@@ -383,7 +330,7 @@ const localUploadTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="upload-step-3"]',
-		message: 'Step 3: Review your files and start the upload.\n\nThe overall progress bar at the top tracks all files. When uploading multiple files, each file also shows its own inline progress bar with speed and ETA.',
+		message: 'Step 3: Review your files and start the upload.\n\nThe overall progress bar at the top tracks all files. When client-side transcoding is enabled, video files show a two-phase workflow: Transcode → Upload. Each file shows its own inline progress bar with speed and ETA.',
 		placement: 'top',
 	},
 	{
@@ -635,6 +582,56 @@ function extractJobInfoByVersion(data: any): Record<number, { queuedKinds: strin
 	return map;
 }
 
+/** Parse ETA string like "00:05:23" or "5m 23s" to seconds */
+function parseEta(eta: string): number | null {
+	if (!eta || eta === 'N/A' || eta === '—') return null
+	// HH:MM:SS or MM:SS
+	const hms = eta.match(/^(\d+):(\d+):(\d+)$/)
+	if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3])
+	const ms = eta.match(/^(\d+):(\d+)$/)
+	if (ms) return Number(ms[1]) * 60 + Number(ms[2])
+	// "5m 23s" style
+	let secs = 0
+	const hm = eta.match(/(\d+)\s*h/); if (hm) secs += Number(hm[1]) * 3600
+	const mm = eta.match(/(\d+)\s*m/); if (mm) secs += Number(mm[1]) * 60
+	const sm = eta.match(/(\d+)\s*s/); if (sm) secs += Number(sm[1])
+	return secs > 0 ? secs : null
+}
+
+/**
+ * Run full client-side transcode via the unified composable.
+ */
+async function runClientFullTranscode(opts: {
+	assetVersionId: number
+	sourceFilePath: string
+	rowName: string
+	groupId: string
+	destDir: string
+	destFileAbs: string
+	wantProxy: boolean
+	localWatermarkPath: string | null
+	taskId?: string
+}) {
+	const { runClientTranscode } = useUploadTranscode()
+
+	await runClientTranscode({
+		assetVersionId: opts.assetVersionId,
+		sourceFilePath: opts.sourceFilePath,
+		filename: opts.rowName,
+		proxyQualities: opts.wantProxy ? proxyQualities.value.slice() : ['720p'],
+		generateHls: true,
+		watermarkPath: opts.localWatermarkPath,
+		ssh: {
+			host: ssh?.server || '',
+			user: ssh?.username || '',
+			port: serverPort,
+			keyPath: privateKeyPath,
+		},
+		apiFetch,
+	})
+	// If this fails, server-side jobs remain queued as fallback
+}
+
 function waitForIngestAndStartTranscode(opts: {
 	uploadId: string
 	rowName: string
@@ -644,6 +641,11 @@ function waitForIngestAndStartTranscode(opts: {
 	destDir: string
 	destFileAbs: string
 	watermarkRelPath?: string
+	// Client-side full transcode opts
+	clientTranscode?: boolean
+	sourceFilePath?: string
+	localWatermarkPath?: string | null
+	taskId?: string
 }) {
 	const chan = `upload:ingest:${opts.uploadId}`
 
@@ -652,6 +654,25 @@ function waitForIngestAndStartTranscode(opts: {
 		const assetVersionId = Number(payload.assetVersionId);
 
 		if (!Number.isFinite(fileId) || fileId <= 0) return;
+
+		// ── Client-side full transcode path ──────────────────────────────────────
+		if (opts.clientTranscode && opts.sourceFilePath && Number.isFinite(assetVersionId) && assetVersionId > 0) {
+			runClientFullTranscode({
+				assetVersionId,
+				sourceFilePath: opts.sourceFilePath,
+				rowName: opts.rowName,
+				groupId: opts.groupId,
+				destDir: opts.destDir,
+				destFileAbs: opts.destFileAbs,
+				wantProxy: opts.wantProxy,
+				localWatermarkPath: opts.localWatermarkPath ?? null,
+				taskId: opts.taskId,
+			});
+			// Don't return — fall through to create per-kind polling tasks
+			// which will show separate progress bars from the client's progress pushes
+		}
+
+		// ── Server-side transcode tracking (also used to display client progress) ──
 
 		const jobInfo = extractJobInfoByVersion(payload);
 		const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
@@ -866,7 +887,11 @@ function pickWatermark() {
 		}
 	});
 }
-function clearWatermark() { watermarkFile.value = null }
+function clearWatermark() {
+	watermarkFile.value = null
+	existingWatermarkPreviewUrl.value = null
+	selectedExistingWatermark.value = ''
+}
 
 async function loadExistingWatermarkFiles() {
 	try {
@@ -879,6 +904,25 @@ async function loadExistingWatermarkFiles() {
 			.sort((a: string, b: string) => a.localeCompare(b))
 	} catch {
 		existingWatermarkFiles.value = []
+	}
+}
+
+async function fetchExistingWatermarkPreview(relPath: string) {
+	try {
+		const base = connectionMeta.value.apiBase ?? ''
+		const token = connectionMeta.value.token ?? ''
+		const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`
+		const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+		if (!res.ok) { existingWatermarkPreviewUrl.value = null; return }
+		const blob = await res.blob()
+		existingWatermarkPreviewUrl.value = await new Promise<string>((resolve, reject) => {
+			const reader = new FileReader()
+			reader.onloadend = () => resolve(reader.result as string)
+			reader.onerror = reject
+			reader.readAsDataURL(blob)
+		})
+	} catch {
+		existingWatermarkPreviewUrl.value = null
 	}
 }
 
@@ -976,6 +1020,7 @@ const watermarkAfterUpload = ref(false)
 const watermarkFile = ref<LocalFile | null>(null)
 const existingWatermarkFiles = ref<string[]>([])
 const selectedExistingWatermark = ref('')
+const existingWatermarkPreviewUrl = ref<string | null>(null)
 const adaptiveHls = ref(false);
 
 watch(transcodeProxyAfterUpload, (v) => {
@@ -991,12 +1036,18 @@ watch(transcodeProxyAfterUpload, (v) => {
 })
 
 watch(selectedExistingWatermark, (v) => {
-	if (String(v || '').trim()) watermarkFile.value = null
+	if (String(v || '').trim()) {
+		watermarkFile.value = null
+		void fetchExistingWatermarkPreview(v)
+	}
 })
 
 watch(watermarkAfterUpload, (enabled) => {
 	if (enabled) void loadExistingWatermarkFiles()
-	else selectedExistingWatermark.value = ''
+	else {
+		selectedExistingWatermark.value = ''
+		existingWatermarkPreviewUrl.value = null
+	}
 })
 
 function finish() {
@@ -1065,7 +1116,7 @@ type UploadRow = {
 	size: number
 	dest: string
 	rsyncId?: string | null
-	status: 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
+	status: 'queued' | 'transcoding' | 'uploading' | 'done' | 'canceled' | 'error'
 	error: string | null
 	progress: number
 	speed: string | null
@@ -1206,6 +1257,7 @@ function scheduleBatchNotification() {
 function uploadOneFile(
 	row: UploadRow,
 	watermarkRelPathForIngest: string,
+	localWatermarkPath: string | null,
 	onDone: () => void
 ) {
 	row.status = 'uploading'
@@ -1251,46 +1303,134 @@ function uploadOneFile(
 
 	const enableWatermark = watermarkAfterUpload.value && !!watermarkRelPathForIngest
 
-	window.electron.rsyncStart(
-		{
-			host: ssh?.server,
-			user: ssh?.username,
-			src: row.path,
-			destDir: row.dest,
-			port: serverPort,
-			keyPath: privateKeyPath,
-			transcodeProxy: transcodeProxyAfterUpload.value,
-			proxyQualities: proxyQualities.value.slice(),
-			watermark: enableWatermark,
-			watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
-			watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
-			apiToken: connectionMeta.value.token || undefined,
-		},
-		p => {
-			if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
+	// Determine if this is a video file and if we should transcode client-side
+	const ext = String(row.name || '').toLowerCase().split('.').pop() || ''
+	const isVideo = videoExts.has(ext)
+	const { enabled: clientTranscodeEnabled, preset: transcodePreset, hwAccel: hwAccelSetting } = useClientTranscode()
+	// Old single-quality client transcode is replaced by full multi-output transcode
+	// that runs after ingest (via runClientFullTranscode). Always upload the raw file.
+	const shouldTranscodeClient = false
 
-			let pct: number | undefined =
-				typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
+	const doUpload = async (filePathToUpload: string, clientTranscoded: boolean = false, clientWatermarked: boolean = false) => {
+		return window.electron.rsyncStart(
+			{
+				host: ssh?.server,
+				user: ssh?.username,
+				src: filePathToUpload,
+				destDir: row.dest,
+				port: serverPort,
+				keyPath: privateKeyPath,
+				transcodeProxy: transcodeProxyAfterUpload.value, // Server generates proxy variants (scaling) even when client transcoded
+				proxyQualities: proxyQualities.value.slice(),
+				watermark: enableWatermark,
+				watermarkFileName: enableWatermark ? watermarkRelPathForIngest : undefined,
+				watermarkProxyQualities: enableWatermark ? proxyQualities.value.slice() : undefined,
+				apiToken: connectionMeta.value.token || undefined,
+				clientTranscoded, // Tell server we transcoded client-side
+				clientWatermarked, // Tell server watermark was applied client-side
+			},
+			p => {
+				if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
 
-			if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
-				pct = (p.bytesTransferred / row.size) * 100;
+				let pct: number | undefined =
+					typeof p.percent === 'number' && !Number.isNaN(p.percent) ? p.percent : undefined;
+
+				if (pct === undefined && typeof p.bytesTransferred === 'number' && row.size > 0) {
+					pct = (p.bytesTransferred / row.size) * 100;
+				}
+
+				if (pct === undefined && typeof p.raw === 'string') {
+					const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
+					if (m) pct = parseFloat(m[1]);
+				}
+
+				updateRowProgress(row, pct, p.rate, p.eta);
+
+				transfer.updateUpload(taskId, {
+					status: 'uploading',
+					progress: typeof pct === 'number' ? pct : row.progress,
+					speed: p.rate ?? null,
+					eta: p.eta ?? null,
+				});
 			}
+		);
+	}
 
-			if (pct === undefined && typeof p.raw === 'string') {
-				const m = p.raw.match(/(\d+(?:\.\d+)?)%/);
-				if (m) pct = parseFloat(m[1]);
+	// Handle transcode and upload workflow
+	const startUploadWorkflow = async () => {
+		if (shouldTranscodeClient) {
+			const transcodeQuality = proxyQualities.value.includes('original') ? 'original' : proxyQualities.value[0] || '720p'
+			
+			try {
+				row.status = 'transcoding'
+				transfer.updateUpload(taskId, {
+					detail: 'Transcoding locally…',
+				})
+
+				const { jobId, done } = await window.electron.transcodeStart(
+					{
+						inputPath: row.path,
+						quality: transcodeQuality as 'original' | '1080p' | '720p',
+						outputFormat: 'mp4',
+						useHardwareAccel: hwAccelSetting.value,
+						preset: transcodePreset.value,
+						watermarkPath: (enableWatermark && localWatermarkPath) ? localWatermarkPath : undefined,
+					},
+					(progress) => {
+						row.progress = progress.percent
+						transfer.updateUpload(taskId, {
+							progress: progress.percent,
+							speed: progress.speed || null,
+							eta: progress.eta || null,
+							detail: `Transcoding: ${progress.fps}fps @ ${progress.speed} - ETA ${progress.eta}`,
+						})
+					}
+				)
+
+				const result = await done
+				if (result?.ok && result?.outputPath) {
+					row.status = 'uploading'
+					row.progress = 0
+					transfer.updateUpload(taskId, {
+						detail: 'Uploading…',
+						progress: 0,
+						speed: null,
+						eta: null,
+					})
+					const clientWatermarked = !!(enableWatermark && localWatermarkPath)
+					return doUpload(result.outputPath, true, clientWatermarked)
+				} else {
+					const errorMsg = result?.error || 'Transcode failed — try disabling client-side transcoding in Settings to let the server handle it.'
+					throw new Error(errorMsg)
+				}
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				row.status = 'error'
+				row.error = `Transcode error: ${errorMsg}`
+				transfer.updateUpload(taskId, {
+					status: 'error',
+				})
+				pushNotification(
+					new Notification(
+						'Transcode Failed',
+						`${row.name}: ${errorMsg}\n\nTip: You can disable client-side transcoding in Settings → Performance to let the server handle it instead.`,
+						'error',
+						12000
+					)
+				)
+				activeUploads.value = Math.max(0, activeUploads.value - 1)
+				onDone()
+				throw err // Re-throw to prevent upload
 			}
-
-			updateRowProgress(row, pct, p.rate, p.eta);
-
-			transfer.updateUpload(taskId, {
-				status: 'uploading',
-				progress: typeof pct === 'number' ? pct : row.progress,
-				speed: p.rate ?? null,
-				eta: p.eta ?? null,
-			});
+		} else {
+			// No client transcode needed, upload directly
+			return doUpload(row.path, false)
 		}
-	).then(({ id, done }) => {
+	}
+
+	startUploadWorkflow()
+		.then(uploadPromise => uploadPromise)
+		.then(({ id, done }) => {
 		row.rsyncId = id;
 		if (row.status === 'canceled') {
 			window.electron.rsyncCancel(id)
@@ -1306,6 +1446,11 @@ function uploadOneFile(
 			destDir: destDirAbs,
 			destFileAbs,
 			watermarkRelPath: watermarkRelPathForIngest,
+			// Client-side full transcode
+			clientTranscode: clientTranscodeEnabled.value && videoExts.has(String(row.name || '').toLowerCase().split('.').pop() || ''),
+			sourceFilePath: row.path,
+			localWatermarkPath: localWatermarkPath,
+			taskId,
 		})
 		row.ingestUnsub = stopIngestListener
 
@@ -1446,6 +1591,24 @@ async function startUploads() {
 		return
 	}
 
+	// Resolve local watermark path for client-side transcode watermarking
+	let localWatermarkPath: string | null = null
+	if (watermarkAfterUpload.value) {
+		if (watermarkFile.value?.path) {
+			localWatermarkPath = watermarkFile.value.path
+		} else if (selectedExistingWatermark.value) {
+			try {
+				localWatermarkPath = await window.electron.downloadWatermark({
+					apiBase: connectionMeta.value.apiBase || '',
+					token: connectionMeta.value.token || '',
+					relPath: selectedExistingWatermark.value,
+				})
+			} catch (e) {
+				console.warn('Failed to download watermark for client transcode, server will apply it:', e)
+			}
+		}
+	}
+
 	// Pre-create dock tasks for ALL queued items so they're visible immediately
 	for (const row of queue) {
 		if (!row.dockTaskId) {
@@ -1500,7 +1663,7 @@ async function startUploads() {
 		while (activeUploads.value < MAX_CONCURRENT_UPLOADS && queueIdx < queue.length) {
 			const row = queue[queueIdx++]
 			if (row.status !== 'queued') continue // may have been canceled while waiting
-			uploadOneFile(row, watermarkRelPathForIngest, () => {
+			uploadOneFile(row, watermarkRelPathForIngest, localWatermarkPath, () => {
 				// When a file finishes, try to start the next queued one
 				drainQueue()
 				// Check if everything is finished
@@ -1536,7 +1699,7 @@ const uploadSummary = computed(() => {
 	const rows = uploads.value
 	const total = rows.length
 	const done = rows.filter(u => u.status === 'done').length
-	const active = rows.filter(u => u.status === 'uploading').length
+	const active = rows.filter(u => u.status === 'uploading' || u.status === 'transcoding').length
 	const queued = rows.filter(u => u.status === 'queued').length
 	const errors = rows.filter(u => u.status === 'error').length
 	const canceled = rows.filter(u => u.status === 'canceled').length
@@ -1545,7 +1708,7 @@ const uploadSummary = computed(() => {
 	let weightedPct = 0
 	for (const u of rows) {
 		if (u.status === 'done' || u.status === 'canceled') weightedPct += 100
-		else if (u.status === 'uploading') weightedPct += (u.progress || 0)
+		else if (u.status === 'uploading' || u.status === 'transcoding') weightedPct += (u.progress || 0)
 		// queued/error = 0
 	}
 	const overallPct = total > 0 ? weightedPct / total : 0

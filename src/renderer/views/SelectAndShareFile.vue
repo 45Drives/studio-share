@@ -219,130 +219,18 @@
                                     <!-- Link Access row -->
                                     <template #after class="">
                                         <div class="border-t border-default mt-2 pt-2 min-w-0">
-                                            <div data-tour="share-access-mode" class="ss-toned-panel min-w-0 p-3">
-                                                <div class="font-semibold mb-2">Link Access Mode</div>
-                                                <div class="grid grid-cols-3 gap-2 min-w-0">
-                                                    <div>
-                                                        <label
-                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
-                                                            <input type="radio" name="access-mode" value="open"
-                                                                v-model="accessMode" class="mt-1" />
-                                                            <span class="min-w-0">
-                                                                <span class="font-semibold block">Anyone with the
-                                                                    link</span>
-                                                                <span class="text-xs text-muted block">No sign-in
-                                                                    required.</span>
-                                                            </span>
-                                                        </label>
-
-                                                        <label
-                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
-                                                            <input type="radio" name="access-mode" value="open_password"
-                                                                v-model="accessMode" class="mt-1" />
-                                                            <span class="min-w-0">
-                                                                <span class="font-semibold block">Anyone with the link +
-                                                                    password</span>
-                                                                <span class="text-xs text-muted block">One shared
-                                                                    password for everyone.</span>
-                                                            </span>
-                                                        </label>
-
-                                                        <label
-                                                            class="flex items-start gap-2 p-1 rounded-md border border-default cursor-pointer">
-                                                            <input type="radio" name="access-mode" value="restricted"
-                                                                v-model="accessMode" class="mt-1" />
-                                                            <span class="min-w-0">
-                                                                <span class="font-semibold block">Only invited
-                                                                    users</span>
-                                                                <span class="text-xs text-muted block">Sign in with a
-                                                                    user account. Permissions come from roles.</span>
-                                                            </span>
-                                                        </label>
-                                                    </div>
-                                                    <div
-                                                        class="col-span-2 border-default min-w-0 p-3 border border-default rounded-md gap-2">
-                                                        <div v-if="accessMode !== 'restricted'"
-                                                            class="flex flex-wrap items-center gap-3 min-w-0">
-                                                            <label class="font-semibold sm:whitespace-nowrap">Allow
-                                                                comments</label>
-                                                            <Switch id="allow-comments-switch"
-                                                                v-model="allowOpenComments" :class="[
-                                                                    allowOpenComments ? 'bg-secondary' : 'bg-well',
-                                                                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                                ]">
-                                                                <span class="sr-only">Toggle comments</span>
-                                                                <span aria-hidden="true" :class="[
-                                                                    allowOpenComments ? 'translate-x-5' : 'translate-x-0',
-                                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                                ]" />
-                                                            </Switch>
-                                                            <span class="text-xs text-muted">{{ allowOpenComments ?
-                                                                'Visitors can leave a name and a comment.' : 'Comments are disabled.'}}</span>
-                                                        </div>
-                                                        <div v-if="accessMode === 'open_password'"
-                                                            class="flex flex-col gap-2 min-w-0 mt-1">
-                                                            <div class="flex flex-row gap-6 items-center text-center">
-                                                                <label
-                                                                    class="text-default font-semibold sm:whitespace-nowrap">Link
-                                                                    password</label>
-                                                                <p class="text-xs text-muted">Share this password with
-                                                                    anyone
-                                                                    you want to access the link.</p>
-                                                            </div>
-
-                                                            <div class="relative flex items-center min-w-0 w-full">
-                                                                <input :type="showPassword ? 'text' : 'password'"
-                                                                    v-model.trim="password"
-                                                                    placeholder="Enter a password"
-                                                                    class="input-textlike border rounded px-3 py-2 w-full pr-10 min-w-0" />
-                                                                <button type="button"
-                                                                    @click="showPassword = !showPassword"
-                                                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted">
-                                                                    <EyeIcon v-if="!showPassword" class="w-5 h-5" />
-                                                                    <EyeSlashIcon v-else class="w-5 h-5" />
-                                                                </button>
-                                                            </div>
-                                                          
-                                                            <p v-if="!password" class="text-sm text-red-500">
-                                                                Password is required when protection is enabled.
-                                                            </p>
-                                                        </div>
-
-                                                        <div v-if="accessMode === 'restricted'"
-                                                            class="flex flex-col gap-2 min-w-0">
-                                                            <p class="text-xs text-muted">
-                                                                Invited users sign in with their own username and
-                                                                password.
-                                                                Roles control download and comment permissions.
-                                                            </p>
-                                                            <button type="button" class="btn btn-primary"
-                                                                @click="openUserModal()">
-                                                                {{ accessCount ? 'Manage invited users' : 'Invite users…' }}
-                                                                <span v-if="accessCount"
-                                                                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-default text-default">
-                                                                    {{ accessCount }}
-                                                                </span>
-                                                            </button>
-                                                            <p class="text-xs opacity-70">Roles control permissions.</p>
-                                                            <p v-if="!accessSatisfied" class="text-sm text-red-500">
-                                                                Add at least one user to continue.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-span-3 grid grid-cols-3">
-                                                        <p class="mx-auto text-xs text-success">
-                                                            Access:
-                                                            {{
-                                                                accessMode === 'open'
-                                                                    ? 'Anyone with the link'
-                                                                    : accessMode === 'open_password'
-                                                                        ? 'Anyone with the link + password'
-                                                                        : 'Invited users only'
-                                                            }}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <LinkAccessMode
+                                                v-model="accessMode"
+                                                v-model:password="password"
+                                                v-model:showPassword="showPassword"
+                                                v-model:allowOpenComments="allowOpenComments"
+                                                :accessCount="accessCount"
+                                                :accessSatisfied="accessSatisfied"
+                                                dataTour="share-access-mode"
+                                                radioName="access-mode"
+                                                wrapperClass="ss-toned-panel min-w-0 p-3"
+                                                @openUserModal="openUserModal()"
+                                            />
                                         </div>
                                  
                                         <!-- Advanced Video Options -->
@@ -354,8 +242,8 @@
                                                     <div class="min-w-0">
                                                         <p class="font-semibold">Video options</p>
                                                         <p class="text-xs text-muted truncate">
-                                                            <span v-if="usingExistingProxy">Existing review copies will be used for streaming.</span>
-                                                            <span v-else>Review copies will be generated for streaming.</span>
+                                                            <span v-if="usingExistingProxy">Existing review copies found.</span>
+                                                            <span v-else>Review copies will be generated after upload.</span>
                                                             <span v-if="watermarkEnabled"> · Watermark enabled.</span>
                                                         </p>
                                                     </div>
@@ -363,118 +251,27 @@
                                                         :class="open ? 'rotate-180' : ''" />
                                                 </DisclosureButton>
                                                 <DisclosurePanel class="border-t border-default px-3 py-2.5 min-w-0 rounded-b-md">
-                                                    <div class="grid grid-cols-3 gap-4 items-start">
-                                                        <!-- Review Copies -->
-                                                        <div class="rounded-md p-2.5 min-w-0">
-                                                            <label class="font-semibold block mb-2">Review Copies</label>
-
-                                                            <div v-if="canTranscodeSelected && preflightProxyBlocked"
-                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-                                                                {{ proxyBlockReason }}
-                                                            </div>
-
-                                                            <div class="flex flex-wrap gap-x-3 gap-y-2">
-                                                                <label class="inline-flex items-center gap-2 text-sm">
-                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="720p"
-                                                                        v-model="proxyQualities" />
-                                                                    <span>720p</span>
-                                                                </label>
-                                                                <label class="inline-flex items-center gap-2 text-sm">
-                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="1080p"
-                                                                        v-model="proxyQualities" />
-                                                                    <span>1080p</span>
-                                                                </label>
-                                                                <label class="inline-flex items-center gap-2 text-sm">
-                                                                    <input type="checkbox" class="proxy-quality-checkbox" value="original"
-                                                                        v-model="proxyQualities" />
-                                                                    <span>Full Res</span>
-                                                                </label>
-                                                            </div>
-                                                            <div class="text-xs text-slate-400 mt-2">
-                                                                Streamable copies for review. The original file is always preserved.
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- Watermark Videos -->
-                                                        <div class="col-span-2 rounded-md p-2.5 min-w-0">
-                                                            <div v-if="hasVideoSelected"
-                                                                class="flex flex-wrap items-center gap-2 mb-2">
-                                                                <label class="font-semibold whitespace-nowrap">Watermark Videos:</label>
-                                                                <Switch v-model="watermarkEnabled"
-                                                                    :disabled="watermarkSwitchDisabled"
-                                                                    :title="watermarkSwitchTitle" :class="[
-                                                                        watermarkEnabled ? 'bg-secondary' : 'bg-well',
-                                                                        watermarkSwitchDisabled ? 'opacity-50 cursor-not-allowed' : '',
-                                                                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2'
-                                                                    ]">
-                                                                    <span class="sr-only">Toggle video watermarking</span>
-                                                                    <span aria-hidden="true" :class="[
-                                                                        watermarkEnabled ? 'translate-x-5' : 'translate-x-0',
-                                                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-default shadow ring-0 transition duration-200 ease-in-out'
-                                                                    ]" />
-                                                                </Switch>
-                                                                <span class="text-sm truncate min-w-0 flex-1" :title="watermarkSwitchTitle">
-                                                                    {{ watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark' }}
-                                                                </span>
-                                                            </div>
-                                                            <div v-else class="text-sm text-muted">
-                                                                Select a video to use watermark options.
-                                                            </div>
-
-                                                            <div v-if="hasVideoSelected && preflightWatermarkBlocked"
-                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-                                                                {{ watermarkBlockReason }}
-                                                            </div>
-                                                            <div v-if="hasVideoSelected && watermarkEnabled"
-                                                                class="flex flex-wrap items-center gap-2 mb-2">
-                                                                <button class="btn btn-secondary" @click="pickWatermark">
-                                                                    {{ usingExistingWatermark ? 'Choose New Image' : 'Choose Image' }}
-                                                                </button>
-                                                                <span class="text-sm truncate min-w-0"
-                                                                    :title="effectiveWatermarkName || (usingExistingWatermark ? 'Using existing watermark' : 'No image selected')">
-                                                                    {{ effectiveWatermarkName || (usingExistingWatermark ? 'Using existing watermark' : 'No image selected') }}
-                                                                </span>
-                                                                <select
-                                                                    v-model="selectedExistingWatermark"
-                                                                    class="input-textlike border rounded px-2 py-1 text-sm min-w-[16rem]"
-                                                                >
-                                                                    <option value="">Select existing watermark file…</option>
-                                                                    <option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">
-                                                                        {{ wm }}
-                                                                    </option>
-                                                                </select>
-                                                                <button class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFiles">
-                                                                    Refresh
-                                                                </button>
-                                                            </div>
-                                                            <div v-if="hasVideoSelected && watermarkEnabled && !watermarkFile && !selectedExistingWatermark && !usingExistingWatermark"
-                                                                class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-                                                                Select a watermark image to continue.
-                                                            </div>
-
-                                                            <!-- Watermark preview -->
-                                                            <div v-if="hasVideoSelected && watermarkEnabled && effectiveWatermarkPreviewUrl"
-                                                                class="mt-2">
-                                                                <div class="flex items-center justify-between gap-2 mb-1">
-                                                                    <div class="text-xs text-slate-400">Preview (approximate)</div>
-                                                                    <button v-if="watermarkFile"
-                                                                        class="btn btn-danger"
-                                                                        @click="clearWatermark">
-                                                                        Clear Image
-                                                                    </button>
-                                                                </div>
-                                                                <div
-                                                                    class="relative aspect-video w-full max-w-[18rem] rounded-md border border-default bg-default/60 overflow-hidden">
-                                                                    <div
-                                                                        class="absolute inset-0 bg-gradient-to-br from-slate-700/40 via-slate-800/40 to-slate-900/60">
-                                                                    </div>
-                                                                    <img :src="effectiveWatermarkPreviewUrl"
-                                                                        alt="Watermark preview"
-                                                                        class="absolute bottom-3 right-3 max-h-[35%] max-w-[35%] opacity-70 drop-shadow-md" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    <VideoOptionsPanel
+                                                        v-model:proxyQualities="proxyQualities"
+                                                        v-model:watermarkEnabled="watermarkEnabled"
+                                                        v-model:selectedExistingWatermark="selectedExistingWatermark"
+                                                        :watermarkFile="watermarkFile"
+                                                        :existingWatermarkFiles="existingWatermarkFiles"
+                                                        :effectiveWatermarkPreviewUrl="effectiveWatermarkPreviewUrl"
+                                                        :effectiveWatermarkName="effectiveWatermarkName"
+                                                        :usingExistingWatermark="usingExistingWatermark"
+                                                        :showHeading="false"
+                                                        watermarkLabel="Watermark Videos"
+                                                        :pickButtonLabel="usingExistingWatermark ? 'Replace...' : 'Browse...'"
+                                                        :watermarkSwitchDisabled="watermarkSwitchDisabled"
+                                                        :watermarkSwitchTitle="watermarkSwitchTitle"
+                                                        :watermarkStatusText="watermarkEnabled ? (usingExistingWatermark ? 'Use existing watermark' : 'Apply watermark') : 'No watermark'"
+                                                        :proxyBlockReason="canTranscodeSelected && preflightProxyBlocked ? proxyBlockReason : ''"
+                                                        :watermarkBlockReason="hasVideoSelected && preflightWatermarkBlocked ? watermarkBlockReason : ''"
+                                                        @pickWatermark="pickWatermark"
+                                                        @clearWatermark="clearWatermark"
+                                                        @refreshWatermarks="loadExistingWatermarkFiles"
+                                                    />
                                                 </DisclosurePanel>
                                             </Disclosure>
                                         </div>
@@ -491,7 +288,9 @@
                                     display_color: c.display_color,
                                     role_id: c.role_id ?? undefined,
                                     role_name: c.role_name ?? undefined,
-                                }))" @apply="onApplyUsers" />
+                                }))"
+                                :preselectedGroups="accessGroups"
+                                @apply="onApplyUsers" />
                             <ConfirmDeleteModal
                                 v-model="outputsExistModalOpen"
                                 :title="outputsConflictTitle"
@@ -559,10 +358,12 @@ import AddUsersModal from '../components/modals/AddUsersModal.vue'
 import ConfirmDeleteModal from '../components/modals/ConfirmDeleteModal.vue'
 import CommonLinkControls from '../components/CommonLinkControls.vue'
 import CheckPortForwarding from '../components/CheckPortForwarding.vue'
+import LinkAccessMode from '../components/LinkAccessMode.vue'
+import VideoOptionsPanel from '../components/VideoOptionsPanel.vue'
 import type { Commenter } from '../typings/electron'
 import { useHeader } from '../composables/useHeader'
-import { Disclosure, DisclosureButton, DisclosurePanel, Switch } from '@headlessui/vue'
-import { ChevronDownIcon, EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
+import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { ChevronDownIcon } from "@heroicons/vue/20/solid";
 import { useResilientNav } from '../composables/useResilientNav';
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { connectionMetaInjectionKey } from '../keys/injection-keys';
@@ -607,11 +408,11 @@ const shareFilesTourSteps: TourStep[] = [
 	},
 	{
 		target: '[data-tour="share-access-mode"]',
-		message: 'Control who can access the link.\n\n• "Anyone with the link" — no sign-in needed.\n• "Anyone + password" — one shared password for all visitors.\n• "Only invited users" — each user signs in with their own account. Roles control download and comment permissions.',
+		message: 'Control who can access the link.\n\n• "Anyone with the link" — no sign-in needed.\n• "Anyone + password" — one shared password for all visitors.\n• "Only invited users and groups" — each user signs in with their own account. Groups let you manage access for multiple users at once. Roles control download and comment permissions.',
 	},
 	{
 		target: '[data-tour="share-advanced-video"]',
-		message: 'When video files are selected, these advanced options appear.\n\n• Review Copies — generate 720p, 1080p, or full-res streamable copies for review.\n• Watermark — overlay a logo or image on review copies to brand or protect your content.\n\nExpand this section to fine-tune quality and watermark settings.',
+		message: 'When video files are selected, these advanced options appear.\n\n• Review Copies — generate 720p, 1080p, or full-res MP4s that recipients can download for offline review.\n• Watermark — overlay a logo or image on review copies to brand or protect your content.\n\nA browser-playable stream is always created automatically so recipients can watch immediately.',
 		beforeShow: () => { tourSpoofing.value = true },
 		cleanup: () => { tourSpoofing.value = false },
 	},
@@ -649,13 +450,14 @@ const showDefaultRootOption = computed(
         !configuredProjectRoot.value,
 )
 const accessUsers = ref<Commenter[]>([])
+const accessGroups = ref<{ id: number; name: string; member_count?: number; display_color?: string | null; role_id: number | null; role_name: string | null }[]>([])
 type AccessMode = 'open' | 'open_password' | 'restricted'
 const accessMode = ref<AccessMode>('open')
 const allowOpenComments = ref(true)
 const defaultAccessMode = ref<AccessMode>('open')
 const defaultAllowOpenComments = ref(true)
 const defaultUseProxyFiles = ref(false)
-const accessCount = computed(() => accessUsers.value.length)
+const accessCount = computed(() => accessUsers.value.length + accessGroups.value.length)
 const protectWithPassword = computed({
     get: () => accessMode.value === 'open_password',
     set: (v: boolean) => {
@@ -676,6 +478,7 @@ function resetAll() {
     usePublicBase.value = defaultUsePublicBase.value
     linkTitle.value = ''
     accessUsers.value = []
+    accessGroups.value = []
     accessMode.value = defaultAccessMode.value
     allowOpenComments.value = defaultAllowOpenComments.value
     password.value = ''
@@ -1730,6 +1533,14 @@ async function generateLink() {
         })
     }
 
+    if (accessMode.value === 'restricted' && accessGroups.value.length) {
+        (body as any).groups = accessGroups.value.map(g => ({
+            groupId: g.id,
+            roleId: g.role_id,
+            roleName: g.role_name,
+        }))
+    }
+
     body.generateReviewProxy = hasVideoSelected.value
     body.hls = hasVideoSelected.value
     if (hasVideoSelected.value) {
@@ -1906,7 +1717,7 @@ async function generateLink() {
                             proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
                         }
                         const fileId = Number(rec?.id ?? rec?.fileId ?? rec?.file_id ?? rec?.file?.id)
-                        const canUsePlayback = !!token && Number.isFinite(fileId) && fileId > 0
+                        const canUsePlayback = !!token && Number.isFinite(fileId) && fileId > 0 && accessMode.value === 'open'
                         const playbackPath = canUsePlayback
                             ? `/api/token/${encodeURIComponent(token)}/files/${encodeURIComponent(String(fileId))}/playback/${encodeURIComponent(String(assetVersionId))}?prefer=auto&audit=0`
                             : ''
@@ -1924,6 +1735,8 @@ async function generateLink() {
                                     return {
                                         status: j?.status ?? payload?.hlsStatus ?? payload?.status,
                                         progress: j?.progress ?? payload?.hlsProgress ?? 0,
+                                        etaSeconds: j?.eta_seconds ?? null,
+                                        speedX: j?.speed_x ?? null,
                                     }
                                 }
                             })
@@ -1953,6 +1766,8 @@ async function generateLink() {
                                         return {
                                             status: j?.status ?? payload?.proxyStatus ?? payload?.status,
                                             progress: j?.progress ?? payload?.proxyProgress ?? 0,
+                                            etaSeconds: j?.eta_seconds ?? null,
+                                            speedX: j?.speed_x ?? null,
                                             qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
                                             activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
                                             perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
@@ -2164,7 +1979,8 @@ function makeKey(name?: string, user_email?: string, username?: string) {
 }
 
 function onApplyUsers(
-    users: any[]
+    users: any[],
+    groups?: any[]
 ) {
     // Normalize the selection coming back from the modal
     const next = users.map(u => {
@@ -2196,6 +2012,7 @@ function onApplyUsers(
 
     // REPLACE (not merge): reflect exactly what's selected in the modal
     accessUsers.value = dedup
+    accessGroups.value = groups || []
 
     invalidateLink()
     scheduleAutoRegen()

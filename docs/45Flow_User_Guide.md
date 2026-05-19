@@ -61,12 +61,16 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
     - [Project Root](#project-root)
     - [Default Link Options](#default-link-options)
     - [Maintenance & Cleanup](#maintenance--cleanup)
-16. [View Logs (Client Log Viewer)](#16-view-logs-client-log-viewer)
+16. [Upgrade to Pro Edition](#16-upgrade-to-pro-edition)
+    - [Purchasing a License](#purchasing-a-license)
+    - [Activating Your License](#activating-your-license)
+    - [Downloading & Installing Pro Edition](#downloading--installing-pro-edition)
+17. [View Logs (Client Log Viewer)](#17-view-logs-client-log-viewer)
     - [Log Summary](#log-summary)
     - [Searching & Filtering Logs](#searching--filtering-logs)
     - [Log Entry Details](#log-entry-details)
-17. [Port Forwarding for External Sharing](#17-port-forwarding-for-external-sharing)
-18. [Frequently Asked Questions](#18-frequently-asked-questions)
+18. [Port Forwarding for External Sharing](#18-port-forwarding-for-external-sharing)
+19. [Frequently Asked Questions](#19-frequently-asked-questions)
 
 ---
 
@@ -396,10 +400,16 @@ The upload table shows each file with real-time status:
 | **Name** | File name with upload percentage |
 | **Size** | File size |
 | **Speed / Time** | Transfer speed during upload, or total time after completion |
-| **Status** | Current state — **Queued**, **Uploading**, **Done**, **Canceled**, or **Error** |
-| **Action** | Cancel button (available during active upload) |
+| **Status** | Current state — **Queued**, **Transcoding** (local), **Uploading**, **Done**, **Canceled**, or **Error** |
+| **Action** | Cancel button (available during active transcode or upload) |
 
 A progress bar at the top shows overall completion across all files.
+
+When **client-side transcoding** is enabled (Settings → Performance), video files go through a two-phase workflow:
+1. **Transcode** — The video is processed on your machine (shown as "Transcode XX%")
+2. **Upload** — The processed file is transferred to the server (shown as "Upload XX%")
+
+This offloads video processing from the server to your workstation. If you don't have client-side transcoding enabled, the server handles video processing after upload.
 
 ![Upload table with file statuses](images/upload-local-table.png)
 
@@ -776,6 +786,24 @@ These defaults are applied automatically when creating new links, but can be cha
 | **Allow comments on open links** | Enable comments by default on open (unauthenticated) links. |
 | **Generate review copies by default** | Automatically enable review copy generation for new links. |
 
+### Performance
+
+Settings for video processing performance. Found under **Settings → Performance**.
+
+| Option | Description |
+|--------|-------------|
+| **Client-side transcoding** | When enabled, videos are processed on your computer before upload — using your local CPU or GPU. This creates review copies faster and reduces load on the server. When disabled, the server handles all video processing after files are uploaded. |
+| **Hardware Acceleration** | Uses your GPU (NVIDIA NVENC, Intel Quick Sync, etc.) for faster transcoding. Falls back to CPU-only when no compatible GPU is detected. |
+
+#### Hardware Requirements for Client-side Transcoding
+
+- **Minimum:** Any modern multi-core CPU (4+ cores recommended)
+- **Recommended:** Dedicated GPU with hardware encoding support (NVIDIA GTX 1060+ / Intel 6th-gen+ / Apple Silicon)
+- **Storage:** Temporary disk space equal to ~1.5× the size of the source video during transcode
+- **FFmpeg** is bundled with 45Flow — no separate installation is needed
+
+> **Tip:** If client-side transcoding fails (e.g., insufficient GPU memory or unsupported codec), you can disable it in Settings → Performance. The server will handle transcoding instead — it just takes longer.
+
 ### Maintenance & Cleanup
 
 For administrators to manage server health:
@@ -797,7 +825,49 @@ For administrators to manage server health:
 
 ---
 
-## 16. View Logs (Client Log Viewer)
+## 16. Upgrade to Pro Edition
+
+45Flow Community Edition can be upgraded in-app to **45Flow Pro Edition**, which includes automatic updates, cross-subnet server discovery via the 45Drives registry, and priority support.
+
+### Purchasing a License
+
+To upgrade, you need a valid 45Flow Pro license key. Contact your 45Drives representative to purchase a license.
+
+Your license key will look like: `STUDIO-XXXX-XXXX-XXXX-XXXX`
+
+### Activating Your License
+
+1. Open 45Flow and connect to your server.
+2. On the Dashboard, click **"Settings"**.
+3. In the Settings sidebar, under **Upgrade**, click **"Go Pro"**.
+4. Enter your license key in the field provided.
+5. Click **"Activate"**.
+
+45Flow will:
+- **Validate** your key with the 45Drives license server.
+- **Activate** the license on your connected server (houston-broadcaster).
+
+If validation succeeds, you'll see a confirmation message showing your license details (perpetual or expiration date).
+
+> **Note:** You must be connected to a server to activate. The license is tied to the server, not the client app. If you have multiple servers, repeat the activation on each one after upgrading.
+
+### Downloading & Installing Pro Edition
+
+After successful activation:
+
+1. Click **"Download & Install Pro Edition"**.
+2. A progress bar shows the download status.
+3. Once complete, click **"Restart & Install"**.
+4. The app will close and reopen as **45Flow Pro Edition**.
+5. Reconnect to your server — it's already licensed, so you'll go straight to the Dashboard.
+
+> **Important:** The upgrade replaces the Community Edition. Your settings, saved servers, and session data are preserved since both editions share the same application identity.
+
+> **Troubleshooting:** If the download fails, check your internet connection and try again. The license activation on your server is already complete — you can also manually download Pro Edition from your 45Drives account and install it directly.
+
+---
+
+## 17. View Logs (Client Log Viewer)
 
 The Client Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
 
@@ -846,7 +916,7 @@ Click on any entry to expand its **Details** section, which shows the full event
 
 ---
 
-## 17. Port Forwarding for External Sharing
+## 18. Port Forwarding for External Sharing
 
 To share files externally (over the internet), HTTPS port **443** (or your custom HTTPS port) must be forwarded from your router to your server.
 
@@ -870,7 +940,7 @@ Port forwarding tells your router to direct incoming traffic on a specific port 
 
 ---
 
-## 18. Frequently Asked Questions
+## 19. Frequently Asked Questions
 
 **Q: My server doesn't appear in the auto-discovery dropdown. What do I do?**  
 A: The `houston-broadcaster` service must be running on the server. Try connecting manually using the server's IP address via the **"Connect manually via IP"** field.

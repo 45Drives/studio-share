@@ -83,6 +83,7 @@
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="text-[11px] font-semibold opacity-80">{{ taskRowLabel(t) }}</span>
+                                        <span v-if="t.kind === 'transcode' && transcodeMethodLabel(t)" class="text-[9px] opacity-50 whitespace-nowrap">{{ transcodeMethodLabel(t) }}</span>
                                         <button
                                             v-if="t.kind === 'upload' && (t.status === 'uploading' || t.status === 'queued')"
                                             class="btn btn-danger px-1.5 py-0 text-[9px] leading-tight"
@@ -225,13 +226,52 @@ function statusClass(t: any): string {
     return ''
 }
 
+function encoderDisplayName(encoder?: string): string {
+    if (!encoder) return ''
+    const e = encoder.toLowerCase()
+    if (e === 'h264_videotoolbox') return 'GPU (VideoToolbox)'
+    if (e === 'h264_vaapi' || e === 'hevc_vaapi') return 'GPU (VAAPI)'
+    if (e === 'h264_nvenc' || e === 'hevc_nvenc') return 'GPU (NVENC)'
+    if (e === 'h264_qsv' || e === 'hevc_qsv') return 'GPU (QSV)'
+    if (e === 'libx264' || e === 'libx265') return 'CPU'
+    if (e === 'copy') return 'Remux'
+    return encoder
+}
+
+function transcodeMethodLabel(t: any): string {
+    if (!t?.transcoder && !t?.encoder) return ''
+    const parts: string[] = []
+    if (t.transcoder) parts.push(t.transcoder === 'client' ? 'Client' : 'Server')
+    const enc = encoderDisplayName(t.encoder)
+    if (enc) parts.push(enc)
+    return parts.join(' · ')
+}
+
 function taskRowLabel(t: any) {
-    if (t?.kind === 'upload') return 'Upload'
+    if (t?.kind === 'upload') {
+        const detail = String(t?.detail || '')
+        if (detail.startsWith('Transcoding')) return 'Transcode'
+        return 'Upload'
+    }
     if (t?.kind === 'transcode') {
         const jk = String(t?.jobKind || '').toLowerCase()
         if (jk === 'proxy_mp4') {
+            const qualities = Array.isArray(t?.context?.proxyQualities) ? t.context.proxyQualities : []
+            const multiRes = qualities.length > 1
+            const status = String(t?.status || '').toLowerCase()
             const m = String(t?.detail || '').match(/\(([^)]+)\)/)
-            return m ? `Review Copy (${m[1]})` : 'Review Copy'
+            // While running, show the active quality; when queued/done show "Multiple Resolutions" if applicable
+            const qualitySuffix = (status === 'running' && m)
+                ? ` (${m[1]})`
+                : multiRes ? ' (Multiple Resolutions)' : (m ? ` (${m[1]})` : '')
+            const baseLabel = `Review Copy${qualitySuffix}`
+            if (status === 'queued') {
+                return `${baseLabel} (Queued)`
+            }
+            if (status === 'running' && Number(t?.progress || 0) === 0) {
+                return `${baseLabel} (Starting…)`
+            }
+            return baseLabel
         }
         if (jk === 'hls') return 'Stream'
         return 'Transcode'

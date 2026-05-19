@@ -580,6 +580,35 @@ async function readHttpError(res: Response): Promise<string> {
     return rid && !String(base).includes(rid) ? `${base} (request ${rid})` : String(base);
 }
 
+function translateSshError(errorMsg: string): string {
+    const msg = String(errorMsg || '').toLowerCase();
+    
+    // SSH authentication failures
+    if (msg.includes('all configured authentication methods failed')) {
+        return 'Authentication failed. Please check your username and password.';
+    }
+    if (msg.includes('permission denied')) {
+        return 'Permission denied. Please check your username and password.';
+    }
+    if (msg.includes('password authentication failed')) {
+        return 'Incorrect password. Please try again.';
+    }
+    
+    // SSH connection failures
+    if (msg.includes('connect etimedout') || msg.includes('connect timeout')) {
+        return 'Connection timed out. Please check the server IP address and ensure SSH is enabled.';
+    }
+    if (msg.includes('connect econnrefused') || msg.includes('connection refused')) {
+        return 'Connection refused. Please check the SSH port (default 22) and ensure SSH is enabled.';
+    }
+    if (msg.includes('network unreachable') || msg.includes('host unreachable')) {
+        return 'Network unreachable. Please check your network connection and the server IP address.';
+    }
+    
+    // Return original message if no translation found
+    return errorMsg;
+}
+
 async function connectToServer() {
     if (!selectedServer.value && !manualIp.value) {
         pushNotification(new Notification('Error', `Please select or enter a server before connecting.`, 'error', 8000));
@@ -655,13 +684,15 @@ async function connectToServer() {
                 // If this fails, SSH preflight/bootstrap will probably fail too, so treat as fatal.
                 window.appLog?.error('ensure-ssh-ready.failed', { error: r?.error });
                 statusLine.value = '';
-                pushNotification(new Notification('Error', r?.error || 'SSH setup failed', 'error', 12000));
+                const userMsg = translateSshError(r?.error || 'SSH setup failed');
+                pushNotification(new Notification('Error', userMsg, 'error', 12000));
                 return;
             }
         } catch (e: any) {
             statusLine.value = '';
             window.appLog?.error('ensure-ssh-ready.failed', { error: e?.message });
-            pushNotification(new Notification('Error', e?.message || 'SSH setup failed', 'error', 12000));
+            const userMsg = translateSshError(e?.message || 'SSH setup failed');
+            pushNotification(new Notification('Error', userMsg, 'error', 12000));
             return;
         }
 
@@ -756,7 +787,8 @@ async function connectToServer() {
                 statusLine.value = '';
                 isBootstrapping.value = false;
                 unlistenProgress?.(); unlistenProgress = null;
-                pushNotification(new Notification('Error', result?.error || 'Bootstrap failed', 'error', 12000));
+                const userMsg = translateSshError(result?.error || 'Bootstrap failed');
+                pushNotification(new Notification('Error', userMsg, 'error', 12000));
                 return;
             }
 
@@ -797,23 +829,36 @@ async function connectToServer() {
         
         try { sessionStorage.setItem('hb_token', token); } catch { /* ignore */ }
 
-        // Seed internal/external base on the server for later link generation
+        // Seed initial settings only if not already configured
         try {
             const hdrs = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
             };
 
-            // One shot: let the server detect both. Internal = LAN IP, External = WAN IP.
-            await fetch(`${apiBase}/api/settings`, {
-                method: 'POST',
+            // Check if settings already exist
+            const existingSettings = await fetch(`${apiBase}/api/settings`, {
+                method: 'GET',
                 headers: hdrs,
-                body: JSON.stringify({
-                    internalBase: 'auto',
-                    externalBase: 'auto',
-                    externalHttpsPort: httpsPort.value ?? 443
-                }),
             });
+            const settings = await existingSettings.json();
+
+            // Only seed defaults if external mode is not configured yet (first-time setup)
+            // Don't overwrite if user has set custom mode or if auto mode has a detected effective base
+            const needsInitialSetup = !settings.externalMode || 
+                                    (settings.externalMode === 'auto' && !settings.externalBaseEffective);
+            
+            if (needsInitialSetup) {
+                await fetch(`${apiBase}/api/settings`, {
+                    method: 'POST',
+                    headers: hdrs,
+                    body: JSON.stringify({
+                        internalBase: 'auto',
+                        externalBase: 'auto',
+                        externalHttpsPort: httpsPort.value ?? 443
+                    }),
+                });
+            }
         } catch (e: any) {
             window.appLog?.warn('settings.seed.failed', { message: e?.message });
         }
@@ -843,9 +888,6 @@ async function connectToServer() {
         });
 
         window.appLog?.info('login.success', { ip });
-
-        // Fire-and-forget: check for broadcaster package updates via API (runs in background)
-        checkBroadcasterUpdateInBackground(apiBase, token);
 
         to('dashboard');
     } catch (e: any) {
@@ -937,7 +979,6 @@ onMounted(async () => {
         statusLine.value = ''
         isBusy.value = false
 
-        checkBroadcasterUpdateInBackground(saved.apiBase, saved.token)
         to('dashboard')
     } catch (err: any) {
         // Network error (server unreachable) — keep saved credentials so user
@@ -951,147 +992,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-    unlistenProgress?.()
-    unlistenProgress = null
-})
-
-/**
- * Background check for houston-broadcaster package updates via the server API.
- * Fires after login — never blocks the user. Shows a persistent notification
- * with an "Install Update" action if a newer version is available.
- */
-async function checkBroadcasterUpdateInBackground(apiBase: string, token: string) {
-    try {
-        const hdrs = { 'Authorization': `Bearer ${token}` };
-
-        const res = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, { headers: hdrs });
-        if (!res.ok) {
-            window.appLog?.warn('broadcaster-update-check.http-error', { status: res.status });
-            return;
-        }
-
-        const data = await res.json();
-        window.appLog?.info('broadcaster-update-check.result', data);
-
-        if (!data.updateAvailable) return;
-
-        // Show a persistent notification with an install button
-        const msg = `Broadcaster update available: ${data.installedVersion ?? '?'} → ${data.candidateVersion ?? '?'}.\n Clicking Update will log you out while the server updates.`;
-        const notif = new Notification('Server Update Available', msg, 'warning', 15000);
-
-        notif.addAction('Update', async () => {
-            // Dismiss the "update available" notification immediately
-            notif.remove();
-
-            // 1. Fire the install request (server responds then starts upgrade in background)
-            let oldVersion: string | undefined;
-            try {
-                const installRes = await fetch(`${apiBase}/api/admin/broadcaster-update-install`, {
-                    method: 'POST',
-                    headers: hdrs,
-                });
-                if (installRes.ok) {
-                    const installData = await installRes.json();
-                    oldVersion = installData.oldVersion;
-                }
-            } catch {
-                window.appLog?.info('broadcaster-update-install.connection-dropped', { msg: 'expected during upgrade' });
-            }
-
-            // 2. Clear auth and navigate back to the connection screen
-            clearLastSession()
-            connectionMeta.value = { ...connectionMeta.value, token: undefined };
-            to('server-selection');
-
-            // 3. Show a persistent "updating" notification on the connection screen
-            const updatingNotif = new Notification(
-                'Server Updating…',
-                'The broadcaster is installing an update and will restart. Please wait…',
-                'info',
-                'never',
-            );
-            pushNotification(updatingNotif);
-
-            // 4a. Wait for the server to go DOWN first (up to 90s).
-            //     systemd-run --no-block returns instantly, so the old server
-            //     may still be alive for a bit until dnf/apt's %preun stops it.
-            const downDeadline = Date.now() + 90_000;
-            let serverWentDown = false;
-            while (Date.now() < downDeadline) {
-                await new Promise(r => setTimeout(r, 2_000));
-                try {
-                    const ctrl = new AbortController();
-                    const timer = setTimeout(() => ctrl.abort(), 5_000);
-                    await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
-                        headers: hdrs,
-                        signal: ctrl.signal,
-                    });
-                    clearTimeout(timer);
-                    // Still responding — not down yet
-                } catch {
-                    // Connection refused / timeout → server is down
-                    serverWentDown = true;
-                    break;
-                }
-            }
-
-            // 4b. Now wait for the server to come BACK UP (up to ~4 minutes)
-            let newVersion: string | undefined;
-            if (serverWentDown) {
-                const maxWaitMs = 240_000;
-                const pollIntervalMs = 4_000;
-                const startedAt = Date.now();
-
-                while (Date.now() - startedAt < maxWaitMs) {
-                    await new Promise(r => setTimeout(r, pollIntervalMs));
-                    try {
-                        const ctrl = new AbortController();
-                        const timer = setTimeout(() => ctrl.abort(), 5_000);
-                        const pingRes = await fetch(`${apiBase}/api/admin/broadcaster-update-check`, {
-                            headers: hdrs,
-                            signal: ctrl.signal,
-                        });
-                        clearTimeout(timer);
-                        if (pingRes.ok) {
-                            const checkData = await pingRes.json();
-                            newVersion = checkData.installedVersion;
-                            break;
-                        }
-                    } catch {
-                        // Server still down — keep polling
-                    }
-                }
-            }
-
-            // 5. Remove the "updating" notification and show result
-            updatingNotif.remove();
-
-            if (newVersion) {
-                const didUpdate = oldVersion && newVersion !== oldVersion;
-                pushNotification(new Notification(
-                    didUpdate ? 'Server Updated' : 'Server Restarted',
-                    didUpdate
-                        ? `Updated from ${oldVersion} to ${newVersion}. You can now log in.`
-                        : `Server is back (v${newVersion}). You can now log in.`,
-                    didUpdate ? 'success' : 'info',
-                    12000,
-                ));
-            } else {
-                pushNotification(new Notification(
-                    'Update Status Unknown',
-                    'The server has not come back yet. It may still be installing — try logging in shortly.',
-                    'warning',
-                    15000,
-                ));
-            }
-        }, false);
-
-        pushNotification(notif);
-    } catch (err: any) {
-        // Completely non-blocking — just log and move on
-        window.appLog?.warn('broadcaster-update-check.error', { error: err?.message });
-    }
-}
+    unlistenProgress?.();
+    unlistenProgress = null;
+});
 </script>
 
 <style scoped>
@@ -1143,7 +1046,8 @@ async function checkBroadcasterUpdateInBackground(apiBase: string, token: string
 
 .connect-main-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    /* grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
 }
 

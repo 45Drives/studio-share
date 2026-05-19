@@ -56,6 +56,8 @@ export type TransferTask =
         _apiFetch?: (path: string, init?: any) => Promise<any>
         jobKind?: 'proxy_mp4' | 'hls' | 'any'
         context?: TransferContext
+        transcoder?: 'client' | 'server'
+        encoder?: string
     }
 
 type PlaybackProgressSnapshot = {
@@ -649,6 +651,12 @@ export function useTransferProgress() {
         // Stop polling first
         try { t.stop?.() } catch { }
 
+        // Cancel client-side FFmpeg if running
+        const clientJobId = (t as any).context?.clientTranscodeJobId
+        if (clientJobId) {
+            try { window.electron?.fullTranscodeCancel?.(clientJobId) } catch { }
+        }
+
         // Cancel on the server for each tracked asset version
         const apiFetch = t._apiFetch
         if (apiFetch) {
@@ -947,8 +955,57 @@ export function useTransferProgress() {
                     }
                 }
                 if ((cur.jobKind ?? 'any') === 'proxy_mp4') {
-                    cur.detail = proxyDetailFromProgress(cur.progress, cur.context?.proxyQualities)
+                    // Extract per-quality progress from the proxy_mp4 job (sent by client-side transcode)
+                    const proxyJob = (castItems as any[]).flatMap((it: any) => it.jobs || [])
+                        .find((j: any) => String(j?.kind || '').toLowerCase() === 'proxy_mp4')
+                    const perQ = proxyJob?.per_quality_progress
+                    const activeQ = proxyJob?.active_quality
+                    const qOrder = proxyJob?.quality_order
+
+                    if (perQ && typeof perQ === 'object') {
+                        const qualityOrder = normalizeQualityList(
+                            (Array.isArray(qOrder) && qOrder.length) ? qOrder : Object.keys(perQ)
+                        )
+                        if (qualityOrder.length) {
+                            if (!cur.context) cur.context = { source: 'upload' }
+                            cur.context.proxyQualities = qualityOrder
+                        }
+                        // Build per-quality sub-items for display
+                        const jobs = qualityOrder.map((q: string) => {
+                            const pct = normalizeProgressPercent(perQ[q])
+                            return {
+                                kind: `proxy_mp4:${q}`,
+                                status: pct >= 100 ? 'done' : (pct > 0 ? 'running' : 'queued'),
+                                progress: pct,
+                                quality: q,
+                            }
+                        })
+                        cur.items = [{ assetVersionId: 0, jobs, summary: { queued: 0, running: 1, done: 0, failed: 0 } }] as any
+                        // Show per-quality progress on the active quality
+                        // Skip override when done — progress was already set to 100
+                        if (nextStatus !== 'done') {
+                            const activePct = proxyActiveQualityProgress(activeQ, perQ)
+                            if (typeof activePct === 'number') {
+                                cur.progress = activePct
+                            }
+                        }
+                        cur.detail = proxyDetailFromActiveQuality(activeQ, cur.progress, cur.context?.proxyQualities)
+                    } else {
+                        cur.detail = proxyDetailFromProgress(cur.progress, cur.context?.proxyQualities)
+                    }
                 }
+
+                // Extract transcoder and encoder from the matching job
+                const matchingJob = (castItems as any[]).flatMap((it: any) => it.jobs || [])
+                    .find((j: any) => {
+                        const jk = String(j?.kind || '').toLowerCase()
+                        const wantKind = (cur.jobKind ?? 'any').toLowerCase()
+                        if (wantKind === 'any') return true
+                        if (wantKind === 'proxy_mp4') return jk === 'proxy_mp4' || jk.startsWith('proxy')
+                        return jk === wantKind
+                    })
+                if (matchingJob?.transcoder) cur.transcoder = matchingJob.transcoder
+                if (matchingJob?.encoder) cur.encoder = matchingJob.encoder
 
                 if (nextStatus === 'done' || nextStatus === 'failed') {
                     cur.completedAt = now()
@@ -1075,7 +1132,7 @@ export function useTransferProgress() {
 
                 cur.items = Array.isArray(snap.items) ? (snap.items as any) : cur.items
                 cur.status = normalizePlaybackStatus(snap.status)
-                cur.progress = normalizeProgressPercent(snap.progress)
+                cur.progress = cur.status === 'done' ? 100 : normalizeProgressPercent(snap.progress)
 
                 // ETA & speed from server snapshot
                 if (cur.status === 'running') {
@@ -1091,7 +1148,7 @@ export function useTransferProgress() {
 
                 if (cur.status === 'failed') {
                     const snapError = String((snap as any)?.error || '').trim()
-                    cur.error = snapError || cur.error || 'transcode failed'
+                    cur.error = snapError || cur.error || 'Transcode failed — check server logs or try disabling client-side transcoding'
                 } else if (cur.status === 'running' || cur.status === 'done') {
                     cur.error = null
                 }
@@ -1118,10 +1175,13 @@ export function useTransferProgress() {
                         })
                         cur.items = [{ assetVersionId: 0, jobs, summary: { queued: 0, running: 1, done: 0, failed: 0 } }] as any
                     }
-                    const activePct = proxyActiveQualityProgress(snap.activeQuality, perQ)
-                    if (typeof activePct === 'number') {
-                        // Keep bar/percentage aligned with "Tracking proxy (<quality>)" label.
-                        cur.progress = activePct
+                    // Skip override when done — progress should stay at 100
+                    if (cur.status !== 'done') {
+                        const activePct = proxyActiveQualityProgress(snap.activeQuality, perQ)
+                        if (typeof activePct === 'number') {
+                            // Keep bar/percentage aligned with "Tracking proxy (<quality>)" label.
+                            cur.progress = activePct
+                        }
                     }
                     cur.detail = proxyDetailFromActiveQuality(snap.activeQuality, cur.progress, cur.context?.proxyQualities)
                 }
@@ -1322,7 +1382,7 @@ export function useTransferProgress() {
                     // Skip if we already have an active task for this version+kind
                     if (hasActiveTranscode({ assetVersionIds: [assetVersionId], file: filePath, jobKind })) continue
 
-                    const label = kind === 'hls' ? 'Generating adaptive stream'
+                    const label = kind === 'hls' ? 'Generating browser stream'
                         : kind === 'proxy_mp4' ? 'Generating review copies'
                         : 'Generating transcodes'
 
