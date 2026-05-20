@@ -2,6 +2,7 @@
 import { computed, reactive, watch } from 'vue'
 import type { ProgressItem, VersionProgressItem } from './transcodeProgress'
 import { startProgressPolling } from './transcodeProgress'
+import { getWebSocketManager } from './useWebSocketManager'
 
 type UploadStatus = 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
 type TranscodeStatus = 'queued' | 'running' | 'done' | 'failed' | 'unknown'
@@ -870,8 +871,73 @@ export function useTransferProgress() {
         }
         upsertTask(t)
 
+        const ws = getWebSocketManager()
+        let wsUnsubscribe: (() => void) | null = null
+        
+        // Try WebSocket for real-time updates
+        if (opts.mode === 'version' && idsToTrack.length === 1) {
+            const assetVersionId = idsToTrack[0]
+            const taskJobKind = opts.jobKind ?? 'any'
+            
+            const handleWsUpdate = (data: any) => {
+                const cur = _state.tasks.find(x => x.taskId === taskId && x.kind === 'transcode') as
+                    | Extract<TransferTask, { kind: 'transcode' }>
+                    | undefined
+                if (!cur) return
+
+                // Filter by kind - only accept updates matching this task's jobKind
+                if (taskJobKind !== 'any' && data?.kind && data.kind !== taskJobKind) return
+
+                // Ignore 'done' status if we haven't started running yet
+                // (this catches completion broadcasts from previous jobs on same assetVersionId)
+                if (data?.status === 'done' && cur.status === 'queued') return
+
+                // Ignore progress=100 unless status is explicitly 'done'
+                if (data?.progress === 100 && data?.status !== 'done') return
+
+                // Update from WebSocket data
+                if (data?.status) {
+                    cur.status = data.status
+                }
+                
+                if (typeof data?.progress === 'number') {
+                    cur.progress = normalizeProgressPercent(data.progress)
+                }
+                
+                if (data?.etaSeconds !== undefined) {
+                    const eta = normalizeEtaSeconds(data.etaSeconds)
+                    cur.eta = formatEta(eta)
+                }
+                
+                if (data?.speedX !== undefined) {
+                    const speed = normalizeSpeedX(data.speedX)
+                    cur.speed = speed !== null ? `${speed.toFixed(2)}x` : null
+                }
+
+                if (data?.error) {
+                    cur.error = data.error
+                }
+
+                // Mark as complete if status is done
+                if (cur.status === 'done' || cur.status === 'failed') {
+                    cur.progress = 100
+                    cur.completedAt = now()
+                }
+            }
+
+            const wsActive = ws.subscribe('transcode', assetVersionId, handleWsUpdate)
+            if (wsActive) {
+                console.log('[transcode] WebSocket active', { taskId, assetVersionId })
+                wsUnsubscribe = () => ws.unsubscribe('transcode', assetVersionId, handleWsUpdate)
+            } else {
+                console.log('[transcode] WebSocket unavailable, using polling only', { taskId })
+            }
+        }
+
+        // Always start polling as fallback/safety net
+        // WebSocket provides real-time updates, polling ensures we don't miss anything if WS disconnects
         let stopPolling: (() => void) | null = null
-        const stop = startProgressPolling({
+        stopPolling = startProgressPolling({
             apiFetch: opts.apiFetch,
             ...(opts.mode === 'version'
                 ? { assetVersionIds: () => idsToTrack }
@@ -1032,9 +1098,12 @@ export function useTransferProgress() {
                 cur.eta = null
             },
         })
-        stopPolling = stop
 
-        ; (t as any).stop = stop
+        // Cleanup function that stops both WebSocket and polling
+        ;(t as any).stop = () => {
+            if (wsUnsubscribe) wsUnsubscribe()
+            if (stopPolling) stopPolling()
+        }
         return taskId
     }
 
@@ -1067,11 +1136,28 @@ export function useTransferProgress() {
         intervalMs?: number
         jobKind?: 'proxy_mp4' | 'hls' | 'any'
         context?: TransferContext
+        assetVersionId?: number
         fetchSnapshot: () => Promise<PlaybackProgressSnapshot | null>
     }) {
-        // Dedup: skip if an active transcode task already exists for this file+jobKind
+        // Dedup: skip if an active transcode task already exists for this assetVersionId or file+jobKind
         const file = opts.context?.file || ''
         const jobKind = opts.jobKind ?? 'any'
+        const assetVersionId = opts.assetVersionId && Number.isFinite(opts.assetVersionId) && opts.assetVersionId > 0 
+            ? opts.assetVersionId : undefined
+        
+        // Check by assetVersionId first (more reliable)
+        if (assetVersionId) {
+            const existing = _state.tasks.find(t => {
+                if (t.kind !== 'transcode') return false
+                if (!isActiveTask(t)) return false
+                if (!jobKindMatches(t.jobKind, jobKind)) return false
+                const taskIds = t.assetVersionIds || []
+                return taskIds.includes(assetVersionId)
+            })
+            if (existing) return null
+        }
+        
+        // Fallback: check by file path
         if (file) {
             const alreadyActive = _state.tasks.some(t => {
                 if (t.kind !== 'transcode') return false

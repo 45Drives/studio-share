@@ -60,6 +60,7 @@ import GlobalMenu from '../renderer/components/GlobalMenu.vue'
 import GuidedTour from '../renderer/components/GuidedTour.vue'
 import QuickShareOverlay from '../renderer/components/QuickShareOverlay.vue'
 import { useTourManager } from '../renderer/composables/useTourManager'
+import { useWebSocketManager } from '../renderer/composables/useWebSocketManager'
 import flowLogo from '../../assets/logos/45Flow-w.png'
 
 /** Flip to true to re-enable the guided tour */
@@ -100,6 +101,9 @@ provide(discoveryStateInjectionKey, discoveryState as DiscoveryState)
 
 const connectionMeta = ref<ConnectionMeta>({ port: 9095 })
 provide(connectionMetaInjectionKey, connectionMeta)
+
+// Initialize WebSocket manager for real-time progress (pass refs directly)
+useWebSocketManager(currentServer, connectionMeta)
 
 const { currentDivision, currentTheme, setThemeControlsUnlocked } = useThemeFromAlias()
 

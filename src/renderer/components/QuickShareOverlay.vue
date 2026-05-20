@@ -497,7 +497,7 @@ function onDocDrop(e: DragEvent) {
   if (!onboarding.value.quickShareTourDone) {
     // First drop — run the Quick Share tour first, then open the real modal
     pendingDropFiles = files
-    requestTour('quickShare', quickShareTourSteps, () => {
+    const tourStarted = requestTour('quickShare', quickShareTourSteps, () => {
       markDone('quickShareTourDone')
       // Restore the user's real files before exiting tour mode
       // so the watcher doesn't blank the modal.
@@ -512,6 +512,12 @@ function onDocDrop(e: DragEvent) {
       tourQuickShareOpen.value = false
       showModal.value = realFiles.length > 0
     })
+    // If tours are disabled, fall through to show modal
+    if (!tourStarted) {
+      droppedFiles.value = files
+      resetWizard()
+      showModal.value = true
+    }
     return
   }
 
@@ -1287,6 +1293,7 @@ async function startUploadAndShare() {
             intervalMs: 1500,
             jobKind: 'hls',
             context,
+            assetVersionId,
             fetchSnapshot: async () => {
               const payload = await apiFetch(playbackPath, { suppressAuthRedirect: true })
               const j = payload?.transcodes?.hls || payload?.transcodes?.HLS || null
@@ -1307,6 +1314,7 @@ async function startUploadAndShare() {
             intervalMs: 1500,
             jobKind: 'proxy_mp4',
             context,
+            assetVersionId,
             fetchSnapshot: async () => {
               const payload = await apiFetch(playbackPath, { suppressAuthRedirect: true })
               const j = payload?.transcodes?.proxy_mp4 || payload?.transcodes?.proxy || null
