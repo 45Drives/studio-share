@@ -1,5 +1,6 @@
 // src/renderer/composables/withResilientClick.ts
-import { Notification, pushNotification } from '@45drives/houston-common-ui'
+import { Notification } from '@45drives/houston-common-ui'
+import { pushNotification } from './useNotificationQueue'
 
 export function withTimeout<T>(p: Promise<T>, ms = 15000): Promise<T> {
     return new Promise((resolve, reject) => {

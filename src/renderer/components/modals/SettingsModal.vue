@@ -672,7 +672,8 @@ const SettingRow = defineComponent({
 import { computed, onMounted, ref, watch } from "vue";
 import { Switch } from "@headlessui/vue";
 import { useApi } from "../../composables/useApi";
-import { pushNotification, Notification } from '@45drives/houston-common-ui';
+import { Notification } from '@45drives/houston-common-ui';
+import { pushNotification } from '../../composables/useNotificationQueue';
 import PathInput from "../PathInput.vue";
 import { useOnboarding } from "../../composables/useOnboarding";
 import { useTimeFormat } from "../../composables/useTimeFormat";

@@ -352,7 +352,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import { useLinkRefreshSignal } from '../composables/useLinkRefresh'
-import { pushNotification, Notification } from '@45drives/houston-common-ui'
+import { Notification } from '@45drives/houston-common-ui'
+import { pushNotification } from '../composables/useNotificationQueue'
 import { appLog } from '../composables/useLog'
 import LinkDetailsModal from "../components/modals/LinkDetailsModal.vue"
 import type { LinkItem, LinkType, Status } from '../typings/electron'
@@ -632,6 +633,7 @@ async function toggleDisable(it: LinkItem) {
 					: 'The link is active again and can be accessed normally.',
 				'success',
 				8000,
+				disable ? 'link-disabled' : 'link-enabled'
 			)
 		)
 	} catch (e: any) {
@@ -645,6 +647,7 @@ async function toggleDisable(it: LinkItem) {
 				msg,
 				level,
 				8000,
+				'link-toggle-error'
 			)
 		)
 	}
@@ -693,6 +696,7 @@ async function saveTitle(it: LinkItem) {
 				'Link title was updated successfully.',
 				'success',
 				8000,
+				'link-title-updated'
 			)
 		)
 		cancelEdit()
@@ -707,6 +711,7 @@ async function saveTitle(it: LinkItem) {
 				msg,
 				level,
 				8000,
+				'link-title-error'
 			)
 		)
 	}
@@ -923,6 +928,7 @@ async function applyCustom(it: LinkItem, opts?: { forceNever?: boolean }) {
 					'This link will no longer expire automatically.',
 					'success',
 					8000,
+					'link-expiry-updated'
 				),
 			)
 		} else {
@@ -932,6 +938,7 @@ async function applyCustom(it: LinkItem, opts?: { forceNever?: boolean }) {
 					`Expiry updated to ${days} day${days === 1 ? '' : 's'} and ${hours} hour${hours === 1 ? '' : 's'}.`,
 					'success',
 					8000,
+					'link-expiry-updated'
 				),
 			)
 		}
@@ -948,6 +955,7 @@ async function applyCustom(it: LinkItem, opts?: { forceNever?: boolean }) {
 				msg,
 				level,
 				8000,
+				'link-expiry-error'
 			),
 		)
 	}

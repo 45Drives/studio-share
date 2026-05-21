@@ -155,7 +155,8 @@ import { useHeader } from '../composables/useHeader'
 import { currentServerInjectionKey, discoveryStateInjectionKey, connectionMetaInjectionKey } from '../keys/injection-keys'
 import { EyeIcon, EyeSlashIcon } from "@heroicons/vue/20/solid";
 import { DiscoveryState, Server } from '../types'
-import { pushNotification, Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
+import { Notification, CardContainer, useDarkModeState } from '@45drives/houston-common-ui'
+import { pushNotification } from '../composables/useNotificationQueue'
 import PortForwardingModal from '../components/modals/PortForwardingModal.vue' 
 import { useResilientNav } from '../composables/useResilientNav';
 import { loadLastSession, saveLastSession, clearLastSession, saveManualServer } from '../composables/useSessionPersistence';

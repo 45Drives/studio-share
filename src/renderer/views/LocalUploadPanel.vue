@@ -293,7 +293,8 @@ import { connectionMetaInjectionKey } from '../keys/injection-keys';
 import { useHeader } from '../composables/useHeader';
 import { useResilientNav } from '../composables/useResilientNav'
 import { onBeforeRouteLeave } from 'vue-router';
-import { pushNotification, Notification, CardContainer } from '@45drives/houston-common-ui';
+import { Notification, CardContainer } from '@45drives/houston-common-ui';
+import { pushNotification } from '../composables/useNotificationQueue';
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
