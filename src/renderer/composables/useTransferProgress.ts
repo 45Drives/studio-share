@@ -900,8 +900,7 @@ export function useTransferProgress() {
         upsertTask(t)
 
         // WebSocket + polling (both run in parallel for resilience)
-        const connectionId = opts.context?.connectionId
-        const wsManager = useWebSocketManager()
+        const wsManager = getWebSocketManager()
         let wsSubscribed = false
         const taskJobKind = opts.jobKind ?? 'any'
 
@@ -981,12 +980,11 @@ export function useTransferProgress() {
                 }
             }
 
-        // Try WebSocket subscription if connectionId is available
-        if (connectionId && opts.mode === 'version' && idsToTrack.length > 0) {
+        // Try WebSocket subscription for transcode progress
+        if (opts.mode === 'version' && idsToTrack.length > 0) {
             // Subscribe to the primary asset version
             const primaryId = idsToTrack[0]
             wsSubscribed = wsManager.subscribe(
-                connectionId,
                 'transcode',
                 primaryId,
                 handleWsUpdate
@@ -1167,8 +1165,8 @@ export function useTransferProgress() {
 
         // Create unified stop function that handles both WebSocket and polling
         const stop = () => {
-            if (wsSubscribed && connectionId && opts.mode === 'version' && idsToTrack.length > 0) {
-                wsManager.unsubscribe(connectionId, 'transcode', idsToTrack[0], handleWsUpdate)
+            if (wsSubscribed && opts.mode === 'version' && idsToTrack.length > 0) {
+                wsManager.unsubscribe('transcode', idsToTrack[0], handleWsUpdate)
             }
             if (stopPolling) {
                 stopPolling()
