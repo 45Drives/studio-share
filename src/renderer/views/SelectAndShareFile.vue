@@ -1207,7 +1207,7 @@ async function uploadWatermarkToProject() {
     const destDir = resolveWatermarkUploadDir()
     const ensured = await ensureServerDirExists(destDir)
     if (!ensured) return { ok: false, error: 'failed to prepare remote watermark directory' }
-    const { done } = await window.electron.rsyncStart({
+    const { id: rsyncId, done } = await window.electron.rsyncStart({
         host,
         user,
         src: watermarkFile.value.path,
@@ -1217,8 +1217,8 @@ async function uploadWatermarkToProject() {
         noIngest: true,
     })
     const res = await done
-    if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
-    return { ok: true, relPath: resolveWatermarkRelPath(), reused: false }
+    if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed', uploadId: rsyncId }
+    return { ok: true, relPath: resolveWatermarkRelPath(), reused: false, uploadId: rsyncId }
 }
 
 // Map units → seconds
@@ -1582,6 +1582,18 @@ async function generateLink() {
         })
         if (watermarkEnabled.value && watermarkFile.value && !keepExistingWatermark && !selectedServerWatermark) {
             const up = await uploadWatermarkToProject()
+            
+            // Dismiss the watermark upload task from Transfer Dock since it's not a user-facing upload
+            if (up.uploadId) {
+                // Find and remove any upload task created by the watermark upload
+                const uploadTasks = transfer.state.tasks.filter(
+                    t => t.kind === 'upload' && t.taskId === up.uploadId
+                )
+                for (const task of uploadTasks) {
+                    transfer.removeTask(task.taskId)
+                }
+            }
+            
             if (!up.ok) {
                 pushNotification(
                     new Notification(
@@ -1678,10 +1690,10 @@ async function generateLink() {
             const transcodeDetail = (kind: 'hls' | 'proxy_mp4', assetVersionId: number) => {
                 const queuedSet = kind === 'hls' ? hlsQueuedSet : proxyQueuedSet
                 const activeSet = kind === 'hls' ? hlsActiveSet : proxyActiveSet
-                const kindLabel = kind === 'hls' ? 'HLS' : 'review copy'
-                if (activeSet.has(assetVersionId)) return `Tracking ${kindLabel} (already running)`
-                if (queuedSet.has(assetVersionId)) return `Tracking ${kindLabel} (queued now)`
-                return `Tracking ${kindLabel}`
+                const kindLabel = kind === 'hls' ? 'browser stream' : 'review copies'
+                if (activeSet.has(assetVersionId)) return `Generating ${kindLabel} (in progress)`
+                if (queuedSet.has(assetVersionId)) return `Generating ${kindLabel}`
+                return `Generating ${kindLabel}`
             }
 
             if (versionIds.length) {
