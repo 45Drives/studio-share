@@ -1,5 +1,4 @@
-export { Server, DivisionType, SavedServer } from '../shared/types';
-import type { Server } from '../shared/types';
+export type { Server, DivisionType, SavedServer } from '../shared/types';
 
 export interface DiscoveryState {
   servers: Server[]
