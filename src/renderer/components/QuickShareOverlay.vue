@@ -288,6 +288,7 @@ import { signalLinkCreated } from '../composables/useLinkRefresh'
 import { tourQuickShareOpen, tourQuickShareStep, tourQuickShareShowDone } from '../composables/useQuickShareTour'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
+import { DEFAULT_45FLOW_WATERMARKS } from '../types'
 import FolderPicker from './FolderPicker.vue'
 import AddUsersModal from './modals/AddUsersModal.vue'
 import LinkAccessMode from './LinkAccessMode.vue'
@@ -830,10 +831,26 @@ async function loadExistingWatermarkFiles() {
     const dirRel = resolveWatermarkDirRel()
     const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`, { method: 'GET' })
     const entries = Array.isArray(data?.entries) ? data.entries : []
-    existingWatermarkFiles.value = entries
+    const serverWatermarks = entries
       .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
       .map((e: any) => `${dirRel}/${String(e.name).trim()}`)
       .sort((a: string, b: string) => a.localeCompare(b))
+    
+    // Check which built-in watermarks actually exist on the server
+    const base = connectionMeta.value.apiBase ?? ''
+    const token = connectionMeta.value.token ?? ''
+    const builtinChecks = await Promise.allSettled(
+      DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
+        const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`
+        const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } })
+        return res.ok ? wm.path : null
+      })
+    )
+    const validBuiltins = builtinChecks
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null)
+      .map(r => r.value)
+    
+    existingWatermarkFiles.value = [...validBuiltins, ...serverWatermarks]
   } catch {
     existingWatermarkFiles.value = []
   }
@@ -867,7 +884,7 @@ async function uploadWatermarkToProject() {
   const destDir = resolveWatermarkUploadDir()
   const ensured = await ensureServerDirExists(destDir)
   if (!ensured) return { ok: false, error: 'failed to prepare remote watermark directory' }
-  const { done } = await electron.rsyncStart({
+  const { id: rsyncId, done } = await electron.rsyncStart({
     host,
     user,
     src: watermarkFile.value.path,
@@ -877,8 +894,8 @@ async function uploadWatermarkToProject() {
     noIngest: true,
   })
   const res = await done
-  if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed' }
-  return { ok: true, relPath: resolveWatermarkRelPath() }
+  if (!res?.ok) return { ok: false, error: res?.error || 'watermark upload failed', uploadId: rsyncId }
+  return { ok: true, relPath: resolveWatermarkRelPath(), uploadId: rsyncId }
 }
 
 let linkDefaultsLoaded = false
@@ -1140,6 +1157,7 @@ async function startUploadAndShare() {
 
     // Upload watermark if needed
     let watermarkRelPath = ''
+    let watermarkUploadId: string | undefined
     if (watermarkEnabled.value && hasVideo.value) {
       const selectedServerWm = String(selectedExistingWatermark.value || '').trim()
       if (selectedServerWm) {
@@ -1153,6 +1171,7 @@ async function startUploadAndShare() {
           return
         }
         watermarkRelPath = (wmUp as any).relPath || ''
+        watermarkUploadId = (wmUp as any).uploadId
       }
     }
 
@@ -1238,6 +1257,16 @@ async function startUploadAndShare() {
     viewUrl.value = data.viewUrl || ''
     uploadPhase.value = 'done'
     signalLinkCreated()
+
+    // Dismiss the watermark upload task from Transfer Dock since it's not a user-facing upload
+    if (watermarkUploadId) {
+      const uploadTasks = transfer.state.tasks.filter(
+        t => t.kind === 'upload' && t.taskId === watermarkUploadId
+      )
+      for (const task of uploadTasks) {
+        transfer.removeTask(task.taskId)
+      }
+    }
 
     // ── Start transcode tracking in the TransferDock ──
     // When client transcoding is enabled, the FFmpeg onProgress callback

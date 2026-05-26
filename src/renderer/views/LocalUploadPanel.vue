@@ -300,6 +300,7 @@ import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
 import { useClientTranscode } from '../composables/useClientTranscode'
 import { useUploadTranscode } from '../composables/useUploadTranscode'
+import { DEFAULT_45FLOW_WATERMARKS } from '../types'
 const { to } = useResilientNav()
 useHeader('Upload Files')
 const transfer = useTransferProgress()
@@ -899,10 +900,26 @@ async function loadExistingWatermarkFiles() {
 		const dirRel = resolveWatermarkDirRel()
 		const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`, { method: 'GET' })
 		const entries = Array.isArray(data?.entries) ? data.entries : []
-		existingWatermarkFiles.value = entries
+		const serverWatermarks = entries
 			.filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
 			.map((e: any) => `${dirRel}/${String(e.name).trim()}`)
 			.sort((a: string, b: string) => a.localeCompare(b))
+		
+		// Check which built-in watermarks actually exist on the server
+		const base = connectionMeta.value.apiBase ?? ''
+		const token = connectionMeta.value.token ?? ''
+		const builtinChecks = await Promise.allSettled(
+			DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
+				const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`
+				const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } })
+				return res.ok ? wm.path : null
+			})
+		)
+		const validBuiltins = builtinChecks
+			.filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null)
+			.map(r => r.value)
+		
+		existingWatermarkFiles.value = [...validBuiltins, ...serverWatermarks]
 	} catch {
 		existingWatermarkFiles.value = []
 	}
