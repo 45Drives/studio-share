@@ -1,84 +1,48 @@
 // src/renderer/composables/useNotificationQueue.ts
-import { ref, reactive } from 'vue'
-import { pushNotification as houstonPushNotification, Notification } from '@45drives/houston-common-ui'
+import { 
+  pushNotification as houstonPushNotification, 
+  Notification,
+  reportError as houstonReportError,
+  reportSuccess as houstonReportSuccess
+} from '@45drives/houston-common-ui'
 
-const MAX_VISIBLE_NOTIFICATIONS = 3
-const notificationQueue = ref<Notification[]>([])
-const activeNotifications = ref<Notification[]>([])
-
-function processQueue() {
-  while (activeNotifications.value.length < MAX_VISIBLE_NOTIFICATIONS && notificationQueue.value.length > 0) {
-    const nextNotif = notificationQueue.value.shift()
-    if (nextNotif) {
-      showNotification(nextNotif)
-    }
-  }
-}
-
-function showNotification(notif: Notification) {
-  // Push to houston-common first, which sets up the remove function
-  const pushedNotif = houstonPushNotification(notif)
-  
-  // Track it in our active list
-  activeNotifications.value.push(pushedNotif)
-  
-  // Wrap the remove function to process queue after removal
-  const originalRemove = pushedNotif.remove
-  pushedNotif.remove = () => {
-    // Call original remove
-    originalRemove()
-    // Remove from our tracking
-    activeNotifications.value = activeNotifications.value.filter((n) => n.key !== pushedNotif.key)
-    // Process next in queue
-    processQueue()
-  }
-  
-  return pushedNotif
+/**
+ * Push a notification with automatic grouping support.
+ * 
+ * This is a thin wrapper around houston-common's pushNotification that:
+ * 1. Passes through to houston-common (which handles group coalescing)
+ * 2. Re-exports for consistency with the rest of the codebase
+ * 
+ * To group related notifications, pass a `group` parameter to the Notification:
+ * @example
+ * ```ts
+ * pushNotification(new Notification('Link Disabled', 'Link has been disabled', 'info', 5000, 'link-disable'))
+ * ```
+ * 
+ * Subsequent notifications with the same group will update in place and increment the count.
+ */
+export function pushNotification(notif: Notification): Notification {
+  return houstonPushNotification(notif)
 }
 
 /**
- * Push a notification with queue management
- * Limits visible notifications to MAX_VISIBLE_NOTIFICATIONS and queues the rest
+ * Report an error via notification
  */
-export function pushNotification(notif: Notification): Notification {
-  // Check if there's already a notification with the same group
-  if (notif.group) {
-    // Check active notifications
-    const existing = activeNotifications.value.find((n) => n.group === notif.group)
-    if (existing) {
-      existing.groupCount++
-      existing.body = notif.body
-      // Restart the dismiss timer
-      existing.stopRemoveTimeout()
-      existing.startRemoveTimeout()
-      return existing
-    }
-    
-    // Check queued notifications
-    const queuedExisting = notificationQueue.value.find((n) => n.group === notif.group)
-    if (queuedExisting) {
-      queuedExisting.groupCount++
-      queuedExisting.body = notif.body
-      return queuedExisting
-    }
-  }
+export function reportError<TErr extends Error | Error[]>(e: TErr, context: string = ""): TErr {
+  return houstonReportError(e, context)
+}
 
-  notif = reactive(notif)
-
-  // Add to active list if under limit, otherwise queue it
-  if (activeNotifications.value.length < MAX_VISIBLE_NOTIFICATIONS) {
-    return showNotification(notif)
-  } else {
-    notificationQueue.value.push(notif)
-    return notif
-  }
+/**
+ * Report a success message via notification
+ */
+export function reportSuccess(message: string = "") {
+  houstonReportSuccess(message)
 }
 
 export function useNotificationQueue() {
   return {
-    notificationQueue,
-    activeNotifications,
-    maxVisible: MAX_VISIBLE_NOTIFICATIONS,
     pushNotification,
+    reportError,
+    reportSuccess,
   }
 }
