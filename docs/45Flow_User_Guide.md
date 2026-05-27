@@ -822,7 +822,6 @@ For administrators to manage server health:
 
 The **Server Health** section (under Settings → Application → Server Health) provides real-time resource statistics from your connected server.
 
-<!-- SCREENSHOT NEEDED: settings-server-health.png -->
 ![Server Health panel](images/settings-server-health.png)
 
 Server Health auto-loads when you navigate to the section and shows the following:
@@ -903,7 +902,6 @@ The Log Viewer lets you inspect application activity, identify errors, and troub
 
 The Log Viewer has two tabs: **Client Logs** and **Server Logs**.
 
-<!-- SCREENSHOT NEEDED: log-viewer-tabs.png -->
 ![Log Viewer with tabs](images/log-viewer-tabs.png)
 
 ### Client Logs
@@ -926,7 +924,6 @@ At the top, you'll see:
 
 The Server Logs tab retrieves structured audit log entries from the connected server. These entries record every significant action taken on the server — link creation, file changes, transcode operations, user actions, and more.
 
-<!-- SCREENSHOT NEEDED: log-viewer-server.png -->
 ![Server Logs tab](images/log-viewer-server.png)
 
 At the top, you'll see:
