@@ -32,29 +32,33 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
    - [Selecting a Destination Folder](#selecting-a-destination-folder)
    - [Configuring the Upload Link](#configuring-the-upload-link)
    - [Generating the Upload Link](#generating-the-upload-link)
-9. [Managing Links](#9-managing-links)
+9. [Transfer Dock](#9-transfer-dock)
+    - [Transfer Dock Overview](#transfer-dock-overview)
+    - [Transfer Entry Details](#transfer-entry-details)
+    - [Transcode Status](#transcode-status)
+10. [Managing Links](#10-managing-links)
    - [Searching & Filtering Links](#searching--filtering-links)
    - [Link Table Columns](#link-table-columns)
    - [Link Actions](#link-actions)
-10. [Link Details](#10-link-details)
+11. [Link Details](#11-link-details)
    - [Link Configuration Summary](#link-configuration-summary)
    - [Shared Files](#shared-files)
    - [Access Activity Log](#access-activity-log)
    - [File Versions](#file-versions)
-11. [Editing a Link](#11-editing-a-link)
-12. [Video Player & Comments](#12-video-player--comments)
+12. [Editing a Link](#12-editing-a-link)
+13. [Video Player & Comments](#13-video-player--comments)
     - [Playback Controls](#playback-controls)
     - [Quality Selection](#quality-selection)
     - [Timecoded Comments](#timecoded-comments)
-13. [User Management](#13-user-management)
+14. [User Management](#14-user-management)
     - [Viewing Existing Users](#viewing-existing-users)
     - [Creating a New User](#creating-a-new-user)
     - [Editing & Deleting Users](#editing--deleting-users)
-14. [Role Management](#14-role-management)
+15. [Role Management](#15-role-management)
     - [System Roles](#system-roles)
     - [Creating Custom Roles](#creating-custom-roles)
     - [Editing & Deleting Roles](#editing--deleting-roles)
-15. [Settings](#15-settings)
+16. [Settings](#16-settings)
     - [Default Link Access](#default-link-access)
     - [External Share URL (Public)](#external-share-url-public)
     - [Internal Share URL (LAN / VPN)](#internal-share-url-lan--vpn)
@@ -62,17 +66,17 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
     - [Default Link Options](#default-link-options)
     - [Server Health](#server-health)
     - [Maintenance & Cleanup](#maintenance--cleanup)
-16. [Upgrade to Pro Edition](#16-upgrade-to-pro-edition)
+17. [Upgrade to Pro Edition](#17-upgrade-to-pro-edition)
     - [Purchasing a License](#purchasing-a-license)
     - [Activating Your License](#activating-your-license)
     - [Downloading & Installing Pro Edition](#downloading--installing-pro-edition)
-17. [View Logs](#17-view-logs)
+18. [View Logs](#18-view-logs)
     - [Client Logs](#client-logs)
     - [Server Logs (Audit Log)](#server-logs-audit-log)
     - [Searching & Filtering Logs](#searching--filtering-logs)
     - [Log Entry Details](#log-entry-details)
-18. [Port Forwarding for External Sharing](#18-port-forwarding-for-external-sharing)
-19. [Frequently Asked Questions](#19-frequently-asked-questions)
+19. [Port Forwarding for External Sharing](#19-port-forwarding-for-external-sharing)
+20. [Frequently Asked Questions](#20-frequently-asked-questions)
 
 ---
 
@@ -474,7 +478,66 @@ When someone opens the link, they'll see a drag-and-drop upload page where they 
 
 ---
 
-## 9. Managing Links
+## 9. Transfer Dock
+
+The **Transfer Dock** is a persistent overlay that tracks all active and recently completed transfers — uploads, transcodes, and review copy generation. It remains visible across all screens so you can continue working while monitoring progress.
+
+![Transfer Dock open](images/transfer-dock-open.png)
+
+### Transfer Dock Overview
+
+The Transfer Dock appears at the bottom of the screen whenever a transfer is in progress. It shows:
+
+- **Active transfer count** — e.g., "Transfers (2 active)"
+- **Link grouping** — Transfers are grouped by the link they belong to, with the server name and link URL displayed.
+- **Clear finished** — Remove completed transfers from the dock.
+- **Close** — Collapse the dock (transfers continue in the background).
+
+When collapsed, a minimal indicator remains visible showing active transfer count. Click it to expand the dock again.
+
+![Transfer Dock collapsed](images/transfer-dock-hidden.png)
+
+### Transfer Entry Details
+
+Each file in the Transfer Dock shows:
+
+| Field | Description |
+|-------|-------------|
+| **File name** | The name of the file being transferred. |
+| **Destination** | Server-side path (e.g., `tank/Local Uploads/video.mp4`). |
+| **Status** | Current state: *Running*, *Complete*, *Queued*, *Canceled*, or *Error*. |
+| **Progress** | Percentage bar for the active phase. |
+| **Speed** | Transfer or encode speed (e.g., `95.23 MB/s` for uploads, `1.05x` for transcodes). |
+| **ETA** | Estimated time remaining. |
+| **Action** | Cancel or Dismiss button. |
+
+### Transcode Status
+
+When review copies or streaming proxies are being generated, each transcode entry shows:
+
+- **Transcode source** — `Client` or `Server`, indicating where the processing is running.
+- **Encoder** — The hardware/software encoder in use:
+  - `GPU (QSV)` — Intel Quick Sync Video
+  - `GPU (NVENC)` — NVIDIA hardware encoder
+  - `GPU (AMF)` — AMD hardware encoder
+  - `GPU (VideoToolbox)` — macOS hardware encoder
+  - `CPU` — Software encoding (libx264)
+- **Speed multiplier** — e.g., `1.05x` means encoding at 1.05× real-time.
+- **Progress** — Percentage complete with ETA.
+
+A typical transfer entry for a QuickShare might show multiple sub-items:
+
+```
+Review Copy (Full Res)     Client · GPU (QSV)    1.05x   ETA 2:08   31%
+Stream                     Client · GPU (QSV)    100%
+Upload                     95.23 MB/s            ETA 0:14            100%
+```
+
+> **Tip:** If client-side transcoding is enabled (Settings → Performance), video processing happens on your machine before upload. The Transfer Dock shows both the transcode and upload phases separately so you can track each step.
+
+---
+
+## 10. Managing Links
 
 All links you create — both share and upload — appear on the Dashboard in the **links table**. This is your central view for monitoring and managing all active, expired, and disabled links.
 
@@ -516,7 +579,7 @@ Each link row provides these actions:
 
 ---
 
-## 10. Link Details
+## 11. Link Details
 
 Click **"Details"** on any link (or click its title) to view comprehensive information.
 
@@ -577,7 +640,7 @@ Click **"Edit"** at the top of the Link Details view to modify the link's settin
 
 ---
 
-## 11. Editing a Link
+## 12. Editing a Link
 
 From the Link Details view, click **"Edit"** to modify an existing link's configuration.
 
@@ -601,7 +664,7 @@ Click **"Cancel"** or **"Close"** to discard changes and return to Link Details.
 
 ---
 
-## 12. Video Player & Comments
+## 13. Video Player & Comments
 
 When someone opens a share link containing video files, they see the **45Flow Video Player** — a browser-based player with collaboration features.
 
@@ -646,7 +709,7 @@ For collection links (multiple files), a sidebar file browser appears on the lef
 
 ---
 
-## 13. User Management
+## 14. User Management
 
 Users are required for the **"Only invited users"** access mode and allow role-based permissions on restricted links. Access user management from the Dashboard by clicking **"Manage Users"**.
 
@@ -690,7 +753,7 @@ Click **"Create User"** to save. The user will appear in the existing users list
 
 ---
 
-## 14. Role Management
+## 15. Role Management
 
 Roles define what users can do when accessing restricted links. Access role management from **Manage Users → Manage Roles**.
 
@@ -731,7 +794,7 @@ Roles define what users can do when accessing restricted links. Access role mana
 
 ---
 
-## 15. Settings
+## 16. Settings
 
 Configure application-wide defaults and server settings. Access Settings from the Dashboard by clicking **"Settings"**.
 
@@ -854,7 +917,7 @@ Click **"Refresh"** to fetch the latest stats from the server.
 
 ---
 
-## 16. Upgrade to Pro Edition
+## 17. Upgrade to Pro Edition
 
 45Flow Community Edition can be upgraded in-app to **45Flow Pro Edition**, which includes automatic updates, cross-subnet server discovery via the 45Drives registry, and priority support.
 
@@ -896,7 +959,7 @@ After successful activation:
 
 ---
 
-## 17. View Logs
+## 18. View Logs
 
 The Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
 
@@ -970,7 +1033,7 @@ Server logs support **pagination** — use the Previous/Next buttons at the bott
 
 ---
 
-## 18. Port Forwarding for External Sharing
+## 19. Port Forwarding for External Sharing
 
 To share files externally (over the internet), HTTPS port **443** (or your custom HTTPS port) must be forwarded from your router to your server.
 
@@ -994,7 +1057,7 @@ Port forwarding tells your router to direct incoming traffic on a specific port 
 
 ---
 
-## 19. Frequently Asked Questions
+## 20. Frequently Asked Questions
 
 **Q: My server doesn't appear in the auto-discovery dropdown. What do I do?**  
 A: The `houston-broadcaster` service must be running on the server. Try connecting manually using the server's IP address via the **"Connect manually via IP"** field.
