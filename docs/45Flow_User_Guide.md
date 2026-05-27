@@ -60,13 +60,15 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
     - [Internal Share URL (LAN / VPN)](#internal-share-url-lan--vpn)
     - [Project Root](#project-root)
     - [Default Link Options](#default-link-options)
+    - [Server Health](#server-health)
     - [Maintenance & Cleanup](#maintenance--cleanup)
 16. [Upgrade to Pro Edition](#16-upgrade-to-pro-edition)
     - [Purchasing a License](#purchasing-a-license)
     - [Activating Your License](#activating-your-license)
     - [Downloading & Installing Pro Edition](#downloading--installing-pro-edition)
-17. [View Logs (Client Log Viewer)](#17-view-logs-client-log-viewer)
-    - [Log Summary](#log-summary)
+17. [View Logs](#17-view-logs)
+    - [Client Logs](#client-logs)
+    - [Server Logs (Audit Log)](#server-logs-audit-log)
     - [Searching & Filtering Logs](#searching--filtering-logs)
     - [Log Entry Details](#log-entry-details)
 18. [Port Forwarding for External Sharing](#18-port-forwarding-for-external-sharing)
@@ -816,6 +818,34 @@ For administrators to manage server health:
 
 ![Maintenance and cleanup scan results](images/settings-maintenance.png)
 
+### Server Health
+
+The **Server Health** section (under Settings → Application → Server Health) provides real-time resource statistics from your connected server.
+
+<!-- SCREENSHOT NEEDED: settings-server-health.png -->
+![Server Health panel](images/settings-server-health.png)
+
+Server Health auto-loads when you navigate to the section and shows the following:
+
+| Section | What It Shows |
+|---------|---------------|
+| **Version** | The installed houston-broadcaster version |
+| **Uptime** | Process uptime (how long the server has been running) and system uptime (total OS uptime) |
+| **CPU** | Number of CPU cores and load averages (1-minute, 5-minute, 15-minute) |
+| **Memory** | System total/free RAM and process RSS (resident set size) |
+| **Disk (Share Root)** | Visual progress bar showing disk usage on the share root volume, with used/free/total bytes |
+| **Transcode Queue** | Number of transcode jobs currently queued, running, completed, or failed |
+| **Links & Connections** | Count of active/total links and current WebSocket connections |
+
+The disk usage bar changes color based on usage:
+- 🔵 Blue — under 75% used
+- 🟡 Amber — 75%–90% used
+- 🔴 Red — over 90% used
+
+Click **"Refresh"** to fetch the latest stats from the server.
+
+> **Note:** Server Health requires admin (PAM) access. If you're logged in with a non-admin user or an environment token, you'll see an access denied message.
+
 ### Saving Settings
 
 - Click **"Save settings"** to apply all changes. New links will use the updated defaults.
@@ -867,17 +897,22 @@ After successful activation:
 
 ---
 
-## 17. View Logs (Client Log Viewer)
+## 17. View Logs
 
-The Client Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
+The Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
 
-![Client Log Viewer](images/log-viewer.png)
+The Log Viewer has two tabs: **Client Logs** and **Server Logs**.
 
-### Log Summary
+<!-- SCREENSHOT NEEDED: log-viewer-tabs.png -->
+![Log Viewer with tabs](images/log-viewer-tabs.png)
+
+### Client Logs
+
+The Client Logs tab shows parsed entries from the local application log file stored on your computer.
 
 At the top, you'll see:
 
-- **Log file** — The name of the currently loaded log file (e.g., `45studio-share-client-2026-03-11.json`).
+- **Log file** — The name of the currently loaded log file (e.g., `45studio-share-client-2026-05-27.json`).
 - **Directory** — The file path where logs are stored on your system.
 - **Entries loaded** — Total number of parsed log entries.
 
@@ -887,32 +922,54 @@ At the top, you'll see:
 - 🔵 **Info** — General operational events (uploads started, links created)
 - ⚪ **Debug** — Low-level diagnostic data
 
+### Server Logs (Audit Log)
+
+The Server Logs tab retrieves structured audit log entries from the connected server. These entries record every significant action taken on the server — link creation, file changes, transcode operations, user actions, and more.
+
+<!-- SCREENSHOT NEEDED: log-viewer-server.png -->
+![Server Logs tab](images/log-viewer-server.png)
+
+At the top, you'll see:
+
+- **Log file** — The ops.log file name on the server (e.g., `ops.log`).
+- **Directory** — The server-side log directory path (e.g., `/var/log/houston-broadcaster`).
+- **Database** — The SQLite database path where structured audit entries are stored.
+- **Entries loaded** — Total number of audit log entries in the database.
+
+Each server log entry shows:
+
+| Column | Description |
+|--------|-------------|
+| **Time** | Timestamp of the server event. |
+| **Level** | Severity: INFO, WARN, or ERROR. |
+| **Action** | The audit event name (e.g., `link.files_updated`, `annotation.created`, `transcode.cancelled`). |
+| **Actor** | Username of who performed the action. |
+| **Resource** | The resource type and ID affected (e.g., `link/17`, `annotation/42`). |
+| **Details** | Expandable JSON payload with additional context. |
+
+Server logs support **pagination** — use the Previous/Next buttons at the bottom to navigate through pages of results.
+
+> **Note:** Server Logs require admin (PAM) access. If you're logged in with a non-admin account, you'll see a message indicating that admin access is required.
+
 ### Searching & Filtering Logs
 
 | Control | Description |
 |---------|-------------|
-| **Search** | Filter by event name, summary text, details, IP address, or actor. |
-| **Level filter** | Show only a specific level: *All levels*, *Error*, *Warn*, *Info*, or *Debug*. |
-| **Errors/warnings only** | Quick toggle to show only error and warning entries. |
-| **Group related events** | Groups similar events together to reduce visual duplication during repeated failures. |
+| **Search** | Filter by event name, summary text, details, actor, or resource. |
+| **Level filter** | Show only a specific level: *All levels*, *Error*, *Warn*, *Info*, or *Debug* (client only). |
+| **Errors/warnings only** | (Client tab) Quick toggle to show only error and warning entries. |
+| **Group related events** | (Client tab) Groups similar events together to reduce visual duplication. |
 
 ### Log Entry Details
 
-Each log entry shows:
+**Client logs:** Click on any entry to expand its **Details** section with full event payload and diagnostic information.
 
-| Column | Description |
-|--------|-------------|
-| **Time** | Timestamp of the event. |
-| **Level** | Severity: ERROR, WARN, INFO, or DEBUG. Error rows are highlighted in red, warnings in amber. |
-| **Event** | Event identifier (e.g., `upload.started`, `link.created`, `sse.error`). |
-| **Summary** | Human-readable description of what happened. |
+**Server logs:** Click **"Show detail"** on any row to expand the structured JSON detail for that audit event.
 
-Click on any entry to expand its **Details** section, which shows the full event payload and structured diagnostic information.
-
-- Click **"Refresh"** to reload and re-parse the current log file.
+- Click **"Refresh"** to reload entries.
 - Click **"Close"** to return to the Dashboard.
 
-> **Tip:** If you're experiencing connection or upload issues, check the logs for `ERROR` entries. The event names and summaries will help identify the cause.
+> **Tip:** If you're experiencing connection or upload issues, check the Client Logs for `ERROR` entries. For server-side issues (transcodes failing, links not updating), check the Server Logs tab.
 
 ---
 
@@ -973,7 +1030,10 @@ A: Yes. Click **"Disable"** in the link's action column on the Dashboard. This i
 A: All uploaded files go through a quarantine process with malware scanning before being moved to the destination folder. Files that fail the scan are rejected.
 
 **Q: Where are my logs stored?**  
-A: Client logs are stored in your local application data directory (shown in the Log Viewer). They are not stored on the server.
+A: **Client logs** are stored in your local application data directory (shown in the Log Viewer's Client tab). **Server logs** (audit entries) are stored on the server in both a SQLite database and the ops.log file. You can view both from the Log Viewer — use the Client/Server tabs to switch.
+
+**Q: I can't see Server Logs — it says "Admin access required". What do I do?**  
+A: Server logs require a system (PAM) account login. If you logged in using an environment token or open access, you won't have admin privileges. Log in with your server's system username and password to access server logs and health stats.
 
 ---
 
