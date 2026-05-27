@@ -670,11 +670,11 @@ function waitForIngestAndStartTranscode(opts: {
 				localWatermarkPath: opts.localWatermarkPath ?? null,
 				taskId: opts.taskId,
 			});
-			// Don't return — fall through to create per-kind polling tasks
-			// which will show separate progress bars from the client's progress pushes
+			// Fall through to create polling tasks — the composable pushes progress to
+			// server DB and the polling tasks display it in the TransferDock UI.
 		}
 
-		// ── Server-side transcode tracking (also used to display client progress) ──
+		// ── Transcode tracking via polling (displays progress from server DB) ──
 
 		const jobInfo = extractJobInfoByVersion(payload);
 		const rec = Number.isFinite(assetVersionId) && assetVersionId > 0 ? jobInfo[assetVersionId] : null;
@@ -919,7 +919,8 @@ async function loadExistingWatermarkFiles() {
 			.filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null)
 			.map(r => r.value)
 		
-		existingWatermarkFiles.value = [...validBuiltins, ...serverWatermarks]
+		// User watermarks first, default watermarks last
+		existingWatermarkFiles.value = [...serverWatermarks, ...validBuiltins]
 	} catch {
 		existingWatermarkFiles.value = []
 	}
@@ -1057,6 +1058,10 @@ watch(selectedExistingWatermark, (v) => {
 	if (String(v || '').trim()) {
 		watermarkFile.value = null
 		void fetchExistingWatermarkPreview(v)
+		// Store the selected watermark for auto-selection later
+		try {
+			localStorage.setItem('45flow-last-watermark', v)
+		} catch { /* ignore storage errors */ }
 	}
 })
 
@@ -1330,6 +1335,8 @@ function uploadOneFile(
 	const shouldTranscodeClient = false
 
 	const doUpload = async (filePathToUpload: string, clientTranscoded: boolean = false, clientWatermarked: boolean = false) => {
+		// Tell server we WILL transcode client-side (pre-claim jobs to prevent server from picking them up)
+		const clientWillTranscode = !clientTranscoded && isVideo && clientTranscodeEnabled.value && transcodeProxyAfterUpload.value
 		return window.electron.rsyncStart(
 			{
 				host: ssh?.server,
@@ -1346,6 +1353,7 @@ function uploadOneFile(
 				apiToken: connectionMeta.value.token || undefined,
 				clientTranscoded, // Tell server we transcoded client-side
 				clientWatermarked, // Tell server watermark was applied client-side
+				clientTranscode: clientWillTranscode, // Tell server we WILL transcode (claim jobs)
 			},
 			p => {
 				if (row.status === 'canceled' || row.status === 'done' || row.status === 'error') return
@@ -1477,7 +1485,14 @@ function uploadOneFile(
 		};
 
 		done.then((res: any) => {
-			cleanup();
+			// Don't immediately remove the ingest listener on success — the ingest
+			// IPC arrives AFTER upload:done (server API call has latency). The handler
+			// self-cleans via its finally block. Use a generous timeout as safety net.
+			if (res.ok) {
+				setTimeout(cleanup, 60000)
+			} else {
+				cleanup()
+			}
 			activeUploads.value = Math.max(0, activeUploads.value - 1)
 
 			if (res.ok) {
@@ -1599,6 +1614,13 @@ async function startUploads() {
 				return
 			}
 			watermarkRelPathForIngest = resolveWatermarkRelPath() || String(watermarkFile.value?.name || '').trim()
+		}
+		
+		// Store the watermark path for auto-selection in share link creation
+		if (watermarkRelPathForIngest) {
+			try {
+				localStorage.setItem('45flow-last-watermark', watermarkRelPathForIngest)
+			} catch { /* ignore storage errors */ }
 		}
 	}
 

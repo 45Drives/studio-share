@@ -2309,6 +2309,7 @@ export type RsyncStartOpts = {
   apiToken?: string
   clientTranscoded?: boolean  // file was transcoded on client side
   clientWatermarked?: boolean  // watermark was applied on client side
+  clientTranscode?: boolean  // client will transcode (pre-claim jobs)
 }
 
 const inflightRsync = new Map<string, ChildProcessWithoutNullStreams | null>()
@@ -3030,6 +3031,7 @@ ipcMain.on('upload:start', async (event, opts: RsyncStartOpts) => {
         }
         if (opts.clientTranscoded) params.set('clientTranscoded', '1')
         if (opts.clientWatermarked) params.set('clientWatermarked', '1')
+        if (opts.clientTranscode) params.set('clientTranscode', '1')
 
         const url = `${base}/api/ingest/register?${params.toString()}`
         const ingestHeaders: Record<string, string> = {}

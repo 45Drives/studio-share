@@ -1054,7 +1054,18 @@ async function loadExistingWatermarkFiles() {
             .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null)
             .map(r => r.value)
         
-        existingWatermarkFiles.value = [...validBuiltins, ...serverWatermarks]
+        // User watermarks first, default watermarks last
+        existingWatermarkFiles.value = [...serverWatermarks, ...validBuiltins]
+
+        // Auto-select last used watermark if available
+        try {
+            const lastUsed = localStorage.getItem('45flow-last-watermark')
+            if (lastUsed && existingWatermarkFiles.value.includes(lastUsed) && !watermarkFile.value && !selectedExistingWatermark.value) {
+                selectedExistingWatermark.value = lastUsed
+                void fetchExistingWatermarkPreview(lastUsed)
+                return
+            }
+        } catch { /* ignore storage errors */ }
 
         // Auto-load preview for first existing watermark when detected
         if (allSelectedVideosHaveWatermark.value && existingWatermarkFiles.value.length && !watermarkFile.value && !selectedExistingWatermark.value) {
