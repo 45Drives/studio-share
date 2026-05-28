@@ -128,6 +128,9 @@
                 <span class="text-sm">External (Internet)</span>
               </label>
             </div>
+            <button type="button" @click="showPortFwdModal = true" class="text-xs text-primary hover:underline whitespace-nowrap">
+              Learn how to set up port forwarding
+            </button>
           </div>
         </div>
 
@@ -207,6 +210,8 @@
           @apply="onApplyUsers" />
       </section>
 
+      <PortForwardingModal v-if="showPortFwdModal" @close="showPortFwdModal = false" />
+
       <!-- ===== STEP 3: Upload & Share Progress ===== -->
       <section v-show="wizardStep === 3" data-tour="qs-step-upload">
         <div v-if="uploadPhase === 'uploading'" class="flex flex-col gap-3">
@@ -285,12 +290,13 @@ import { useTransferProgress } from '../composables/useTransferProgress'
 import { useClientTranscode } from '../composables/useClientTranscode'
 import { useUploadTranscode } from '../composables/useUploadTranscode'
 import { signalLinkCreated } from '../composables/useLinkRefresh'
-import { tourQuickShareOpen, tourQuickShareStep, tourQuickShareShowDone } from '../composables/useQuickShareTour'
+import { tourQuickShareOpen, tourQuickShareStep, tourQuickShareShowDone, quickShareOverlayOpen } from '../composables/useQuickShareTour'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
 import { DEFAULT_45FLOW_WATERMARKS } from '../types'
 import FolderPicker from './FolderPicker.vue'
 import AddUsersModal from './modals/AddUsersModal.vue'
+import PortForwardingModal from './modals/PortForwardingModal.vue'
 import LinkAccessMode from './LinkAccessMode.vue'
 import VideoOptionsPanel from './VideoOptionsPanel.vue'
 import type { Commenter, RsyncProgress } from '../typings/electron'
@@ -368,7 +374,7 @@ const quickShareTourSteps: TourStep[] = [
   // ── Quick Share Step 2: Network ──
   {
     target: '[data-tour="qs-network"]',
-    message: 'Choose the network for your share link.\n\nLocal (LAN) generates an internal URL for your network. External (Internet) uses your public domain or IP so anyone outside your network can access it.',
+    message: 'Choose the network for your share link.\n\nLocal (LAN) generates an internal URL for your network. External (Internet) uses your public domain or IP so anyone outside your network can access it (this requires port forwarding to be set up to your server).\n\nClick "Learn how to set up port forwarding" to see detailed setup instructions.',
     beforeShow: () => {
       tourQuickShareOpen.value = true
       tourQuickShareStep.value = 2
@@ -544,6 +550,7 @@ onBeforeUnmount(() => {
 
 // ── Modal state ──
 const showModal = ref(false)
+watch(showModal, (v) => { quickShareOverlayOpen.value = v })
 const minimized = ref(false)
 const droppedFiles = ref<DroppedFile[]>([])
 const wizardStep = ref<1 | 2 | 3>(1)
@@ -607,6 +614,7 @@ const proxyQualities = ref<string[]>(['original'])
 
 // Restricted users
 const userModalOpen = ref(false)
+const showPortFwdModal = ref(false)
 const accessUsers = ref<Commenter[]>([])
 const accessGroups = ref<{ id: number; name: string; member_count?: number; display_color?: string | null; role_id: number | null; role_name: string | null }[]>([])
 const linkContext = { type: 'download' as const }

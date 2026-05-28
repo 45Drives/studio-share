@@ -131,6 +131,7 @@ import { computed, watch } from 'vue'
 import { useTransferProgress } from '../composables/useTransferProgress'
 import { useTourManager, type TourStep } from '../composables/useTourManager'
 import { useOnboarding } from '../composables/useOnboarding'
+import { quickShareOverlayOpen } from '../composables/useQuickShareTour'
 
 const {
     state,
@@ -166,12 +167,27 @@ const transferDockTourSteps: TourStep[] = [
 
 // Trigger dock tour the first time the panel opens
 let _dockTourTriggered = false
+
+function triggerDockTour() {
+	setTimeout(() => {
+		requestTour('transfer-dock', transferDockTourSteps, () => markDone('transferDockTourDone'))
+	}, 600)
+}
+
 watch(() => state.open, (open) => {
 	if (open && !_dockTourTriggered && !onboarding.value.transferDockTourDone) {
 		_dockTourTriggered = true
-		setTimeout(() => {
-			requestTour('transfer-dock', transferDockTourSteps, () => markDone('transferDockTourDone'))
-		}, 600)
+		if (quickShareOverlayOpen.value) {
+			// Defer tour until the Quick Share overlay closes
+			const stop = watch(quickShareOverlayOpen, (overlayOpen) => {
+				if (!overlayOpen) {
+					stop()
+					triggerDockTour()
+				}
+			})
+		} else {
+			triggerDockTour()
+		}
 	}
 })
 
