@@ -1787,7 +1787,6 @@ async function generateLink() {
                             linkUrl: data.viewUrl,
                             linkTitle: linkTitle.value || undefined,
                             file: rec?.path || rec?.relPath || rec?.p || rec?.name,
-                            files: files.value.slice(),
                             proxyQualities: transcodeProxy.value ? proxyQualities.value.slice() : [],
                         }
                         const fileId = Number(rec?.id ?? rec?.fileId ?? rec?.file_id ?? rec?.file?.id)

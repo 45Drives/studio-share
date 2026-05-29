@@ -70,6 +70,8 @@ type PlaybackProgressSnapshot = {
     perQualityProgress?: Record<string, number>
     transcoder?: 'client' | 'server'
     encoder?: string
+    etaSeconds?: number | null
+    speedX?: number | null
 }
 
 function now() {
@@ -993,7 +995,7 @@ export function useTransferProgress() {
             )
 
             if (wsSubscribed) {
-                console.log('[transcode] WebSocket active', { taskId, assetVersionId: primaryId })
+                // console.log('[transcode] WebSocket active', { taskId, assetVersionId: primaryId })
             } else {
                 console.log('[transcode] WebSocket unavailable, using polling only', { taskId })
             }
@@ -1257,6 +1259,7 @@ export function useTransferProgress() {
             stop: undefined,
             jobKind: opts.jobKind ?? 'any',
             context: opts.context,
+            ...(assetVersionId ? { assetVersionIds: [assetVersionId] } : {}),
         }
         upsertTask(t)
 
@@ -1298,11 +1301,11 @@ export function useTransferProgress() {
 
                 // ETA & speed from server snapshot
                 if (cur.status === 'running') {
-                    const serverEta = formatEta((snap as any)?.etaSeconds ?? null)
+                    const serverEta = formatEta(snap.etaSeconds ?? null)
                     const elapsedMs = Math.max(0, now() - Number(cur.startedAt || now()))
                     const localEta = formatEta(estimateEtaFromProgress(cur.progress, elapsedMs))
                     cur.eta = serverEta || localEta
-                    cur.speed = formatSpeed((snap as any)?.speedX ?? null)
+                    cur.speed = formatSpeed(snap.speedX ?? null)
                 } else {
                     cur.eta = null
                     cur.speed = null
