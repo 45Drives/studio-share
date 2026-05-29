@@ -802,6 +802,7 @@ const watermarkFile = ref<LocalFile | null>(null)
 const existingWatermarkFiles = ref<string[]>([])
 const selectedExistingWatermark = ref('')
 const existingWatermarkPreviewUrl = ref<string | null>(null)
+const detectedWatermarkFile = ref('')
 const overwriteExisting = ref(false)
 const preflightLoading = ref(false)
 const preflightProxyBlocked = ref(false)
@@ -943,6 +944,22 @@ async function runPreflight() {
         preflightWatermarkExistingCount.value = Number(summary.watermarkExistingCount || 0)
         preflightTranscodeInProgressCount.value = Number(summary.transcodeInProgressCount || 0)
 
+        // Extract detected watermark file from preflight items for auto-selection
+        const items = Array.isArray(data?.items) ? data.items : []
+        const detectedWatermarks = items
+            .filter((it: any) => it?.watermarkFile)
+            .map((it: any) => String(it.watermarkFile))
+        if (detectedWatermarks.length > 0) {
+            const allSame = detectedWatermarks.every((w: string) => w === detectedWatermarks[0])
+            if (allSame) {
+                detectedWatermarkFile.value = detectedWatermarks[0]
+            } else {
+                detectedWatermarkFile.value = ''
+            }
+        } else {
+            detectedWatermarkFile.value = ''
+        }
+
         const noticeKey = [
             videoSelected.slice().sort().join('|'),
             preflightProxyBlocked.value ? '1' : '0',
@@ -1057,20 +1074,30 @@ async function loadExistingWatermarkFiles() {
         // User watermarks first, default watermarks last
         existingWatermarkFiles.value = [...serverWatermarks, ...validBuiltins]
 
-        // Auto-select last used watermark if available
-        try {
-            const lastUsed = localStorage.getItem('45flow-last-watermark')
-            if (lastUsed && existingWatermarkFiles.value.includes(lastUsed) && !watermarkFile.value && !selectedExistingWatermark.value) {
-                selectedExistingWatermark.value = lastUsed
-                void fetchExistingWatermarkPreview(lastUsed)
+        // Auto-select: prefer detected watermark from preflight (what's actually in the video),
+        // then fall back to localStorage last-used, then first in list
+        if (!watermarkFile.value && !selectedExistingWatermark.value) {
+            const detected = detectedWatermarkFile.value
+            if (detected && existingWatermarkFiles.value.includes(detected)) {
+                selectedExistingWatermark.value = detected
+                void fetchExistingWatermarkPreview(detected)
                 return
             }
-        } catch { /* ignore storage errors */ }
 
-        // Auto-load preview for first existing watermark when detected
-        if (allSelectedVideosHaveWatermark.value && existingWatermarkFiles.value.length && !watermarkFile.value && !selectedExistingWatermark.value) {
-            selectedExistingWatermark.value = existingWatermarkFiles.value[0]
-            void fetchExistingWatermarkPreview(existingWatermarkFiles.value[0])
+            try {
+                const lastUsed = localStorage.getItem('45flow-last-watermark')
+                if (lastUsed && existingWatermarkFiles.value.includes(lastUsed)) {
+                    selectedExistingWatermark.value = lastUsed
+                    void fetchExistingWatermarkPreview(lastUsed)
+                    return
+                }
+            } catch { /* ignore storage errors */ }
+
+            // Fallback: first existing watermark when all selected videos have one
+            if (allSelectedVideosHaveWatermark.value && existingWatermarkFiles.value.length) {
+                selectedExistingWatermark.value = existingWatermarkFiles.value[0]
+                void fetchExistingWatermarkPreview(existingWatermarkFiles.value[0])
+            }
         }
     } catch {
         existingWatermarkFiles.value = []
@@ -1698,6 +1725,12 @@ async function generateLink() {
         // Only apply overwrite for the retry; reset for subsequent requests
         overwriteExisting.value = false
 
+        // Persist watermark selection for future auto-select
+        const effectiveWatermark = String(body.watermarkFile || selectedExistingWatermark.value || '').trim()
+        if (effectiveWatermark) {
+            try { localStorage.setItem('45flow-last-watermark', effectiveWatermark) } catch { }
+        }
+
         const wantsHls = hasVideoSelected.value
         if (transcodeProxy.value || wantsHls) {
             const versionIds = extractAssetVersionIdsFromMagicLinkResponse(data);
@@ -1779,6 +1812,8 @@ async function generateLink() {
                                         progress: j?.progress ?? payload?.hlsProgress ?? 0,
                                         etaSeconds: j?.eta_seconds ?? null,
                                         speedX: j?.speed_x ?? null,
+                                        transcoder: j?.transcoder,
+                                        encoder: j?.encoder,
                                     }
                                 }
                             })
@@ -1814,6 +1849,8 @@ async function generateLink() {
                                             qualityOrder: j?.quality_order ?? j?.qualityOrder ?? payload?.quality_order ?? payload?.qualityOrder,
                                             activeQuality: j?.active_quality ?? j?.activeQuality ?? payload?.active_quality ?? payload?.activeQuality,
                                             perQualityProgress: j?.per_quality_progress ?? j?.perQualityProgress ?? payload?.per_quality_progress ?? payload?.perQualityProgress,
+                                            transcoder: j?.transcoder,
+                                            encoder: j?.encoder,
                                         }
                                     }
                                 })

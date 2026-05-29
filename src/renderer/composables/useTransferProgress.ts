@@ -8,7 +8,7 @@ type UploadStatus = 'queued' | 'uploading' | 'done' | 'canceled' | 'error'
 type TranscodeStatus = 'queued' | 'running' | 'done' | 'failed' | 'unknown'
 
 export type TransferContext = {
-    source: 'link' | 'upload'
+    source: 'link' | 'upload' | 'server'
     groupId?: string          // stable id shared by upload+transcode for same action
     linkUrl?: string
     linkTitle?: string
@@ -68,6 +68,8 @@ type PlaybackProgressSnapshot = {
     qualityOrder?: string[]
     activeQuality?: string
     perQualityProgress?: Record<string, number>
+    transcoder?: 'client' | 'server'
+    encoder?: string
 }
 
 function now() {
@@ -940,7 +942,7 @@ export function useTransferProgress() {
                         (Array.isArray(wsQOrder) && wsQOrder.length) ? wsQOrder : Object.keys(wsPerQ)
                     )
                     if (qualityOrder.length) {
-                        if (!cur.context) cur.context = { source: 'upload' }
+                        if (!cur.context) cur.context = { source: 'server' }
                         cur.context.proxyQualities = qualityOrder
                     }
                     // Show active quality's individual progress (0-100)
@@ -1096,7 +1098,7 @@ export function useTransferProgress() {
                             (Array.isArray(qOrder) && qOrder.length) ? qOrder : Object.keys(perQ)
                         )
                         if (qualityOrder.length) {
-                            if (!cur.context) cur.context = { source: 'upload' }
+                            if (!cur.context) cur.context = { source: 'server' }
                             cur.context.proxyQualities = qualityOrder
                         }
                         // Build per-quality sub-items for display
@@ -1289,6 +1291,10 @@ export function useTransferProgress() {
                 cur.items = Array.isArray(snap.items) ? (snap.items as any) : cur.items
                 cur.status = normalizePlaybackStatus(snap.status)
                 cur.progress = cur.status === 'done' ? 100 : normalizeProgressPercent(snap.progress)
+
+                // Transcoder/encoder attribution
+                if (snap.transcoder) cur.transcoder = snap.transcoder
+                if (snap.encoder) cur.encoder = snap.encoder
 
                 // ETA & speed from server snapshot
                 if (cur.status === 'running') {
@@ -1593,7 +1599,7 @@ export function useTransferProgress() {
                         intervalMs: 1500,
                         jobKind,
                         context: {
-                            source: 'upload' as const,
+                            source: 'server' as const,
                             destDir: relDir,
                             file: filePath,
                         },
