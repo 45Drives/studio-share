@@ -372,6 +372,10 @@ function outerTitleForBucket(bucketCtx: any, tasks: any[]) {
         }
     }
 
+    if (c.source === 'server') {
+        return { title: 'Transcode', subtitle: undefined }
+    }
+
     const anyUpload = tasks.some(t => t?.context?.source === 'upload')
     if (!anyUpload) {
         const anyLink = tasks.find(t => t?.context?.linkUrl)?.context?.linkUrl
