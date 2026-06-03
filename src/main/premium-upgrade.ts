@@ -19,14 +19,13 @@ const PREMIUM_REPO_NAME = '45Flow'
  *   4. App restarts as Premium Edition (same appId, in-place replacement)
  */
 export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
-    if (!app.isPackaged) return
-
     let autoUpdater: any = null
-    try {
-        ;({ autoUpdater } = require('electron-updater'))
-    } catch (e) {
-        console.warn('[upgrade] electron-updater unavailable; premium upgrade disabled.', e)
-        return
+    if (app.isPackaged) {
+        try {
+            ;({ autoUpdater } = require('electron-updater'))
+        } catch (e) {
+            console.warn('[upgrade] electron-updater unavailable; premium upgrade disabled.', e)
+        }
     }
 
     // ── Validate license key against VPS ────────────────────────────────
