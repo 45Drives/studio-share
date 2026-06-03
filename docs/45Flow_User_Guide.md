@@ -17,66 +17,72 @@ Welcome to **45Flow** — the secure file sharing and collaboration platform by 
    - [Custom Port Configuration](#custom-port-configuration)
    - [Logging In](#logging-in)
 4. [Dashboard Overview](#4-dashboard-overview)
-5. [Drag and Drop QuickShare](#5-drag-and-drop-quickshare)
-6. [Share Files Remotely (Generate a Share Link)](#6-share-files-remotely-generate-a-share-link)
+5. [Port Forwarding for External Sharing](#5-port-forwarding-for-external-sharing)
+6. [Drag and Drop QuickShare](#6-drag-and-drop-quickshare)
+7. [Share Files Remotely (Generate a Share Link)](#7-share-files-remotely-generate-a-share-link)
    - [Step 1: Select a Project](#step-1-select-a-project)
    - [Step 2: Select Files & Configure Link](#step-2-select-files--configure-link)
    - [Link Access Modes](#link-access-modes)
    - [Advanced Video Options](#advanced-video-options)
    - [Generating the Link](#generating-the-link)
-7. [Upload Files Locally](#7-upload-files-locally)
+8. [Upload Files Locally](#8-upload-files-locally)
    - [Step 1: Select Local Files](#step-1-select-local-files)
    - [Step 2: Choose Destination](#step-2-choose-destination)
    - [Step 3: Upload & Monitor Progress](#step-3-upload--monitor-progress)
-8. [Create an Upload Link (Remote Upload)](#8-create-an-upload-link-remote-upload)
+9. [Create an Upload Link (Remote Upload)](#9-create-an-upload-link-remote-upload)
    - [Selecting a Destination Folder](#selecting-a-destination-folder)
    - [Configuring the Upload Link](#configuring-the-upload-link)
    - [Generating the Upload Link](#generating-the-upload-link)
-9. [Transfer Dock](#9-transfer-dock)
+10. [Accessing a Shared Link](#10-accessing-a-shared-link)
+    - [Opening the Link](#opening-the-link)
+    - [Password-Protected Links](#password-protected-links)
+    - [User-Restricted Links](#user-restricted-links)
+11. [Transfer Dock](#11-transfer-dock)
     - [Transfer Dock Overview](#transfer-dock-overview)
     - [Transfer Entry Details](#transfer-entry-details)
     - [Transcode Status](#transcode-status)
-10. [Managing Links](#10-managing-links)
+12. [Managing Links](#12-managing-links)
    - [Searching & Filtering Links](#searching--filtering-links)
    - [Link Table Columns](#link-table-columns)
    - [Link Actions](#link-actions)
-11. [Link Details](#11-link-details)
+13. [Link Details](#13-link-details)
    - [Link Configuration Summary](#link-configuration-summary)
    - [Shared Files](#shared-files)
    - [Access Activity Log](#access-activity-log)
    - [File Versions](#file-versions)
-12. [Editing a Link](#12-editing-a-link)
-13. [Video Player & Comments](#13-video-player--comments)
+14. [Editing a Link](#14-editing-a-link)
+15. [Video Player & Comments](#15-video-player--comments)
     - [Playback Controls](#playback-controls)
     - [Quality Selection](#quality-selection)
     - [Timecoded Comments](#timecoded-comments)
-14. [User Management](#14-user-management)
+16. [User Management](#16-user-management)
     - [Viewing Existing Users](#viewing-existing-users)
     - [Creating a New User](#creating-a-new-user)
+    - [Managing Groups](#managing-groups)
     - [Editing & Deleting Users](#editing--deleting-users)
-15. [Role Management](#15-role-management)
+17. [Role Management](#17-role-management)
     - [System Roles](#system-roles)
     - [Creating Custom Roles](#creating-custom-roles)
     - [Editing & Deleting Roles](#editing--deleting-roles)
-16. [Settings](#16-settings)
-    - [Default Link Access](#default-link-access)
-    - [External Share URL (Public)](#external-share-url-public)
-    - [Internal Share URL (LAN / VPN)](#internal-share-url-lan--vpn)
+18. [Settings](#18-settings)
+    - [URLs & Access](#urls--access)
+    - [SSL Certificate Management](#ssl-certificate-management)
+    - [Link Options](#link-options)
     - [Project Root](#project-root)
-    - [Default Link Options](#default-link-options)
+    - [Preferences & Performance](#preferences--performance)
     - [Server Health](#server-health)
     - [Maintenance & Cleanup](#maintenance--cleanup)
-17. [Upgrade to Pro Edition](#17-upgrade-to-pro-edition)
+    - [Guides](#guides)
+19. [Upgrade to Pro Edition](#19-upgrade-to-pro-edition)
     - [Purchasing a License](#purchasing-a-license)
     - [Activating Your License](#activating-your-license)
     - [Downloading & Installing Pro Edition](#downloading--installing-pro-edition)
-18. [View Logs](#18-view-logs)
+20. [View Logs](#20-view-logs)
     - [Client Logs](#client-logs)
     - [Server Logs (Audit Log)](#server-logs-audit-log)
     - [Searching & Filtering Logs](#searching--filtering-logs)
     - [Log Entry Details](#log-entry-details)
-19. [Port Forwarding for External Sharing](#19-port-forwarding-for-external-sharing)
-20. [Frequently Asked Questions](#20-frequently-asked-questions)
+21. [Frequently Asked Questions](#21-frequently-asked-questions)
 
 ---
 
@@ -168,7 +174,7 @@ In most cases, the default ports work without changes. If your server uses non-s
 | **API** | 9095 | Server communication and link management |
 | **HTTPS** | 443 | Share links, upload links, external access |
 
-> **Important:** For external sharing the HTTPS port (443 by default) must be open/forwarded on your router. See [Port Forwarding](#17-port-forwarding-for-external-sharing) for details.
+> **Important:** For external sharing the HTTPS port (443 by default) must be open/forwarded on your router. See [Port Forwarding](#19-port-forwarding-for-external-sharing) for details.
 
 ### Logging In
 
@@ -217,7 +223,7 @@ Three large action buttons let you perform the core tasks:
 
 ### Active Links Table
 
-Below the action buttons, the Dashboard displays a table of **all links** you've created, with search/filter tools and at-a-glance status information. See [Managing Links](#9-managing-links) for full details.
+Below the action buttons, the Dashboard displays a table of **all links** you've created, with search/filter tools and at-a-glance status information. See [Managing Links](#12-managing-links) for full details.
 
 ### Logging Out
 
@@ -225,7 +231,33 @@ Click **"Log Out"** at the bottom of the Dashboard to disconnect from the server
 
 ---
 
-## 5. Drag and Drop QuickShare
+## 5. Port Forwarding for External Sharing
+
+To share files externally (over the internet), HTTPS port **443** (or your custom HTTPS port) must be forwarded from your router to your server. **This is a critical setup step for external sharing** — complete it before creating external links.
+
+**What is port forwarding?**  
+Port forwarding tells your router to direct incoming traffic on a specific port to your server's local IP address, allowing people outside your network to access your share links.
+
+**General Steps:**
+
+1. Log into your router's admin panel (usually at `192.168.1.1` or `192.168.0.1`).
+2. Find the **Port Forwarding** or **NAT** settings section.
+3. Create a new rule:
+   - **External port:** 443 (or your custom HTTPS port)
+   - **Internal IP:** Your server's local IP address
+   - **Internal port:** 443 (or your custom HTTPS port)
+   - **Protocol:** TCP
+4. Save the rule and test using the **"Check Port"** button in the 45Flow link creation screen.
+
+> **Note:** Port forwarding configuration varies by router manufacturer and model. Some ISPs or shared building networks may restrict port forwarding. If you're unsure whether your network supports it, contact your ISP or network administrator.
+
+![Port forwarding help modal](images/port-forwarding-help.png)
+
+> **Tip:** After setting up port forwarding, configure your external URL in [Settings](#18-settings) → URLs & Access to ensure links are generated correctly.
+
+---
+
+## 6. Drag and Drop QuickShare
 
 The **QuickShare** feature provides the fastest way to create a share link. Simply drag files from your desktop or file manager directly into 45Flow to instantly generate a shareable link with one click.
 
@@ -246,7 +278,7 @@ QuickShare links are created with the following default settings:
 - **Network:** Local network access (LAN/VPN)
 - **Comments:** Enabled by default
 
-These defaults can be customized in [Settings](#15-settings) under **Default Link Options**.
+These defaults can be customized in [Settings](#18-settings) under **Default Link Options**.
 
 ### After Creating a QuickShare Link
 
@@ -261,11 +293,11 @@ From the Dashboard, you can find your QuickShare link and:
 - View access logs
 - Delete the link
 
-> **Tip:** QuickShare is perfect for ad-hoc file sharing when you don't need custom settings. For more control over link configuration, use the [full file share workflow](#6-share-files-remotely-generate-a-share-link) instead.
+> **Tip:** QuickShare is perfect for ad-hoc file sharing when you don't need custom settings. For more control over link configuration, use the [full file share workflow](#7-share-files-remotely-generate-a-share-link) instead.
 
 ---
 
-## 6. Share Files Remotely (Generate a Share Link)
+## 7. Share Files Remotely (Generate a Share Link)
 
 Use this feature to select files on your server and generate a secure link that others can use to view, download, and optionally comment on those files.
 
@@ -353,7 +385,7 @@ When sharing video files, expand the **"Advanced video options"** section for ad
 
 ---
 
-## 7. Upload Files Locally
+## 8. Upload Files Locally
 
 Use this feature to transfer files from your workstation directly to the server. This is ideal for getting new media onto the server for sharing later.
 
@@ -427,7 +459,7 @@ When all files are complete, click **"Finish"** to return to the Dashboard.
 
 ---
 
-## 8. Create an Upload Link (Remote Upload)
+## 9. Create an Upload Link (Remote Upload)
 
 Use this feature to create a link that allows external collaborators to upload files to a specific folder on your server — without giving them Dashboard access.
 
@@ -478,7 +510,39 @@ When someone opens the link, they'll see a drag-and-drop upload page where they 
 
 ---
 
-## 9. Transfer Dock
+## 10. Accessing a Shared Link
+
+When someone opens a share link you've created, their experience depends on the **access mode** you configured. This section explains what recipients see when accessing links with different restriction levels.
+
+### Opening the Link
+
+For **open access** (Anyone with the link) share links, recipients can immediately browse files, play videos, or download content without any login or password.
+
+![Open access share link](images/video-player.png)
+
+### Password-Protected Links
+
+When you protect a link with a password (**Anyone with the link + password**), recipients must enter the correct password before accessing the content.
+
+![Password-protected link entry screen](images/link-password-protected.png)
+
+After entering the correct password, they'll have full access to the shared files according to the permissions you set (view, download, comment, etc.).
+
+### User-Restricted Links
+
+For links restricted to **specific users** or **invited users only**, recipients must log in with their credentials:
+
+1. Click **"Sign In"** on the access screen.
+2. Enter their username and password.
+3. If authenticated and authorized, they'll be granted access to the content.
+
+![User-restricted link login screen](images/link-user-restricted.png)
+
+> **Note:** Users must have been invited to the link (or have appropriate role permissions) to access user-restricted content. See [User Management](#16-user-management) for details on creating and managing user accounts.
+
+---
+
+## 11. Transfer Dock
 
 The **Transfer Dock** is a persistent overlay that tracks all active and recently completed transfers — uploads, transcodes, and review copy generation. It remains visible across all screens so you can continue working while monitoring progress.
 
@@ -537,7 +601,7 @@ Upload                     95.23 MB/s            ETA 0:14            100%
 
 ---
 
-## 10. Managing Links
+## 12. Managing Links
 
 All links you create — both share and upload — appear on the Dashboard in the **links table**. This is your central view for monitoring and managing all active, expired, and disabled links.
 
@@ -579,7 +643,7 @@ Each link row provides these actions:
 
 ---
 
-## 11. Link Details
+## 13. Link Details
 
 Click **"Details"** on any link (or click its title) to view comprehensive information.
 
@@ -640,7 +704,7 @@ Click **"Edit"** at the top of the Link Details view to modify the link's settin
 
 ---
 
-## 12. Editing a Link
+## 14. Editing a Link
 
 From the Link Details view, click **"Edit"** to modify an existing link's configuration.
 
@@ -664,7 +728,7 @@ Click **"Cancel"** or **"Close"** to discard changes and return to Link Details.
 
 ---
 
-## 13. Video Player & Comments
+## 15. Video Player & Comments
 
 When someone opens a share link containing video files, they see the **45Flow Video Player** — a browser-based player with collaboration features.
 
@@ -709,7 +773,7 @@ For collection links (multiple files), a sidebar file browser appears on the lef
 
 ---
 
-## 14. User Management
+## 16. User Management
 
 Users are required for the **"Only invited users"** access mode and allow role-based permissions on restricted links. Access user management from the Dashboard by clicking **"Manage Users"**.
 
@@ -746,6 +810,30 @@ Click **"Create new user"** to expand the creation form.
 
 Click **"Create User"** to save. The user will appear in the existing users list and can now be invited to restricted links.
 
+### Managing Groups
+
+Groups allow you to organize users into logical collections (e.g., **Editors**, **Clients**, **Reviewers**) for easier permission management.
+
+**Creating a Group:**
+
+1. Click **"Create Group"** in the User Management screen.
+2. Enter a **group name** and optional **description**.
+3. Click **"Save"**.
+
+**Adding Users to a Group:**
+
+1. Open the group's detail view.
+2. Click **"Add Users"**.
+3. Select users from the list and confirm.
+
+**Using Groups for Link Access:**
+
+When creating a user-restricted link, you can invite an entire group instead of adding users individually. All group members will automatically have access to the link.
+
+![User groups management](images/manage-groups.png)
+
+> **Tip:** Use groups to streamline link permissions when sharing with the same team repeatedly. Add new members to the group once, and they'll inherit access to all links shared with that group.
+
 ### Editing & Deleting Users
 
 - Click the **pencil icon** on any user to edit their name, email, company, tags, comment color, default role, or to reset their password.
@@ -753,7 +841,7 @@ Click **"Create User"** to save. The user will appear in the existing users list
 
 ---
 
-## 15. Role Management
+## 17. Role Management
 
 Roles define what users can do when accessing restricted links. Access role management from **Manage Users → Manage Roles**.
 
@@ -794,22 +882,27 @@ Roles define what users can do when accessing restricted links. Access role mana
 
 ---
 
-## 16. Settings
+## 18. Settings
 
 Configure application-wide defaults and server settings. Access Settings from the Dashboard by clicking **"Settings"**.
 
+The Settings panel is organized into sections via the left-hand navigation sidebar:
+
+- **Link Sharing** — URLs & Access, Certificate, Link Options, Project Root
+- **Application** — Preferences, Server Health, Maintenance
+- **Help** — Guides
+- **Upgrade** — Go Pro
+
 ![Settings modal](images/settings.png)
 
-### Default Link Access
+### URLs & Access
 
 Toggle between **Internal** and **External** as the default network access mode for new links:
 
 - **Internal** — New links default to LAN/VPN routing.
 - **External** — New links default to public/internet routing (requires port forwarding).
 
-### External Share URL (Public)
-
-Configure how public-facing links are generated:
+**External Share URL (Public):**
 
 | Setting | Description |
 |---------|-------------|
@@ -817,15 +910,13 @@ Configure how public-facing links are generated:
 | **External base** | Your public hostname or IP (e.g., `https://example.ddns.net`). No path — hostname only. |
 | **External HTTPS port** | Port users will use in their browser. Default is `443`. |
 
-> **Note:** Using a custom domain requires a valid SSL certificate for that domain.
+> **Note:** Using a custom domain requires a valid SSL certificate for that domain. See [SSL Certificate Management](#ssl-certificate-management) below.
 
 **Example:**  
 Without a domain: `https://142.177.145.42/s/<token>`  
 With a domain: `https://studio.yourcompany.com/s/<token>`
 
-### Internal Share URL (LAN / VPN)
-
-Configure how internal links are generated:
+**Internal Share URL (LAN / VPN):**
 
 | Setting | Description |
 |---------|-------------|
@@ -834,14 +925,38 @@ Configure how internal links are generated:
 
 A **Preview** section shows the currently active external and internal URLs so you can verify your configuration.
 
-### Project Root
+### SSL Certificate Management
 
-| Setting | Description |
-|---------|-------------|
-| **Ignore ZFS pools** | Check to skip the pool selection step and always use the configured project root. |
-| **Project root path** | Absolute path used as the default starting directory when creating shares or uploads. |
+The **Certificate** tab lets you upgrade from the default self-signed certificate to a trusted **Let's Encrypt** certificate for your custom domain. A trusted certificate eliminates browser security warnings when clients open share links.
 
-### Default Link Options
+![Certificate management](images/settings-certificate.png)
+
+**Certificate Status:**
+
+The top section shows your current certificate state:
+
+| Field | Description |
+|-------|-------------|
+| **Type** | Self-Signed (default) or Trusted (Let's Encrypt) |
+| **Domain** | The domain the certificate is issued for |
+| **Expires** | Expiration date with days remaining |
+| **Auto-renewal** | Whether automatic renewal is active (Let's Encrypt certificates auto-renew before expiry) |
+
+**Setting Up a Trusted Certificate:**
+
+1. **Configure your domain** — Enter your custom domain name (e.g., `studio.yourcompany.com`). This auto-syncs from the External Base if already set.
+2. **Add a contact email** — Let's Encrypt sends renewal notices to this address.
+3. **Create a DNS A record** — At your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.), create an **A record** pointing your domain to your server's public IP address.
+4. **Verify DNS** — Click **"Verify DNS"** to confirm the record is active.
+5. **Install certificate** — Once DNS is verified, click **"Install Trusted Certificate"** to automatically obtain and install the Let's Encrypt certificate.
+
+**Reverting to Self-Signed:**
+
+If you need to remove the trusted certificate (e.g., domain change), click **"Revert to Self-Signed"**. This instantly switches back to the self-signed certificate.
+
+> **Important:** Port 80 and 443 must both be accessible from the internet for Let's Encrypt validation to succeed. Ensure your firewall and port forwarding rules allow both ports.
+
+### Link Options
 
 These defaults are applied automatically when creating new links, but can be changed per link:
 
@@ -851,14 +966,29 @@ These defaults are applied automatically when creating new links, but can be cha
 | **Allow comments on open links** | Enable comments by default on open (unauthenticated) links. |
 | **Generate review copies by default** | Automatically enable review copy generation for new links. |
 
-### Performance
+### Project Root
 
-Settings for video processing performance. Found under **Settings → Performance**.
+| Setting | Description |
+|---------|-------------|
+| **Ignore ZFS pools** | Check to skip the pool selection step and always use the configured project root. |
+| **Project root path** | Absolute path used as the default starting directory when creating shares or uploads. |
+
+### Preferences & Performance
+
+**Display:**
+
+| Option | Description |
+|--------|-------------|
+| **Time format** | Toggle between 24-hour and 12-hour time display throughout the app. |
+
+**Performance:**
 
 | Option | Description |
 |--------|-------------|
 | **Client-side transcoding** | When enabled, videos are processed on your computer before upload — using your local CPU or GPU. This creates review copies faster and reduces load on the server. When disabled, the server handles all video processing after files are uploaded. |
-| **Hardware Acceleration** | Uses your GPU (NVIDIA NVENC, Intel Quick Sync, etc.) for faster transcoding. Falls back to CPU-only when no compatible GPU is detected. |
+| **Hardware Acceleration** | Uses your GPU (NVIDIA NVENC, Intel Quick Sync, AMD AMF, Apple VideoToolbox) for faster transcoding. Falls back to CPU-only when no compatible GPU is detected. |
+| **Encode Quality** | Choose between Fast (quicker encode, larger file), Balanced (good tradeoff), or Quality (slower encode, best visual fidelity). |
+| **Detected Encoders** | Shows which hardware encoders passed verification on your system. |
 
 #### Hardware Requirements for Client-side Transcoding
 
@@ -867,23 +997,11 @@ Settings for video processing performance. Found under **Settings → Performanc
 - **Storage:** Temporary disk space equal to ~1.5× the size of the source video during transcode
 - **FFmpeg** is bundled with 45Flow — no separate installation is needed
 
-> **Tip:** If client-side transcoding fails (e.g., insufficient GPU memory or unsupported codec), you can disable it in Settings → Performance. The server will handle transcoding instead — it just takes longer.
-
-### Maintenance & Cleanup
-
-For administrators to manage server health:
-
-- **Delete orphan transcode directories** — Remove transcode output folders that no longer have associated links.
-- **Prune DB rows for missing source files** — Clean up database entries where the original files no longer exist on disk.
-- Configure **orphan min age** (hours) and **max missing file checks** to control scan scope.
-- Click **"Run Scan"** to preview what would be cleaned, then **"Apply Cleanup"** to execute.
-- Use **"Export JSON"** to save scan results.
-
-![Maintenance and cleanup scan results](images/settings-maintenance.png)
+> **Tip:** If client-side transcoding fails (e.g., insufficient GPU memory or unsupported codec), you can disable it in Settings → Preferences. The server will handle transcoding instead — it just takes longer.
 
 ### Server Health
 
-The **Server Health** section (under Settings → Application → Server Health) provides real-time resource statistics from your connected server.
+The **Server Health** section provides real-time resource statistics from your connected server.
 
 ![Server Health panel](images/settings-server-health.png)
 
@@ -908,6 +1026,26 @@ Click **"Refresh"** to fetch the latest stats from the server.
 
 > **Note:** Server Health requires admin (PAM) access. If you're logged in with a non-admin user or an environment token, you'll see an access denied message.
 
+### Maintenance & Cleanup
+
+For administrators to manage server health:
+
+- **Delete orphan transcode directories** — Remove transcode output folders that no longer have associated links.
+- **Prune DB rows for missing source files** — Clean up database entries where the original files no longer exist on disk.
+- Configure **orphan min age** (hours) and **max missing file checks** to control scan scope.
+- Click **"Run Scan"** to preview what would be cleaned, then **"Apply Cleanup"** to execute.
+- Use **"Export JSON"** to save scan results.
+
+![Maintenance and cleanup scan results](images/settings-maintenance.png)
+
+### Guides
+
+The Guides section provides:
+
+- **Open User Guide** — Opens this documentation in your browser.
+- **Disable guided tours** — Turn off all onboarding walkthroughs and first-time guides.
+- **Re-enable guided tours** — Reset onboarding walkthroughs so they show again on each page.
+
 ### Saving Settings
 
 - Click **"Save settings"** to apply all changes. New links will use the updated defaults.
@@ -917,7 +1055,7 @@ Click **"Refresh"** to fetch the latest stats from the server.
 
 ---
 
-## 17. Upgrade to Pro Edition
+## 19. Upgrade to Pro Edition
 
 45Flow Community Edition can be upgraded in-app to **45Flow Pro Edition**, which includes automatic updates, cross-subnet server discovery via the 45Drives registry, and priority support.
 
@@ -959,7 +1097,7 @@ After successful activation:
 
 ---
 
-## 18. View Logs
+## 20. View Logs
 
 The Log Viewer lets you inspect application activity, identify errors, and troubleshoot issues. Access it from the Dashboard by clicking **"View Logs"**.
 
@@ -1033,31 +1171,7 @@ Server logs support **pagination** — use the Previous/Next buttons at the bott
 
 ---
 
-## 19. Port Forwarding for External Sharing
-
-To share files externally (over the internet), HTTPS port **443** (or your custom HTTPS port) must be forwarded from your router to your server.
-
-**What is port forwarding?**  
-Port forwarding tells your router to direct incoming traffic on a specific port to your server's local IP address, allowing people outside your network to access your share links.
-
-**General Steps:**
-
-1. Log into your router's admin panel (usually at `192.168.1.1` or `192.168.0.1`).
-2. Find the **Port Forwarding** or **NAT** settings section.
-3. Create a new rule:
-   - **External port:** 443 (or your custom HTTPS port)
-   - **Internal IP:** Your server's local IP address
-   - **Internal port:** 443 (or your custom HTTPS port)
-   - **Protocol:** TCP
-4. Save the rule and test using the **"Check Port"** button in the 45Flow link creation screen.
-
-> **Note:** Port forwarding configuration varies by router manufacturer and model. Some ISPs or shared building networks may restrict port forwarding. If you're unsure whether your network supports it, contact your ISP or network administrator.
-
-![Port forwarding help modal](images/port-forwarding-help.png)
-
----
-
-## 20. Frequently Asked Questions
+## 21. Frequently Asked Questions
 
 **Q: My server doesn't appear in the auto-discovery dropdown. What do I do?**  
 A: The `houston-broadcaster` service must be running on the server. Try connecting manually using the server's IP address via the **"Connect manually via IP"** field.
