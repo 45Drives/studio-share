@@ -714,22 +714,29 @@
                             </div>
 
                             <!-- Downloaded — ready to install -->
-                            <div v-if="upgradeStep === 'ready'" class="mt-4 rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-3">
+                            <div v-if="upgradeStep === 'ready' || upgradeStep === 'installing'" class="mt-4 rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-3">
                                 <div class="text-sm font-semibold text-green-800 dark:text-green-400 mb-1">Download Complete</div>
                                 <p class="text-sm text-green-700 dark:text-green-400 mb-3">
-                                    Pro Edition is ready to install. The app will restart.
+                                    {{ upgradeStep === 'installing' ? 'Installing Pro Edition…' : 'Pro Edition is ready to install. The app will restart.' }}
                                 </p>
                                 <button
                                     class="btn btn-success text-sm px-4"
                                     type="button"
+                                    :disabled="upgradeBusy"
                                     @click="handleUpgradeInstall"
                                 >
-                                    Restart & Install
+                                    {{ upgradeStep === 'installing' ? 'Installing…' : 'Restart & Install' }}
                                 </button>
                             </div>
 
+                            <!-- Manual installation required (Linux) -->
+                            <div v-if="upgradeStep === 'manual'" class="mt-4 rounded-lg border border-yellow-400 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 p-3">
+                                <div class="text-sm font-semibold text-yellow-900 dark:text-yellow-400 mb-1">Manual Installation Required</div>
+                                <p class="text-sm text-yellow-800 dark:text-yellow-400 whitespace-pre-wrap font-mono">{{ upgradeError }}</p>
+                            </div>
+
                             <!-- Error -->
-                            <div v-if="upgradeError" class="text-danger text-sm mt-3">{{ upgradeError }}</div>
+                            <div v-if="upgradeError && upgradeStep !== 'manual'" class="text-danger text-sm mt-3">{{ upgradeError }}</div>
                         </template>
 
                     </div>
@@ -909,7 +916,7 @@ function openUserGuide() {
 // ── Premium Upgrade ─────────────────────────────────────────────────────
 const upgradeKey = ref('')
 const upgradeBusy = ref(false)
-const upgradeStep = ref<'idle' | 'validating' | 'downloading' | 'ready'>('idle')
+const upgradeStep = ref<'idle' | 'validating' | 'downloading' | 'ready' | 'installing' | 'manual'>('idle')
 const upgradeValidated = ref(false)
 const upgradeError = ref('')
 const upgradePercent = ref(0)
@@ -1002,10 +1009,35 @@ async function handleUpgradeStart() {
 }
 
 async function handleUpgradeInstall() {
+    upgradeBusy.value = true
+    upgradeStep.value = 'installing'
+    upgradeError.value = ''
+    
     try {
-        await window.electron?.ipcRenderer.invoke('upgrade:install')
-    } catch {
-        // App is restarting
+        const result = await window.electron?.ipcRenderer.invoke('upgrade:install')
+        
+        // If manual installation is required (Linux deb/rpm), show instructions
+        if (result && !result.ok && result.manualInstall) {
+            upgradeError.value = result.error
+            upgradeStep.value = 'manual'
+            upgradeBusy.value = false
+            return
+        }
+        
+        // If there's an error but not manual install, show it
+        if (result && !result.ok) {
+            upgradeError.value = result.error || 'Installation failed.'
+            upgradeStep.value = 'ready'
+            upgradeBusy.value = false
+            return
+        }
+        
+        // Otherwise app is restarting automatically (this won't execute as app quits)
+    } catch (err: any) {
+        // App is likely restarting, but handle unexpected errors
+        upgradeError.value = err?.message || 'Installation failed.'
+        upgradeStep.value = 'ready'
+        upgradeBusy.value = false
     }
 }
 
