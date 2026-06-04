@@ -1128,7 +1128,7 @@ async function startUploadAndShare() {
           src: fileToUpload,
           destDir,
           port,
-          keyPath: undefined,
+          keyPath: connectionMeta.value.ssh?.keyPath,
           transcodeProxy: hasVideo.value,
           proxyQualities: hasVideo.value ? proxyQualities.value.slice() : undefined,
           apiToken: connectionMeta.value.token || undefined,

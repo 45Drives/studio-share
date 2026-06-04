@@ -673,6 +673,7 @@ async function connectToServer() {
 
         // Ensure SSH is ready early so any later SSH operations can use keys reliably
         statusLine.value = 'Preparing SSH…';
+        let verifiedKeyPath: string | undefined;
         try {
             const r = await window.electron?.ipcRenderer.invoke('ensure-ssh-ready', {
                 host: ip,
@@ -689,6 +690,8 @@ async function connectToServer() {
                 pushNotification(new Notification('Error', userMsg, 'error', 12000));
                 return;
             }
+            // Store the verified key path for later use in uploads
+            verifiedKeyPath = r?.keyPath;
         } catch (e: any) {
             statusLine.value = '';
             window.appLog?.error('ensure-ssh-ready.failed', { error: e?.message });
@@ -711,6 +714,7 @@ async function connectToServer() {
                 server: ip,
                 username: username.value,
                 port: sshPortToUse,
+                keyPath: verifiedKeyPath,
             },
         };
 
