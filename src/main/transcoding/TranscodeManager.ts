@@ -206,7 +206,6 @@ export class TranscodeManager {
         this.activeJobs.delete(jobId);
         reject(err);
       });
-    });
   }
 
   private buildFfmpegArgs(options: TranscodeOptions, outputPath: string, sourceHeight: number): string[] {
