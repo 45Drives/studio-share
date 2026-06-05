@@ -1170,7 +1170,7 @@ function resetUploadState() {
 
 // from step 1
 const serverPort = 22
-const privateKeyPath = undefined // or "~/.ssh/id_ed25519"
+const privateKeyPath = computed(() => ssh?.keyPath)
 
 // Make rows once when entering Step 3
 function prepareRows(): UploadRow[] {
