@@ -827,6 +827,7 @@ async function connectToServer() {
                 server: ip,
                 username: username.value,
                 port: sshPortToUse,
+                keyPath: verifiedKeyPath,  // Preserve the key path from ensure-ssh-ready
             },
         };
 
