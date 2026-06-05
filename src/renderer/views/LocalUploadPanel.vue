@@ -627,7 +627,7 @@ async function runClientFullTranscode(opts: {
 			host: ssh?.server || '',
 			user: ssh?.username || '',
 			port: serverPort,
-			keyPath: privateKeyPath,
+			keyPath: privateKeyPath.value,
 		},
 		apiFetch,
 	})
@@ -1344,7 +1344,7 @@ function uploadOneFile(
 				src: filePathToUpload,
 				destDir: row.dest,
 				port: serverPort,
-				keyPath: privateKeyPath,
+				keyPath: privateKeyPath.value,
 				transcodeProxy: transcodeProxyAfterUpload.value, // Server generates proxy variants (scaling) even when client transcoded
 				proxyQualities: proxyQualities.value.slice(),
 				watermark: enableWatermark,
@@ -1634,7 +1634,7 @@ async function startUploads() {
 					src: watermarkFile.value.path,
 					destDir: watermarkDestDir,
 					port: serverPort,
-					keyPath: privateKeyPath,
+					keyPath: privateKeyPath.value,
 					noIngest: true,
 				}
 			)
@@ -1726,7 +1726,7 @@ async function startUploads() {
 				user: ssh?.username,
 				destDir: row.dest,
 				port: serverPort,
-				keyPath: privateKeyPath,
+				keyPath: privateKeyPath.value,
 				transcodeProxy: transcodeProxyAfterUpload.value,
 				proxyQualities: proxyQualities.value.slice(),
 				watermark: enableWm,
