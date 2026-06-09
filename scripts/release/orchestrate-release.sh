@@ -230,32 +230,74 @@ rsync_to() {
   fi
   local ssh_user_escaped
   ssh_user_escaped="$(printf '%q' "$user")"
-  if [[ -n "$pass" ]]; then
-    sshpass -p "$pass" rsync -az "${delete_flag[@]}" \
-      -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
-      $excludes \
-      "$src" "${host}:$dest"
-  else
-    rsync -az "${delete_flag[@]}" \
-      -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
-      $excludes \
-      "$src" "${host}:$dest"
-  fi
+  
+  local max_retries=5
+  local retry_count=0
+  local retry_delay=5
+  
+  while [[ $retry_count -lt $max_retries ]]; do
+    if [[ -n "$pass" ]]; then
+      if sshpass -p "$pass" rsync -az --partial --timeout=30 "${delete_flag[@]}" \
+        -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
+        $excludes \
+        "$src" "${host}:$dest"; then
+        return 0
+      fi
+    else
+      if rsync -az --partial --timeout=30 "${delete_flag[@]}" \
+        -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
+        $excludes \
+        "$src" "${host}:$dest"; then
+        return 0
+      fi
+    fi
+    
+    retry_count=$((retry_count + 1))
+    if [[ $retry_count -lt $max_retries ]]; then
+      echo "rsync_to failed (attempt $retry_count/$max_retries), retrying in ${retry_delay}s..." >&2
+      sleep "$retry_delay"
+      retry_delay=$((retry_delay * 2))
+    fi
+  done
+  
+  echo "rsync_to failed after $max_retries attempts" >&2
+  return 1
 }
 
 rsync_from() {
   local host="$1" user="$2" pass="$3" port="$4" src="$5" dest="$6"
   local ssh_user_escaped
   ssh_user_escaped="$(printf '%q' "$user")"
-  if [[ -n "$pass" ]]; then
-    sshpass -p "$pass" rsync -az \
-      -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
-      "${host}:$src" "$dest"
-  else
-    rsync -az \
-      -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
-      "${host}:$src" "$dest"
-  fi
+  
+  local max_retries=5
+  local retry_count=0
+  local retry_delay=5
+  
+  while [[ $retry_count -lt $max_retries ]]; do
+    if [[ -n "$pass" ]]; then
+      if sshpass -p "$pass" rsync -az --partial --timeout=30 \
+        -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
+        "${host}:$src" "$dest"; then
+        return 0
+      fi
+    else
+      if rsync -az --partial --timeout=30 \
+        -e "ssh -p $port -l $ssh_user_escaped ${SSH_STRICT_OPTS[*]}" \
+        "${host}:$src" "$dest"; then
+        return 0
+      fi
+    fi
+    
+    retry_count=$((retry_count + 1))
+    if [[ $retry_count -lt $max_retries ]]; then
+      echo "rsync_from failed (attempt $retry_count/$max_retries), retrying in ${retry_delay}s..." >&2
+      sleep "$retry_delay"
+      retry_delay=$((retry_delay * 2))
+    fi
+  done
+  
+  echo "rsync_from failed after $max_retries attempts" >&2
+  return 1
 }
 
 scp_from_file() {
