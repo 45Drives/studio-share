@@ -700,7 +700,7 @@
                                     :disabled="upgradeBusy"
                                     @click="handleUpgradeStart"
                                 >
-                                    {{ upgradeBusy && upgradeStep === 'downloading' ? 'Downloading…' : 'Download & Install Pro Edition' }}
+                                    {{ upgradeBusy && upgradeStep === 'checking' ? 'Checking…' : upgradeBusy && upgradeStep === 'downloading' ? 'Downloading…' : 'Download & Install Pro Edition' }}
                                 </button>
                             </div>
 
@@ -926,7 +926,7 @@ function openUserGuide() {
 // ── Premium Upgrade ─────────────────────────────────────────────────────
 const upgradeKey = ref('')
 const upgradeBusy = ref(false)
-const upgradeStep = ref<'idle' | 'validating' | 'downloading' | 'ready' | 'installing' | 'manual'>('idle')
+const upgradeStep = ref<'idle' | 'validating' | 'checking' | 'downloading' | 'ready' | 'installing' | 'manual'>('idle')
 const upgradeValidated = ref(false)
 const upgradeError = ref('')
 const upgradePercent = ref(0)
@@ -981,7 +981,7 @@ async function handleUpgradeValidate() {
 
 async function handleUpgradeStart() {
     upgradeBusy.value = true
-    upgradeStep.value = 'downloading'
+    upgradeStep.value = 'checking'
     upgradeError.value = ''
     upgradePercent.value = 0
 
@@ -1005,12 +1005,25 @@ async function handleUpgradeStart() {
     ipc?.on('upgrade:error', onError)
 
     try {
-        const result = await ipc?.invoke('upgrade:start')
-        if (!result?.ok) {
-            upgradeError.value = result?.error || 'Upgrade failed.'
+        // First, check for available updates
+        const checkResult = await ipc?.invoke('upgrade:check')
+        if (!checkResult?.ok) {
+            upgradeError.value = checkResult?.error || 'Failed to check for Premium updates.'
+            upgradeStep.value = 'idle'
+            upgradeBusy.value = false
+            return
+        }
+
+        // Now trigger the download — completion is handled by the 'upgrade:downloaded' event
+        upgradeStep.value = 'downloading'
+        const downloadResult = await ipc?.invoke('upgrade:download')
+        // If the invoke itself returns an error (before the event fires)
+        if (downloadResult && downloadResult.ok === false) {
+            upgradeError.value = downloadResult?.error || 'Download failed.'
             upgradeStep.value = 'idle'
             upgradeBusy.value = false
         }
+        // Otherwise, success is handled by 'upgrade:downloaded' event listener above
     } catch (err: any) {
         upgradeError.value = err?.message || 'Upgrade failed.'
         upgradeStep.value = 'idle'

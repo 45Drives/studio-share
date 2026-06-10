@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import https from 'https'
 
 const LICENSE_SERVER_URL = 'https://studio-license.45d.io'
 const PREMIUM_REPO_OWNER = '45Drives'
@@ -126,8 +125,8 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
         }
     })
 
-    // ── Download and install Premium edition ────────────────────────────
-    ipcMain.handle('upgrade:start', async () => {
+    // ── Check for Premium edition update ────────────────────────────────
+    ipcMain.handle('upgrade:check', async () => {
         if (!autoUpdater) return { ok: false, error: 'Updater not available.' }
 
         try {
@@ -142,7 +141,6 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
             autoUpdater.autoInstallOnAppQuit = false
             autoUpdater.allowPrerelease = false
 
-            // First, check if an update is available
             console.log('[upgrade] checking for updates...')
             const result = await autoUpdater.checkForUpdates()
             if (!result?.updateInfo?.version) {
@@ -150,14 +148,23 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
             }
 
             console.log('[upgrade] update available:', result.updateInfo.version)
-            
-            // Now explicitly trigger the download
-            console.log('[upgrade] starting download...')
-            await autoUpdater.downloadUpdate()
-
             return { ok: true, version: result.updateInfo.version }
         } catch (err: any) {
-            console.error('[upgrade] failed:', err)
+            console.error('[upgrade] check failed:', err)
+            return { ok: false, error: normalizeUpdaterError(err) }
+        }
+    })
+
+    // ── Download Premium edition update ──────────────────────────────────
+    ipcMain.handle('upgrade:download', async () => {
+        if (!autoUpdater) return { ok: false, error: 'Updater not available.' }
+
+        try {
+            console.log('[upgrade] starting download...')
+            await autoUpdater.downloadUpdate()
+            return { ok: true }
+        } catch (err: any) {
+            console.error('[upgrade] download failed:', err)
             return { ok: false, error: normalizeUpdaterError(err) }
         }
     })
