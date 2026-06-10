@@ -39,11 +39,12 @@
 			</div>
 
 			<div data-tour="manage-links-table" class="manage-table-wrap overflow-x-auto min-w-0 overscroll-x-contain touch-pan-x">
-				<table class="manage-table min-w-[1260px] text-sm border-collapse">
+				<table class="manage-table min-w-[1320px] text-sm border-collapse">
 					<colgroup>
+						<col class="thumb-col" /> <!-- Thumbnail -->
 						<col class="w-[20%]" /> <!-- Title -->
 						<col class="w-[7%]" /> <!-- Type -->
-						<col class="w-[17%]" /> <!-- Short Link -->
+						<col class="w-[16%]" /> <!-- Short Link -->
 						<col class="w-[11%]" /> <!-- Expires -->
 						<col class="w-[6%]" /> <!-- Status -->
 						<col class="w-[7%]" /> <!-- Access -->
@@ -52,6 +53,7 @@
 					</colgroup>
 					<thead>
 						<tr class="manage-table-head-row border-b border-default">
+							<th class="p-1 border border-default thumb-td"></th>
 							<th class="text-left p-2 font-semibold border border-default cursor-pointer select-none"
 								@click="setSort('title')">
 								<span class="flex items-center justify-between gap-2 w-full">
@@ -107,7 +109,7 @@
 
 					<tbody class="bg-accent">
 						<tr v-if="loading">
-							<td colspan="8" class="p-0 border border-default">
+							<td colspan="9" class="p-0 border border-default">
 								<div class="w-full min-h-[140px] flex items-center justify-center">
 									<div
 										class="flex items-center gap-3 px-4 py-3 rounded-lg bg-default/60 border border-default shadow-sm">
@@ -123,7 +125,7 @@
 						</tr>
 
 						<tr v-else-if="filteredRows.length === 0 && !showingDemoData">
-							<td colspan="8"
+							<td colspan="9"
 								class="px-2 py-4 text-center text-default font-bold border border-default align-middle whitespace-nowrap">
 								No links found.
 							</td>
@@ -133,6 +135,14 @@
 						<tr v-else-if="showingDemoData" v-for="it in DEMO_LINKS" :key="it.id"
 							data-tour-demo
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12 opacity-80">
+							<!-- Thumbnail -->
+							<td class="p-1 border border-default align-middle thumb-td">
+								<div class="thumb-cell">
+									<div class="thumb-placeholder" :class="thumbIconClass(it)">
+										{{ thumbIconLabel(it) }}
+									</div>
+								</div>
+							</td>
 							<!-- Title -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div class="min-w-0 flex items-center justify-between gap-2">
@@ -192,6 +202,15 @@
 
 						<tr v-else v-for="it in pagedRows" :key="it.id"
 							class="hover:bg-black/10 dark:hover:bg-white/10 transition border border-default h-12">
+							<!-- Thumbnail -->
+							<td class="p-1 border border-default align-middle w-[50px]">
+								<div class="thumb-cell">
+									<img v-if="hasThumbnail(it)" :src="thumbSrc(it)" class="thumb-img" />
+									<div v-else class="thumb-placeholder" :class="thumbIconClass(it)">
+										{{ thumbIconLabel(it) }}
+									</div>
+								</div>
+							</td>
 							<!-- Title -->
 							<td class="p-2 border border-default align-middle overflow-hidden min-w-0">
 								<div v-if="editingId !== it.id" class="min-w-0 flex items-center justify-between gap-2">
@@ -322,7 +341,7 @@
 							</td>
 						</tr>
 						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
-							<td colspan="8" class="p-0 bg-well">&nbsp;</td>
+							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
 						</tr>
 					</tbody>
 				</table>
@@ -413,7 +432,7 @@ const DEMO_LINKS: LinkItem[] = [
 
 const showingDemoData = computed(() => props.tourActive && rows.value.length === 0 && !loading.value)
 
-const { apiFetch } = useApi()
+const { apiFetch, baseUrl, meta } = useApi()
 async function refresh() {
 	loading.value = true
 	error.value = null
@@ -534,6 +553,66 @@ function badgeClass(t: LinkType) {
 		: t === 'download'
 			? 'text-emerald-500'
 			: 'text-cyan-400'
+}
+
+/* ------------------- thumbnail helpers ------------------- */
+const thumbCache = ref<Record<string, string>>({})
+const thumbFailed = ref<Set<string>>(new Set())
+
+async function loadThumbnail(it: LinkItem) {
+	if (!it.thumbnailUrl) return
+	const key = String(it.id)
+	if (thumbCache.value[key] || thumbFailed.value.has(key)) return
+
+	try {
+		const base = baseUrl.value || ''
+		const url = `${base}${it.thumbnailUrl}`
+		const headers: Record<string, string> = {}
+		const token = meta.value?.token
+		if (token) headers['Authorization'] = `Bearer ${token}`
+
+		const res = await fetch(url, { headers })
+		if (!res.ok) throw new Error(`HTTP ${res.status}`)
+		const blob = await res.blob()
+		thumbCache.value[key] = URL.createObjectURL(blob)
+	} catch {
+		thumbFailed.value.add(key)
+	}
+}
+
+function thumbSrc(it: LinkItem) {
+	return thumbCache.value[String(it.id)] || ''
+}
+
+function hasThumbnail(it: LinkItem) {
+	const key = String(it.id)
+	if (thumbFailed.value.has(key)) return false
+	if (thumbCache.value[key]) return true
+	if (it.thumbnailUrl) {
+		loadThumbnail(it)
+		return false // not loaded yet, show placeholder
+	}
+	return false
+}
+
+function thumbIconClass(it: LinkItem) {
+	if (it.type === 'upload') return 'thumb-icon--upload'
+	const firstFile = it.target?.files?.[0]
+	if (!firstFile?.mime) return 'thumb-icon--file'
+	if (firstFile.mime.startsWith('video/')) return 'thumb-icon--video'
+	if (firstFile.mime.startsWith('image/')) return 'thumb-icon--image'
+	if (firstFile.mime.startsWith('audio/')) return 'thumb-icon--audio'
+	return 'thumb-icon--file'
+}
+
+function thumbIconLabel(it: LinkItem) {
+	if (it.type === 'upload') return '⬆'
+	const firstFile = it.target?.files?.[0]
+	if (!firstFile?.mime) return '📄'
+	if (firstFile.mime.startsWith('video/')) return '🎬'
+	if (firstFile.mime.startsWith('image/')) return '🖼'
+	if (firstFile.mime.startsWith('audio/')) return '🎵'
+	return '📄'
 }
 
 function isDisabled(it: LinkItem) {
@@ -1057,6 +1136,7 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 .manage-table {
 	width: 100%;
 	min-width: 1180px;
+	table-layout: fixed;
 	border-spacing: 0;
 	margin: 0;
 }
@@ -1093,5 +1173,65 @@ function formatLocal(ts: unknown, opts: Intl.DateTimeFormatOptions) {
 	.manage-header {
 		padding-top: 0.25rem;
 	}
+}
+
+/* ── Thumbnail cells ──────────────────────────────── */
+.thumb-cell {
+	width: 64px;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--btn-primary-bg) 12%, transparent);
+}
+
+.thumb-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 4px;
+}
+
+.thumb-placeholder {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	opacity: 0.7;
+	border-radius: 4px;
+}
+
+.thumb-icon--video {
+	background: color-mix(in srgb, #10b981 18%, transparent);
+}
+
+.thumb-icon--image {
+	background: color-mix(in srgb, #6366f1 18%, transparent);
+}
+
+.thumb-icon--audio {
+	background: color-mix(in srgb, #f59e0b 18%, transparent);
+}
+
+.thumb-icon--upload {
+	background: color-mix(in srgb, #3b82f6 18%, transparent);
+}
+
+.thumb-icon--file {
+	background: color-mix(in srgb, #6b7280 18%, transparent);
+}
+
+.thumb-col {
+	width: 76px;
+}
+
+.thumb-td {
+	width: 76px;
+	min-width: 76px;
+	max-width: 76px;
 }
 </style>
