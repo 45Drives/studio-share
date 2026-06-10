@@ -71,6 +71,7 @@
     "!dist",
     "!scripts",
     "!houston-common",
+    "!.venv",
     "!**/*.test.js",
     "!**/*.test.ts",
     "!**/*.md",
