@@ -5,6 +5,7 @@ import fs from 'fs';
 import { app } from 'electron';
 import { getFfmpegPath, getFfprobePath } from './ffmpeg-paths';
 import { detectHardwareCapabilities, hasHardwareAcceleration } from './hardware-detect';
+import { acquire, release } from './ffmpeg-semaphore';
 
 export interface TranscodeOptions {
   inputPath: string;
@@ -63,7 +64,12 @@ export class TranscodeManager {
     console.log(`[transcode] Job ${jobId}: args =`, args.join(' '));
 
     try {
-      await this.runFfmpeg(jobId, ffmpegPath, args, outputPath, onProgress);
+      await acquire();
+      try {
+        await this.runFfmpeg(jobId, ffmpegPath, args, outputPath, onProgress);
+      } finally {
+        release();
+      }
       return outputPath;
     } catch (err: any) {
       // If hardware encoding failed, automatically retry with software
@@ -79,7 +85,12 @@ export class TranscodeManager {
         const softwareArgs = this.buildFfmpegArgs(softwareOptions, outputPath, sourceHeight);
         console.log(`[transcode] Job ${jobId}: software fallback args =`, softwareArgs.join(' '));
         
-        await this.runFfmpeg(jobId, ffmpegPath, softwareArgs, outputPath, onProgress);
+        await acquire();
+        try {
+          await this.runFfmpeg(jobId, ffmpegPath, softwareArgs, outputPath, onProgress);
+        } finally {
+          release();
+        }
         return outputPath;
       }
       
