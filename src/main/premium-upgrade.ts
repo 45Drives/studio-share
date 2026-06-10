@@ -18,6 +18,45 @@ const PREMIUM_REPO_NAME = '45Flow'
  *      download the update, and install it
  *   4. App restarts as Premium Edition (same appId, in-place replacement)
  */
+
+function normalizeUpdaterError(err: any): string {
+    const raw = String(err?.message || err || 'Unknown updater error')
+    const compact = raw.replace(/\s+/g, ' ').trim()
+
+    console.error('[upgrade] Raw updater error:', raw)
+
+    // GitHub XML/Atom feed returned instead of JSON — typically a CDN/proxy issue
+    if (/<(feed|entry|content|title|updated|link)\b/i.test(compact) || /&lt;[a-z!/]/i.test(compact)) {
+        return 'GitHub returned an unexpected response. This is usually caused by a network proxy or firewall. Try again from a different network if this persists.'
+    }
+    if (/Cannot find .*latest\.yml/i.test(compact)) {
+        return 'The update manifest file was not found. The Premium release may still be uploading. Please try again in a few minutes.'
+    }
+    if (/404/i.test(compact)) {
+        return 'Update files not found (404). The release may have been removed or is not yet available.'
+    }
+    if (/rate limit|API rate|403/i.test(compact)) {
+        return 'GitHub rate limit exceeded. Too many update checks from your network. Please wait an hour and try again.'
+    }
+    if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|getaddrinfo/i.test(compact)) {
+        return 'Could not reach GitHub. Please check your internet connection and ensure github.com is not blocked.'
+    }
+    if (/UNABLE_TO_GET_ISSUER_CERT|CERT_HAS_EXPIRED|DEPTH_ZERO_SELF_SIGNED|SSL|certificate/i.test(compact)) {
+        return 'SSL/TLS certificate error. This is often caused by a corporate proxy. Check your network security settings.'
+    }
+    if (/EACCES|EPERM|permission denied/i.test(compact)) {
+        return 'Permission denied while downloading. Try running as administrator or check write permissions.'
+    }
+    if (/ENOSPC|no space/i.test(compact)) {
+        return 'Not enough disk space to download the update. Free up some space and try again.'
+    }
+    if (/timeout|timed?\s*out/i.test(compact)) {
+        return 'Download timed out. Your connection may be slow or GitHub may be temporarily unavailable. Please try again.'
+    }
+
+    return `Download failed: ${compact.slice(0, 200)}`
+}
+
 export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
     let autoUpdater: any = null
     if (app.isPackaged) {
@@ -26,6 +65,31 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
         } catch (e) {
             console.warn('[upgrade] electron-updater unavailable; premium upgrade disabled.', e)
         }
+    }
+
+    // Set up event listeners once during initialization
+    if (autoUpdater) {
+        autoUpdater.on('download-progress', (p: any) => {
+            console.log('[upgrade] download progress:', p.percent)
+            getMainWindow()?.webContents.send('upgrade:progress', {
+                percent: p.percent,
+                transferred: p.transferred,
+                total: p.total,
+                bytesPerSecond: p.bytesPerSecond,
+            })
+        })
+
+        autoUpdater.on('update-downloaded', () => {
+            console.log('[upgrade] update downloaded')
+            getMainWindow()?.webContents.send('upgrade:downloaded')
+        })
+
+        autoUpdater.on('error', (err: any) => {
+            console.error('[upgrade] error:', err)
+            getMainWindow()?.webContents.send('upgrade:error', {
+                message: normalizeUpdaterError(err),
+            })
+        })
     }
 
     // ── Validate license key against VPS ────────────────────────────────
@@ -74,39 +138,27 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
                 repo: PREMIUM_REPO_NAME,
             })
 
-            autoUpdater.autoDownload = true
+            autoUpdater.autoDownload = false
             autoUpdater.autoInstallOnAppQuit = false
             autoUpdater.allowPrerelease = false
 
-            const win = getMainWindow()
-
-            autoUpdater.on('download-progress', (p: any) => {
-                win?.webContents.send('upgrade:progress', {
-                    percent: p.percent,
-                    transferred: p.transferred,
-                    total: p.total,
-                    bytesPerSecond: p.bytesPerSecond,
-                })
-            })
-
-            autoUpdater.on('update-downloaded', () => {
-                win?.webContents.send('upgrade:downloaded')
-            })
-
-            autoUpdater.on('error', (err: any) => {
-                win?.webContents.send('upgrade:error', {
-                    message: err?.message || 'Download failed.',
-                })
-            })
-
+            // First, check if an update is available
+            console.log('[upgrade] checking for updates...')
             const result = await autoUpdater.checkForUpdates()
             if (!result?.updateInfo?.version) {
                 return { ok: false, error: 'No Premium release found. Please try again later.' }
             }
 
+            console.log('[upgrade] update available:', result.updateInfo.version)
+            
+            // Now explicitly trigger the download
+            console.log('[upgrade] starting download...')
+            await autoUpdater.downloadUpdate()
+
             return { ok: true, version: result.updateInfo.version }
         } catch (err: any) {
-            return { ok: false, error: `Upgrade failed: ${err?.message || 'Unknown error'}` }
+            console.error('[upgrade] failed:', err)
+            return { ok: false, error: normalizeUpdaterError(err) }
         }
     })
 
