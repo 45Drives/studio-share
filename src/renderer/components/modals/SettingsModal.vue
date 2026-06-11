@@ -163,6 +163,57 @@
                                     </Switch>
                                 </SettingRow>
                             </div>
+                            
+                            <!-- Default Watermark -->
+                            <div class="mt-4 pt-4 border-t border-default">
+                                <div class="px-1 py-2">
+                                    <p class="font-semibold text-sm mb-3">Default Watermark</p>
+                                    
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <Switch v-model="defaultWatermarkEnabled" :disabled="busy" :class="[
+                                            defaultWatermarkEnabled ? 'bg-primary' : 'bg-well',
+                                            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors'
+                                        ]">
+                                            <span class="sr-only">Toggle default watermark</span>
+                                            <span :class="[
+                                                defaultWatermarkEnabled ? 'translate-x-4' : 'translate-x-0',
+                                                'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-default shadow ring-0 transition-transform'
+                                            ]" />
+                                        </Switch>
+                                        <span class="text-sm text-default">Apply watermark to new video links</span>
+                                    </div>
+                                    
+                                    <div v-if="defaultWatermarkEnabled" class="space-y-2">
+                                        <div class="flex flex-row items-center gap-2 mb-2">
+                                            <button class="btn btn-secondary text-xs" @click="pickDefaultWatermark">Browse…</button>
+                                            <span class="text-sm truncate min-w-0" :title="defaultWatermarkName || 'No image selected'">
+                                                {{ defaultWatermarkName || 'No image selected' }}
+                                            </span>
+                                            <select v-model="selectedExistingWatermark" @change="onSelectExistingWatermark"
+                                                class="input-textlike border rounded px-2 py-1 text-xs min-w-[14rem]">
+                                                <option value="">Select existing watermark…</option>
+                                                <option v-for="wm in existingWatermarkFiles" :key="wm" :value="wm">{{ wm.split('/').pop() }}</option>
+                                            </select>
+                                            <button class="btn btn-secondary px-2 py-1 text-xs" @click="loadExistingWatermarkFiles">Refresh</button>
+                                        </div>
+                                        
+                                        <p v-if="!defaultWatermarkFile && !selectedExistingWatermark" class="text-xs text-amber-700 dark:text-amber-300">
+                                            Select a watermark image to continue.
+                                        </p>
+                                        
+                                        <WatermarkPreview
+                                            v-if="defaultWatermarkPreview"
+                                            :previewUrl="defaultWatermarkPreview"
+                                            :showClear="!!defaultWatermarkFile"
+                                            maxWidth="14rem"
+                                            size="small"
+                                            clearBtnClass="text-xs px-2 py-0.5"
+                                            @clear="clearDefaultWatermark"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <p class="text-xs text-accent mt-3">
                                 These defaults apply when creating new links and can be changed per link.
                             </p>
@@ -461,7 +512,6 @@
                                 <button class="btn btn-secondary text-sm" type="button" @click="fetchHealth" :disabled="healthLoading">
                                     {{ healthLoading ? 'Loading…' : 'Refresh' }}
                                 </button>
-                                <span v-if="healthData?.version" class="text-xs text-muted">houston-broadcaster v{{ healthData.version }}</span>
                             </div>
 
                             <div v-if="healthError" class="text-danger text-xs mb-3">{{ healthError }}</div>
@@ -656,6 +706,18 @@
 
                         <!-- ═══ Upgrade to Premium ══════════════════════════════ -->
                         <template v-if="activeSection === 'upgrade'">
+                            <!-- Server already licensed notice -->
+                            <div v-if="serverLicenseStatus?.licensed" class="rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-4 mb-4">
+                                <div class="text-sm font-semibold text-green-800 dark:text-green-400 mb-1">Server Already Licensed</div>
+                                <p class="text-sm text-green-700 dark:text-green-400 leading-relaxed">
+                                    This server is already activated with a Pro license ({{ serverLicenseStatus.license?.perpetual ? 'Perpetual' : 'Subscription' }}).
+                                    <span v-if="!serverLicenseStatus.license?.perpetual && serverLicenseStatus.license?.expiresAt">
+                                        Expires: {{ new Date(serverLicenseStatus.license.expiresAt).toLocaleDateString() }}.
+                                    </span>
+                                    You can still upgrade your client app to Pro Edition below to access multi-server support and other Pro client features.
+                                </p>
+                            </div>
+                            
                             <div class="rounded-lg border border-default bg-default/40 p-4 mb-4">
                                 <div class="text-sm font-semibold text-default mb-1">45Flow Pro Edition</div>
                                 <p class="text-sm text-accent leading-relaxed">
@@ -801,6 +863,8 @@ import { useClientTranscode } from "../../composables/useClientTranscode";
 import { useTourManager, type TourStep } from "../../composables/useTourManager";
 import { useTourPreferences } from "../../composables/useTourPreferences";
 import { appLog } from "../../composables/useLog";
+import { DEFAULT_45FLOW_WATERMARKS } from "../../types";
+import WatermarkPreview from "../WatermarkPreview.vue";
 
 const emit = defineEmits<{
     (e: "close"): void;
@@ -819,7 +883,7 @@ const emit = defineEmits<{
     }): void;
 }>();
 
-const { apiFetch } = useApi();
+const { apiFetch, meta } = useApi();
 const { onboarding, resetAll: resetOnboarding, markDone } = useOnboarding();
 const { hour12 } = useTimeFormat();
 const { enabled: clientTranscodeEnabled, preset: transcodePreset, hwAccel: hwAccelEnabled } = useClientTranscode();
@@ -931,6 +995,7 @@ const upgradeValidated = ref(false)
 const upgradeError = ref('')
 const upgradePercent = ref(0)
 const upgradeLicenseInfo = ref('')
+const serverLicenseStatus = ref<any | null>(null)
 
 async function handleUpgradeValidate() {
     const key = upgradeKey.value.trim()
@@ -1093,8 +1158,16 @@ const savedExternalBase = ref("");
 const defaultRestrictAccess = ref(false);
 const defaultAllowComments = ref(true);
 const defaultUseProxyFiles = ref(false);
+const defaultWatermarkEnabled = ref(false);
+const defaultWatermarkId = ref('');
+const defaultWatermarkPreview = ref<string | null>(null);
+type LocalFile = { path: string; name: string; size: number; dataUrl?: string | null };
+const defaultWatermarkFile = ref<LocalFile | null>(null);
+const existingWatermarkFiles = ref<string[]>([]);
+const selectedExistingWatermark = ref('');
 const projectRoot = ref<string>("");
 const forceProjectRoot = ref(false);
+const settingsLoaded = ref(false);
 
 const cleanupBusy = ref(false);
 const cleanupMode = ref<"scan" | "apply" | null>(null);
@@ -1148,11 +1221,143 @@ function formatBytes(bytes: number | undefined) {
     return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-watch(activeSection, (section) => {
+watch(activeSection, async (section) => {
     if (section === 'health' && !healthData.value && !healthLoading.value) {
         fetchHealth();
     }
+    
+    // Check server license status when navigating to Go Pro tab
+    if (section === 'upgrade' && !serverLicenseStatus.value && !upgradeBusy.value) {
+        try {
+            const status = await apiFetch('/api/license/status');
+            if (status?.ok) {
+                serverLicenseStatus.value = status;
+            }
+        } catch (err) {
+            console.warn('[settings] Failed to check server license:', err);
+        }
+    }
 });
+
+watch(defaultWatermarkId, async (newId) => {
+    if (!newId) {
+        defaultWatermarkPreview.value = null;
+        return;
+    }
+    
+    // Find the watermark in the default list
+    const watermark = DEFAULT_45FLOW_WATERMARKS.find(wm => wm.id === newId);
+    if (!watermark) {
+        defaultWatermarkPreview.value = null;
+        return;
+    }
+    
+    try {
+        const base = meta.value?.apiBase || '';
+        const url = `${base}${watermark.path}`;
+        const headers: Record<string, string> = {};
+        const token = meta.value?.token;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        defaultWatermarkPreview.value = URL.createObjectURL(blob);
+    } catch (err) {
+        console.warn('[settings] Failed to load watermark preview:', err);
+        defaultWatermarkPreview.value = null;
+    }
+});
+
+const defaultWatermarkName = computed(() => {
+    if (defaultWatermarkFile.value) return defaultWatermarkFile.value.name;
+    if (selectedExistingWatermark.value) {
+        return selectedExistingWatermark.value.split('/').pop() || '';
+    }
+    return '';
+});
+
+function pickDefaultWatermark() {
+    (window.electron as any)?.pickWatermark().then((f: any) => {
+        if (f) {
+            defaultWatermarkFile.value = f;
+            selectedExistingWatermark.value = '';
+            if (f.dataUrl) {
+                defaultWatermarkPreview.value = f.dataUrl;
+            }
+        }
+    }).catch((err: any) => {
+        console.warn('[settings] Failed to pick watermark:', err);
+    });
+}
+
+function clearDefaultWatermark() {
+    defaultWatermarkFile.value = null;
+    defaultWatermarkPreview.value = null;
+    selectedExistingWatermark.value = '';
+    defaultWatermarkId.value = '';
+}
+
+async function onSelectExistingWatermark() {
+    const relPath = selectedExistingWatermark.value;
+    if (!relPath) {
+        defaultWatermarkPreview.value = null;
+        defaultWatermarkFile.value = null;
+        return;
+    }
+    
+    defaultWatermarkFile.value = null;
+    
+    try {
+        const base = meta.value?.apiBase || '';
+        const token = meta.value?.token || '';
+        const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(url, { headers });
+        if (!res.ok) { 
+            defaultWatermarkPreview.value = null; 
+            return; 
+        }
+        const blob = await res.blob();
+        defaultWatermarkPreview.value = URL.createObjectURL(blob);
+    } catch (err) {
+        console.warn('[settings] Failed to load watermark preview:', err);
+        defaultWatermarkPreview.value = null;
+    }
+}
+
+async function loadExistingWatermarkFiles() {
+    try {
+        const dirRel = '.45flow/watermarks';
+        const data = await apiFetch(`/api/files?dir=${encodeURIComponent(dirRel)}`);
+        const entries = Array.isArray(data?.entries) ? data.entries : [];
+        const serverWatermarks = entries
+            .filter((e: any) => !e?.isDir && typeof e?.name === 'string' && String(e.name).trim())
+            .map((e: any) => `${dirRel}/${String(e.name).trim()}`)
+            .sort((a: string, b: string) => a.localeCompare(b));
+        
+        // Check which built-in watermarks exist on the server
+        const base = meta.value?.apiBase || '';
+        const token = meta.value?.token || '';
+        const builtinChecks = await Promise.allSettled(
+            DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
+                const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`;
+                const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } });
+                return res.ok ? wm.path : null;
+            })
+        );
+        const validBuiltins = builtinChecks
+            .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null)
+            .map(r => r.value);
+        
+        existingWatermarkFiles.value = [...serverWatermarks, ...validBuiltins];
+    } catch (err) {
+        console.warn('[settings] Failed to load watermarks:', err);
+        existingWatermarkFiles.value = [];
+    }
+}
 
 const cleanupTranscodeFixes = computed(() =>
     Array.isArray(cleanupResult.value?.transcodeFixes) ? cleanupResult.value.transcodeFixes : []
@@ -1452,6 +1657,9 @@ const internalPreview = computed(() => {
 });
 
 const validationError = computed(() => {
+    // Don't show validation errors until settings are loaded from server
+    if (!settingsLoaded.value) return null;
+    
     if (!isValidPort(externalHttpsPort.value)) {
         return "External HTTPS port must be between 1 and 65535.";
     }
@@ -1512,10 +1720,14 @@ async function reload() {
             typeof data.defaultRestrictAccess === "boolean" ? data.defaultRestrictAccess : false;
         defaultAllowComments.value =
             typeof data.defaultAllowComments === "boolean" ? data.defaultAllowComments : true;
+        defaultWatermarkId.value = data.defaultWatermarkId || '';
+        defaultWatermarkEnabled.value = !!defaultWatermarkId.value;
         defaultUseProxyFiles.value =
             typeof data.defaultUseProxyFiles === "boolean" ? data.defaultUseProxyFiles : false;
         projectRoot.value = typeof data.projectRoot === "string" ? data.projectRoot : "";
         forceProjectRoot.value = typeof data.forceProjectRoot === "boolean" ? data.forceProjectRoot : false;
+        
+        settingsLoaded.value = true;
     } catch (e: any) {
         loadError.value = e?.message ? `Failed to load settings: ${e.message}` : "Failed to load settings.";
     } finally {
@@ -1549,6 +1761,7 @@ async function save() {
             defaultRestrictAccess: !!defaultRestrictAccess.value,
             defaultAllowComments: !!defaultAllowComments.value,
             defaultUseProxyFiles: !!defaultUseProxyFiles.value,
+            defaultWatermarkId: defaultWatermarkEnabled.value ? defaultWatermarkId.value : null,
             projectRoot: (projectRoot.value || "").trim() || null,
             forceProjectRoot: !!forceProjectRoot.value,
         };
