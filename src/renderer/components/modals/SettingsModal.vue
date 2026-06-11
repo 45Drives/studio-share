@@ -186,9 +186,9 @@
                                     <div v-if="defaultWatermarkEnabled" class="space-y-2">
                                         <div class="flex flex-row items-center gap-2 mb-2">
                                             <button class="btn btn-secondary text-xs" @click="pickDefaultWatermark">Browse…</button>
-                                            <span class="text-sm truncate min-w-0" :title="defaultWatermarkName || 'No image selected'">
+                                            <!-- <span class="text-sm truncate min-w-0" :title="defaultWatermarkName || 'No image selected'">
                                                 {{ defaultWatermarkName || 'No image selected' }}
-                                            </span>
+                                            </span> -->
                                             <select v-model="selectedExistingWatermark" @change="onSelectExistingWatermark"
                                                 class="input-textlike border rounded px-2 py-1 text-xs min-w-[14rem]">
                                                 <option value="">Select existing watermark…</option>
@@ -1254,7 +1254,7 @@ watch(defaultWatermarkId, async (newId) => {
     
     try {
         const base = meta.value?.apiBase || '';
-        const url = `${base}${watermark.path}`;
+        const url = `${base}/api/watermarks/defaults/${watermark.id}/stream`;
         const headers: Record<string, string> = {};
         const token = meta.value?.token;
         if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -1272,6 +1272,10 @@ watch(defaultWatermarkId, async (newId) => {
 const defaultWatermarkName = computed(() => {
     if (defaultWatermarkFile.value) return defaultWatermarkFile.value.name;
     if (selectedExistingWatermark.value) {
+        // Check if it's a built-in watermark
+        const builtin = DEFAULT_45FLOW_WATERMARKS.find(wm => wm.id === selectedExistingWatermark.value);
+        if (builtin) return builtin.name;
+        // Otherwise it's a user watermark path
         return selectedExistingWatermark.value.split('/').pop() || '';
     }
     return '';
@@ -1311,7 +1315,18 @@ async function onSelectExistingWatermark() {
     try {
         const base = meta.value?.apiBase || '';
         const token = meta.value?.token || '';
-        const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
+        
+        // Check if it's a built-in default watermark
+        const isBuiltIn = DEFAULT_45FLOW_WATERMARKS.some(wm => wm.id === relPath);
+        let url: string;
+        if (isBuiltIn) {
+            // Use the defaults API endpoint for built-in watermarks
+            url = `${base}/api/watermarks/defaults/${relPath}/stream`;
+        } else {
+            // Use file preview endpoint for user-uploaded watermarks
+            url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
+        }
+        
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
         
@@ -1338,14 +1353,14 @@ async function loadExistingWatermarkFiles() {
             .map((e: any) => `${dirRel}/${String(e.name).trim()}`)
             .sort((a: string, b: string) => a.localeCompare(b));
         
-        // Check which built-in watermarks exist on the server
+        // Check which built-in watermarks exist on the server using the defaults API
         const base = meta.value?.apiBase || '';
         const token = meta.value?.token || '';
         const builtinChecks = await Promise.allSettled(
             DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
-                const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`;
+                const url = `${base}/api/watermarks/defaults/${wm.id}/stream`;
                 const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } });
-                return res.ok ? wm.path : null;
+                return res.ok ? wm.id : null;
             })
         );
         const validBuiltins = builtinChecks
@@ -1722,6 +1737,13 @@ async function reload() {
             typeof data.defaultAllowComments === "boolean" ? data.defaultAllowComments : true;
         defaultWatermarkId.value = data.defaultWatermarkId || '';
         defaultWatermarkEnabled.value = !!defaultWatermarkId.value;
+        
+        // Load existing watermark files and sync the selection
+        await loadExistingWatermarkFiles();
+        if (defaultWatermarkId.value) {
+            selectedExistingWatermark.value = defaultWatermarkId.value;
+        }
+        
         defaultUseProxyFiles.value =
             typeof data.defaultUseProxyFiles === "boolean" ? data.defaultUseProxyFiles : false;
         projectRoot.value = typeof data.projectRoot === "string" ? data.projectRoot : "";
@@ -1761,7 +1783,7 @@ async function save() {
             defaultRestrictAccess: !!defaultRestrictAccess.value,
             defaultAllowComments: !!defaultAllowComments.value,
             defaultUseProxyFiles: !!defaultUseProxyFiles.value,
-            defaultWatermarkId: defaultWatermarkEnabled.value ? defaultWatermarkId.value : null,
+            defaultWatermarkId: defaultWatermarkEnabled.value ? (selectedExistingWatermark.value || defaultWatermarkId.value) : null,
             projectRoot: (projectRoot.value || "").trim() || null,
             forceProjectRoot: !!forceProjectRoot.value,
         };
