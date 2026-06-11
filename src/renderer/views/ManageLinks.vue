@@ -341,7 +341,7 @@
 							</td>
 						</tr>
 						<tr v-for="n in emptyRowCount" :key="`empty-${n}`" class="h-12">
-							<td colspan="9" class="p-0 bg-well">&nbsp;</td>
+							<td colspan="10" class="p-0 bg-well">&nbsp;</td>
 						</tr>
 					</tbody>
 				</table>
