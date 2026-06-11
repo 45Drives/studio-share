@@ -140,6 +140,7 @@ export function initPremiumUpgrade(getMainWindow: () => BrowserWindow | null) {
             autoUpdater.autoDownload = false
             autoUpdater.autoInstallOnAppQuit = false
             autoUpdater.allowPrerelease = false
+            autoUpdater.allowDowngrade = true
 
             console.log('[upgrade] checking for updates...')
             const result = await autoUpdater.checkForUpdates()
