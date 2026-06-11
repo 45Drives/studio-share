@@ -3495,16 +3495,7 @@ ipcMain.handle('watermark:download', async (_event, opts: { apiBase: string; tok
   const { apiBase, token, relPath } = opts;
   if (!apiBase || !relPath) return null;
   try {
-    // Built-in watermarks use a different API endpoint
-    const isBuiltIn = relPath.startsWith('/.watermarks-builtin/') || relPath.startsWith('.watermarks-builtin/');
-    let url: string;
-    if (isBuiltIn) {
-      const filename = relPath.replace(/^\.?\/?\.watermarks-builtin\//, '').replace(/\.[^.]+$/, '');
-      const id = filename.toLowerCase().replace(/[^a-z0-9-]/g, '');
-      url = `${apiBase}/api/watermarks/defaults/${id}/stream`;
-    } else {
-      url = `${apiBase}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
-    }
+    const url = `${apiBase}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, { headers });

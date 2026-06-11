@@ -920,7 +920,7 @@ async function loadExistingWatermarkFiles() {
 		const token = connectionMeta.value.token ?? ''
 		const builtinChecks = await Promise.allSettled(
 			DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
-				const url = `${base}/api/watermarks/defaults/${wm.id}/stream`
+				const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`
 				const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } })
 				return res.ok ? wm.path : null
 			})
@@ -945,9 +945,8 @@ async function fetchExistingWatermarkPreview(relPath: string) {
 		const builtinById = DEFAULT_45FLOW_WATERMARKS.find(wm => wm.id === relPath)
 		const builtinByPath = DEFAULT_45FLOW_WATERMARKS.find(wm => wm.path === relPath)
 		const builtin = builtinById || builtinByPath
-		const url = builtin
-			? `${base}/api/watermarks/defaults/${builtin.id}/stream`
-			: `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`
+		const previewPath = builtin ? builtin.path : relPath
+		const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(previewPath)}`
 		
 		const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
 		if (!res.ok) { existingWatermarkPreviewUrl.value = null; return }

@@ -1254,7 +1254,7 @@ watch(defaultWatermarkId, async (newId) => {
     
     try {
         const base = meta.value?.apiBase || '';
-        const url = `${base}/api/watermarks/defaults/${watermark.id}/stream`;
+        const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(watermark.path)}`;
         const headers: Record<string, string> = {};
         const token = meta.value?.token;
         if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -1317,11 +1317,11 @@ async function onSelectExistingWatermark() {
         const token = meta.value?.token || '';
         
         // Check if it's a built-in default watermark
-        const isBuiltIn = DEFAULT_45FLOW_WATERMARKS.some(wm => wm.id === relPath);
+        const builtIn = DEFAULT_45FLOW_WATERMARKS.find(wm => wm.id === relPath);
         let url: string;
-        if (isBuiltIn) {
-            // Use the defaults API endpoint for built-in watermarks
-            url = `${base}/api/watermarks/defaults/${relPath}/stream`;
+        if (builtIn) {
+            // Built-ins are available via the regular watermark preview endpoint.
+            url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(builtIn.path)}`;
         } else {
             // Use file preview endpoint for user-uploaded watermarks
             url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(relPath)}`;
@@ -1358,7 +1358,7 @@ async function loadExistingWatermarkFiles() {
         const token = meta.value?.token || '';
         const builtinChecks = await Promise.allSettled(
             DEFAULT_45FLOW_WATERMARKS.map(async (wm) => {
-                const url = `${base}/api/watermarks/defaults/${wm.id}/stream`;
+                const url = `${base}/api/files/watermark-preview?path=${encodeURIComponent(wm.path)}`;
                 const res = await fetch(url, { method: 'HEAD', headers: { 'Authorization': `Bearer ${token}` } });
                 return res.ok ? wm.id : null;
             })
